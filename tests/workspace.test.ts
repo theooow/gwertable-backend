@@ -34,6 +34,54 @@ describe("workspace routes", () => {
     assert.equal(membersPayload.invitations[0].email, "collab@gwertable.test");
   });
 
+  it("updates account and workspace settings", async () => {
+    const { authorization } = await seedAdminSession();
+
+    const account = await request("PUT", "/api/account", authorization, {
+      name: "Theo Selim",
+    });
+    assert.equal(account.statusCode, 200);
+    assert.equal(json<{ user: { name: string } }>(account).user.name, "Theo Selim");
+
+    const workspace = await request("PUT", "/api/workspace", authorization, {
+      name: "Gwertable Prod",
+    });
+    assert.equal(workspace.statusCode, 200);
+    assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Gwertable Prod");
+  });
+
+  it("deletes the current workspace after confirmation", async () => {
+    const { authorization, workspace } = await seedAdminSession();
+
+    const blocked = await request("DELETE", "/api/workspace", authorization, {
+      confirm: "wrong",
+    });
+    assert.equal(blocked.statusCode, 400);
+
+    const deleted = await request("DELETE", "/api/workspace", authorization, {
+      confirm: workspace.name,
+    });
+    assert.equal(deleted.statusCode, 200);
+    assert.deepEqual(json(deleted), { ok: true });
+    assert.equal(await prisma.workspace.count({ where: { id: workspace.id } }), 0);
+  });
+
+  it("deletes the current account after email confirmation", async () => {
+    const { authorization, user } = await seedAdminSession();
+
+    const blocked = await request("DELETE", "/api/account", authorization, {
+      confirm: "wrong@gwertable.test",
+    });
+    assert.equal(blocked.statusCode, 400);
+
+    const deleted = await request("DELETE", "/api/account", authorization, {
+      confirm: user.email,
+    });
+    assert.equal(deleted.statusCode, 200);
+    assert.deepEqual(json(deleted), { ok: true });
+    assert.equal(await prisma.user.count({ where: { id: user.id } }), 0);
+  });
+
   it("forbids non-admin users from managing invitations", async () => {
     const { workspace } = await seedAdminSession();
     const user = await prisma.user.create({
