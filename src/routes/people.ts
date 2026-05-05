@@ -28,6 +28,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const { search, tags, includeArchived } = peopleQuerySchema.parse(request.query);
 
     const where: Prisma.PersonWhereInput = {
+      workspaceId: request.workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(search
         ? {
@@ -51,7 +52,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "person.read");
 
     const persons = await prisma.person.findMany({
-      where: { archivedAt: null },
+      where: { workspaceId: request.workspaceId, archivedAt: null },
       select: { tags: true },
     });
 
@@ -70,6 +71,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const person = await prisma.person.create({
       data: {
         fullName: parsed.fullName,
+        workspaceId: request.workspaceId,
         email: parsed.email || null,
         phone: parsed.phone || null,
         discordUserId: parsed.discordUserId || null,
@@ -85,7 +87,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "person.read");
     const { id } = idParamsSchema.parse(request.params);
 
-    const person = await prisma.person.findUnique({ where: { id } });
+    const person = await prisma.person.findFirst({ where: { id, workspaceId: request.workspaceId } });
     if (!person) {
       const error = new Error("Personne introuvable");
       error.name = "NotFoundError";
@@ -101,7 +103,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const parsed = personSchema.parse(request.body);
 
     return prisma.person.update({
-      where: { id },
+      where: { id, workspaceId: request.workspaceId },
       data: {
         fullName: parsed.fullName,
         email: parsed.email || null,
@@ -118,7 +120,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
 
     return prisma.person.update({
-      where: { id },
+      where: { id, workspaceId: request.workspaceId },
       data: { archivedAt: new Date() },
     });
   });
@@ -128,7 +130,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
 
     return prisma.person.update({
-      where: { id },
+      where: { id, workspaceId: request.workspaceId },
       data: { archivedAt: null },
     });
   });

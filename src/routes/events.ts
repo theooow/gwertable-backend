@@ -12,6 +12,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "event.read");
 
     return prisma.event.findMany({
+      where: { workspaceId: request.workspaceId },
       include: {
         venue: { select: { name: true } },
         _count: { select: { participants: true, tasks: true, expenses: true } },
@@ -23,6 +24,17 @@ export async function eventRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events", async (request, reply) => {
     requireCan(request.userRole, "event.write");
     const parsed = eventSchema.parse(request.body);
+    if (parsed.venueId) {
+      const venue = await prisma.venue.findFirst({
+        where: { id: parsed.venueId, workspaceId: request.workspaceId },
+        select: { id: true },
+      });
+      if (!venue) {
+        const error = new Error("Lieu introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+    }
 
     const event = await prisma.event.create({
       data: {
@@ -31,6 +43,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
         endsAt: parsed.endsAt ? new Date(parsed.endsAt) : null,
         status: parsed.status,
         description: parsed.description || null,
+        workspaceId: request.workspaceId,
         venueId: parsed.venueId || null,
       },
     });
@@ -42,7 +55,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "event.read");
 
     return prisma.venue.findMany({
-      where: { archivedAt: null },
+      where: { workspaceId: request.workspaceId, archivedAt: null },
       orderBy: { name: "asc" },
     });
   });
@@ -52,7 +65,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const parsed = createVenueSchema.parse(request.body);
 
     const venue = await prisma.venue.create({
-      data: { name: parsed.name },
+      data: { name: parsed.name, workspaceId: request.workspaceId },
     });
 
     return reply.status(201).send(venue);
@@ -63,7 +76,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
 
     const event = await prisma.event.findUnique({
-      where: { id },
+      where: { id, workspaceId: request.workspaceId },
       include: {
         venue: true,
         _count: {
@@ -91,9 +104,20 @@ export async function eventRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "event.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = eventSchema.parse(request.body);
+    if (parsed.venueId) {
+      const venue = await prisma.venue.findFirst({
+        where: { id: parsed.venueId, workspaceId: request.workspaceId },
+        select: { id: true },
+      });
+      if (!venue) {
+        const error = new Error("Lieu introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+    }
 
     return prisma.event.update({
-      where: { id },
+      where: { id, workspaceId: request.workspaceId },
       data: {
         name: parsed.name,
         startsAt: new Date(parsed.startsAt),

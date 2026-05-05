@@ -19,6 +19,79 @@ const eventItemParamsSchema = z.object({
 });
 const idParamsSchema = z.object({ id: z.string().min(1) });
 
+async function requireEventInWorkspace(eventId: string, workspaceId: string) {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, workspaceId },
+    select: { id: true },
+  });
+  if (!event) {
+    const error = new Error("Evenement introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requirePersonInWorkspace(personId: string, workspaceId: string) {
+  const person = await prisma.person.findFirst({
+    where: { id: personId, workspaceId },
+    select: { id: true },
+  });
+  if (!person) {
+    const error = new Error("Personne introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireParticipantInWorkspace(id: string, workspaceId: string) {
+  const participant = await prisma.eventParticipant.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!participant) {
+    const error = new Error("Participant introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireTaskInWorkspace(id: string, workspaceId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!task) {
+    const error = new Error("Tache introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireExpenseInWorkspace(id: string, workspaceId: string) {
+  const expense = await prisma.expense.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!expense) {
+    const error = new Error("Depense introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireShoppingItemInWorkspace(id: string, workspaceId: string) {
+  const item = await prisma.shoppingItem.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true, eventId: true, name: true },
+  });
+  if (!item) {
+    const error = new Error("Article introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+  return item;
+}
+
 function normalizeParticipant(participant: Awaited<ReturnType<typeof prisma.eventParticipant.findMany>>[number], canSeeSensitive: boolean) {
   return {
     id: participant.id,
@@ -60,9 +133,10 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "participant.read");
     const { eventId } = eventParamsSchema.parse(request.params);
     const canSeeSensitive = can(request.userRole, "budget.read");
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     const participants = await prisma.eventParticipant.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       include: { person: { select: { id: true, fullName: true, email: true } } },
       orderBy: { person: { fullName: "asc" } },
     });
@@ -74,9 +148,11 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "participant.write");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = participantSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    await requirePersonInWorkspace(parsed.personId, request.workspaceId);
 
-    const existing = await prisma.eventParticipant.findUnique({
-      where: { eventId_personId: { eventId, personId: parsed.personId } },
+    const existing = await prisma.eventParticipant.findFirst({
+      where: { eventId, personId: parsed.personId, event: { workspaceId: request.workspaceId } },
     });
     if (existing) {
       const error = new Error("Cette personne est deja participante de cet evenement");
@@ -107,6 +183,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "participant.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = participantSchema.parse(request.body);
+    await requireParticipantInWorkspace(id, request.workspaceId);
+    await requirePersonInWorkspace(parsed.personId, request.workspaceId);
 
     return prisma.eventParticipant.update({
       where: { id },
@@ -128,6 +206,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "participant.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = participantSchema.parse(request.body);
+    await requireParticipantInWorkspace(id, request.workspaceId);
+    await requirePersonInWorkspace(parsed.personId, request.workspaceId);
 
     return prisma.eventParticipant.update({
       where: { id },
@@ -148,21 +228,24 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/events/:eventId/participants/:id", async (request) => {
     requireCan(request.userRole, "participant.write");
     const { id } = eventItemParamsSchema.parse(request.params);
+    await requireParticipantInWorkspace(id, request.workspaceId);
     return prisma.eventParticipant.delete({ where: { id } });
   });
 
   fastify.delete("/api/participants/:id", async (request) => {
     requireCan(request.userRole, "participant.write");
     const { id } = idParamsSchema.parse(request.params);
+    await requireParticipantInWorkspace(id, request.workspaceId);
     return prisma.eventParticipant.delete({ where: { id } });
   });
 
   fastify.get("/api/events/:eventId/participants/persons", async (request) => {
     requireCan(request.userRole, "participant.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     const participants = await prisma.eventParticipant.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       select: { personId: true, person: { select: { id: true, fullName: true } } },
       orderBy: { person: { fullName: "asc" } },
     });
@@ -173,9 +256,10 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events/:eventId/tasks", async (request) => {
     requireCan(request.userRole, "task.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     return prisma.task.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       include: { assignee: { select: { id: true, fullName: true } } },
       orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
     });
@@ -185,6 +269,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = taskSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
     const task = await prisma.task.create({
       data: {
@@ -206,6 +292,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = taskSchema.parse(request.body);
+    await requireTaskInWorkspace(id, request.workspaceId);
+    if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
     return prisma.task.update({
       where: { id },
@@ -225,6 +313,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = taskSchema.parse(request.body);
+    await requireTaskInWorkspace(id, request.workspaceId);
+    if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
     return prisma.task.update({
       where: { id },
@@ -244,6 +334,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = taskStatusSchema.parse(request.body);
+    await requireTaskInWorkspace(id, request.workspaceId);
     return prisma.task.update({ where: { id }, data: { status: parsed.status } });
   });
 
@@ -251,27 +342,31 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = taskStatusSchema.parse(request.body);
+    await requireTaskInWorkspace(id, request.workspaceId);
     return prisma.task.update({ where: { id }, data: { status: parsed.status } });
   });
 
   fastify.delete("/api/events/:eventId/tasks/:id", async (request) => {
     requireCan(request.userRole, "task.write");
     const { id } = eventItemParamsSchema.parse(request.params);
+    await requireTaskInWorkspace(id, request.workspaceId);
     return prisma.task.delete({ where: { id } });
   });
 
   fastify.delete("/api/tasks/:id", async (request) => {
     requireCan(request.userRole, "task.write");
     const { id } = idParamsSchema.parse(request.params);
+    await requireTaskInWorkspace(id, request.workspaceId);
     return prisma.task.delete({ where: { id } });
   });
 
   fastify.get("/api/events/:eventId/expenses", async (request) => {
     requireCan(request.userRole, "budget.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     return prisma.expense.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       include: { paidBy: { select: { id: true, fullName: true } } },
       orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
     });
@@ -281,6 +376,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "budget.write");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = expenseSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
     const expense = await prisma.expense.create({
       data: {
@@ -303,6 +400,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "budget.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = expenseSchema.parse(request.body);
+    await requireExpenseInWorkspace(id, request.workspaceId);
+    if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
     return prisma.expense.update({
       where: { id },
@@ -323,6 +422,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "budget.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = expenseSchema.parse(request.body);
+    await requireExpenseInWorkspace(id, request.workspaceId);
+    if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
     return prisma.expense.update({
       where: { id },
@@ -342,21 +443,24 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/events/:eventId/expenses/:id", async (request) => {
     requireCan(request.userRole, "budget.write");
     const { id } = eventItemParamsSchema.parse(request.params);
+    await requireExpenseInWorkspace(id, request.workspaceId);
     return prisma.expense.delete({ where: { id } });
   });
 
   fastify.delete("/api/expenses/:id", async (request) => {
     requireCan(request.userRole, "budget.write");
     const { id } = idParamsSchema.parse(request.params);
+    await requireExpenseInWorkspace(id, request.workspaceId);
     return prisma.expense.delete({ where: { id } });
   });
 
   fastify.get("/api/events/:eventId/expenses/persons", async (request) => {
     requireCan(request.userRole, "budget.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     const participants = await prisma.eventParticipant.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       select: { person: { select: { id: true, fullName: true } } },
       orderBy: { person: { fullName: "asc" } },
     });
@@ -367,9 +471,10 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events/:eventId/shopping", async (request) => {
     requireCan(request.userRole, "shopping.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     const items = await prisma.shoppingItem.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       include: { buyer: { select: { id: true, fullName: true } } },
       orderBy: [{ bought: "asc" }, { category: "asc" }, { name: "asc" }],
     });
@@ -381,6 +486,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = shoppingSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    if (parsed.buyerId) await requirePersonInWorkspace(parsed.buyerId, request.workspaceId);
 
     const item = await prisma.shoppingItem.create({
       data: {
@@ -401,6 +508,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = shoppingSchema.parse(request.body);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
+    if (parsed.buyerId) await requirePersonInWorkspace(parsed.buyerId, request.workspaceId);
 
     return prisma.shoppingItem.update({
       where: { id },
@@ -419,6 +528,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = shoppingSchema.parse(request.body);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
+    if (parsed.buyerId) await requirePersonInWorkspace(parsed.buyerId, request.workspaceId);
 
     return prisma.shoppingItem.update({
       where: { id },
@@ -437,6 +548,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     const parsed = boughtSchema.parse(request.body);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
     return prisma.shoppingItem.update({ where: { id }, data: { bought: parsed.bought } });
   });
 
@@ -444,6 +556,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = boughtSchema.parse(request.body);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
     return prisma.shoppingItem.update({ where: { id }, data: { bought: parsed.bought } });
   });
 
@@ -451,8 +564,10 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     const parsed = boughtWithExpenseSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
-    const item = await prisma.shoppingItem.findUniqueOrThrow({ where: { id } });
+    const item = await requireShoppingItemInWorkspace(id, request.workspaceId);
     const expense = await prisma.expense.create({
       data: {
         eventId,
@@ -477,8 +592,9 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = boughtWithExpenseSchema.parse(request.body);
+    if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
-    const item = await prisma.shoppingItem.findUniqueOrThrow({ where: { id } });
+    const item = await requireShoppingItemInWorkspace(id, request.workspaceId);
     const expense = await prisma.expense.create({
       data: {
         eventId: item.eventId,
@@ -502,21 +618,24 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/events/:eventId/shopping/:id", async (request) => {
     requireCan(request.userRole, "shopping.write");
     const { id } = eventItemParamsSchema.parse(request.params);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
     return prisma.shoppingItem.delete({ where: { id } });
   });
 
   fastify.delete("/api/shopping/:id", async (request) => {
     requireCan(request.userRole, "shopping.write");
     const { id } = idParamsSchema.parse(request.params);
+    await requireShoppingItemInWorkspace(id, request.workspaceId);
     return prisma.shoppingItem.delete({ where: { id } });
   });
 
   fastify.get("/api/events/:eventId/shopping/persons", async (request) => {
     requireCan(request.userRole, "shopping.read");
     const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
 
     const participants = await prisma.eventParticipant.findMany({
-      where: { eventId },
+      where: { eventId, event: { workspaceId: request.workspaceId } },
       select: { person: { select: { id: true, fullName: true } } },
       orderBy: { person: { fullName: "asc" } },
     });
@@ -530,6 +649,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
 
     return prisma.person.findMany({
       where: {
+        workspaceId: request.workspaceId,
         archivedAt: null,
         OR: [
           { fullName: { contains: query, mode: "insensitive" } },
