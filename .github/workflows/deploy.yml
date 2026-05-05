@@ -89,7 +89,9 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
           script: |
+            set -eu
             cd ~/gwertable
             upsert_env() {
               key="$1"
@@ -168,7 +170,16 @@ jobs:
             COMPOSE
 
             docker compose up -d db
-            docker compose pull backend
+            docker compose pull backend frontend
             docker compose run --rm backend npx prisma migrate deploy
-            docker compose up -d --force-recreate backend
+            for attempt in 1 2 3; do
+              if docker compose up -d --force-recreate --remove-orphans backend frontend; then
+                break
+              fi
+              if [ "$attempt" = "3" ]; then
+                exit 1
+              fi
+              docker compose ps -a
+              sleep 15
+            done
             docker image prune -f
