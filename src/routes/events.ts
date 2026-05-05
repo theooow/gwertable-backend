@@ -129,4 +129,21 @@ export async function eventRoutes(fastify: FastifyInstance) {
       },
     });
   });
+
+  fastify.delete("/api/events/:id", async (request) => {
+    requireCan(request.userRole, "event.write");
+    const { id } = idParamsSchema.parse(request.params);
+
+    const event = await prisma.event.findUnique({
+      where: { id, workspaceId: request.workspaceId },
+      select: { id: true },
+    });
+    if (!event) {
+      const error = new Error("Evenement introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return prisma.event.delete({ where: { id } });
+  });
 }

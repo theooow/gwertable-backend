@@ -74,6 +74,8 @@ describe("people and event routes", () => {
       })).statusCode,
       200,
     );
+    assert.equal((await request("DELETE", `/api/events/${event.id}`, authorization)).statusCode, 200);
+    assert.equal((await request("GET", `/api/events/${event.id}`, authorization)).statusCode, 404);
   });
 
   it("does not expose people, venues or events from another workspace", async () => {
