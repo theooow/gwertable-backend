@@ -52,4 +52,64 @@ describe("auth and health routes", () => {
     assert.equal(response.statusCode, 401);
     assert.equal(json<{ error: string }>(response).error, "Unauthorized");
   });
+
+  it("accepts a workspace invitation during magic-link login", async () => {
+    const workspace = await prisma.workspace.create({ data: { name: "Inviting workspace" } });
+    const admin = await prisma.user.create({
+      data: {
+        email: "owner@gwertable.test",
+        role: "ADMIN",
+        defaultWorkspaceId: workspace.id,
+        workspaceMemberships: {
+          create: { workspaceId: workspace.id, role: "ADMIN" },
+        },
+      },
+    });
+    await prisma.session.create({
+      data: {
+        sessionToken: "owner-session",
+        userId: admin.id,
+        expires: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    const invitation = await request("POST", "/api/workspace/invitations", "Bearer owner-session", {
+      email: "collab@gwertable.test",
+      role: "ORGANIZER",
+    });
+    assert.equal(invitation.statusCode, 201);
+    const invitePayload = json<{ inviteUrl: string }>(invitation);
+    const inviteToken = new URL(invitePayload.inviteUrl).searchParams.get("invite");
+    assert.ok(inviteToken);
+
+    const loginLink = await request("POST", "/api/auth/login-link", undefined, {
+      email: "collab@gwertable.test",
+      inviteToken,
+    });
+    assert.equal(loginLink.statusCode, 200);
+    assert.match(json<{ devVerificationUrl: string }>(loginLink).devVerificationUrl, /invite=/);
+
+    const verificationToken = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "collab@gwertable.test" },
+    });
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "collab@gwertable.test",
+      token: verificationToken.token,
+      inviteToken,
+    });
+    assert.equal(verified.statusCode, 200);
+    const verifiedPayload = json<{ user: { role: string; workspaceId: string } }>(verified);
+    assert.equal(verifiedPayload.user.role, "ORGANIZER");
+    assert.equal(verifiedPayload.user.workspaceId, workspace.id);
+
+    const member = await prisma.workspaceMember.findFirstOrThrow({
+      where: { workspaceId: workspace.id, user: { email: "collab@gwertable.test" } },
+    });
+    assert.equal(member.role, "ORGANIZER");
+
+    const acceptedInvitation = await prisma.workspaceInvitation.findFirstOrThrow({
+      where: { token: inviteToken },
+    });
+    assert.ok(acceptedInvitation.acceptedAt);
+  });
 });

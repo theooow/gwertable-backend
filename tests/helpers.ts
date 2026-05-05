@@ -29,6 +29,7 @@ export async function resetDatabase() {
       "Venue",
       "VerificationToken",
       "WorkspaceMember",
+      "WorkspaceInvitation",
       "Workspace"
     RESTART IDENTITY CASCADE
   `);

@@ -89,9 +89,24 @@ export const authPlugin = fp(async (fastify) => {
       throw error;
     }
 
+    const membership = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: session.user.defaultWorkspaceId,
+          userId: session.user.id,
+        },
+      },
+      select: { role: true },
+    });
+    if (!membership) {
+      const error = new Error("Compte non membre de cet espace de travail");
+      error.name = "ForbiddenError";
+      throw error;
+    }
+
     const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
     request.workspaceId = defaultWorkspaceId;
-    request.user = { ...user, workspaceId: defaultWorkspaceId };
-    request.userRole = session.user.role;
+    request.user = { ...user, role: membership.role, workspaceId: defaultWorkspaceId };
+    request.userRole = membership.role;
   });
 });

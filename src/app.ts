@@ -8,6 +8,7 @@ import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
 import { eventModuleRoutes } from "./routes/event-modules.js";
 import { peopleRoutes } from "./routes/people.js";
+import { workspaceRoutes } from "./routes/workspace.js";
 
 export async function buildApp() {
   const app = fastify({
@@ -27,6 +28,7 @@ export async function buildApp() {
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);
   await app.register(peopleRoutes);
+  await app.register(workspaceRoutes);
 
   return app;
 }

@@ -105,6 +105,7 @@ model Workspace {
 
   defaultUsers User[] @relation("DefaultWorkspace")
   members      WorkspaceMember[]
+  invitations  WorkspaceInvitation[]
   persons      Person[]
   venues       Venue[]
   suppliers    Supplier[]
@@ -123,6 +124,22 @@ model WorkspaceMember {
 
   @@unique([workspaceId, userId])
   @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  role        UserRole
+  token       String   @unique
+  expires     DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([email])
+  @@unique([workspaceId, email])
 }
 
 model Account {
