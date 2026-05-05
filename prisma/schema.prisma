@@ -1,0 +1,408 @@
+// Prisma schema — Soirée Manager
+// Voir PROJECT.md pour le contexte complet
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  ORGANIZER
+  TREASURER
+  VOLUNTEER
+  ARTIST
+  VIEWER
+}
+
+enum EventStatus {
+  DRAFT
+  PLANNING
+  LIVE
+  DONE
+  ARCHIVED
+}
+
+enum ParticipantRole {
+  GUEST
+  VOLUNTEER
+  ARTIST
+  STAFF
+  SUPPLIER
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+  BLOCKED
+}
+
+enum Priority {
+  LOW
+  MED
+  HIGH
+}
+
+enum ReimbStatus {
+  PENDING
+  DONE
+  NOT_OWED
+}
+
+enum Ownership {
+  OWNED
+  BORROWED
+  RENTED
+}
+
+enum RsvpStatus {
+  UNKNOWN
+  YES
+  NO
+  MAYBE
+}
+
+// ============================================================
+// PERSISTENT ENTITIES (pas liées à un event spécifique)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  role          UserRole  @default(VIEWER)
+  discordUserId String?   @unique
+  personId      String?   @unique
+  person        Person?   @relation(fields: [personId], references: [id])
+  createdAt     DateTime  @default(now())
+  archivedAt    DateTime?
+
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Person {
+  id            String    @id @default(cuid())
+  fullName      String
+  email         String?   @unique
+  phone         String?
+  discordUserId String?   @unique
+  notes         String?
+  tags          String[]
+  archivedAt    DateTime?
+
+  user          User?
+  participations EventParticipant[]
+  expensesPaid   Expense[]          @relation("PaidBy")
+  tasksAssigned  Task[]             @relation("TaskAssignee")
+  shifts         Shift[]
+  shoppingItems  ShoppingItem[]     @relation("ShoppingBuyer")
+  equipmentOwned EquipmentItem[]    @relation("EquipmentOwner")
+  announcements  Announcement[]     @relation("AnnouncementAuthor")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([archivedAt])
+}
+
+model Venue {
+  id         String    @id @default(cuid())
+  name       String
+  address    String?
+  capacity   Int?
+  notes      String?
+  archivedAt DateTime?
+
+  events     Event[]
+}
+
+model Supplier {
+  id         String    @id @default(cuid())
+  name       String
+  category   String
+  contact    String?
+  notes      String?
+  archivedAt DateTime?
+}
+
+model EquipmentItem {
+  id         String    @id @default(cuid())
+  name       String
+  category   String    // son, lumière, mobilier, déco
+  ownership  Ownership
+  ownerId    String?
+  owner      Person?   @relation("EquipmentOwner", fields: [ownerId], references: [id])
+  notes      String?
+  archivedAt DateTime?
+
+  usages     EquipmentUsage[]
+
+  @@index([category])
+}
+
+// ============================================================
+// EVENT-SCOPED ENTITIES
+// ============================================================
+
+model Event {
+  id            String      @id @default(cuid())
+  name          String
+  startsAt      DateTime
+  endsAt        DateTime?
+  status        EventStatus @default(DRAFT)
+  description   String?
+  venueId       String?
+  venue         Venue?      @relation(fields: [venueId], references: [id])
+  parentEventId String?     // si cloné depuis un autre event
+
+  participants    EventParticipant[]
+  tasks           Task[]
+  shifts          Shift[]
+  runOfShow       RunOfShowItem[]
+  expenses        Expense[]
+  incomes         Income[]
+  shopping        ShoppingItem[]
+  equipmentUsages EquipmentUsage[]
+  announcements   Announcement[]
+  documents       Document[]
+  channels        Channel[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([startsAt])
+  @@index([status])
+}
+
+model EventParticipant {
+  id        String  @id @default(cuid())
+  eventId   String
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person  @relation(fields: [personId], references: [id])
+
+  roles     ParticipantRole[]
+
+  // Champs invité
+  rsvpStatus    RsvpStatus @default(UNKNOWN)
+  plusOnes      Int        @default(0)
+  dietary       String?
+
+  // Champs artiste
+  setStart      DateTime?
+  setEnd        DateTime?
+  fee           Decimal?   @db.Decimal(10, 2)
+  rider         Json?
+  contractSigned Boolean   @default(false)
+
+  // Notes internes orga (sensibles)
+  internalNotes String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([eventId, personId])
+  @@index([eventId])
+  @@index([personId])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  eventId     String
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  category    String
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MED)
+  dueAt       DateTime?
+  assigneeId  String?
+  assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId, status])
+  @@index([assigneeId])
+  @@index([dueAt])
+}
+
+model Shift {
+  id         String   @id @default(cuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  position   String   // "Bar 1", "Accueil", "Régie son"
+  startsAt   DateTime
+  endsAt     DateTime
+  assigneeId String?
+  assignee   Person?  @relation(fields: [assigneeId], references: [id])
+  notes      String?
+  reminderSentAt DateTime?
+
+  @@index([eventId, startsAt])
+  @@index([assigneeId])
+}
+
+model RunOfShowItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  durationMin Int
+  title       String
+  responsible String?
+  notes       String?
+
+  @@index([eventId, startsAt])
+}
+
+model Expense {
+  id            String      @id @default(cuid())
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label         String
+  amountCents   Int
+  category      String
+  paidById      String?
+  paidBy        Person?     @relation("PaidBy", fields: [paidById], references: [id])
+  paidAt        DateTime?
+  reimbursement ReimbStatus @default(PENDING)
+  receiptUrl    String?
+  notes         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([eventId, category])
+  @@index([paidById])
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label       String
+  amountCents Int
+  category    String   // bar, contributions, sponsor
+  receivedAt  DateTime?
+
+  @@index([eventId])
+}
+
+model ShoppingItem {
+  id             String   @id @default(cuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name           String
+  quantity       Decimal  @db.Decimal(10, 2)
+  unit           String?
+  category       String
+  estimatedCents Int?
+  buyerId        String?
+  buyer          Person?  @relation("ShoppingBuyer", fields: [buyerId], references: [id])
+  bought         Boolean  @default(false)
+  expenseId      String?  // lien quand acheté
+
+  @@index([eventId, bought])
+}
+
+model EquipmentUsage {
+  id              String        @id @default(cuid())
+  eventId         String
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            EquipmentItem @relation(fields: [itemId], references: [id])
+  conditionBefore String?
+  conditionAfter  String?
+  returned        Boolean       @default(false)
+  notes           String?
+
+  @@unique([eventId, itemId])
+  @@index([eventId])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  category  String   // contrat, devis, plan, rider
+  createdAt DateTime @default(now())
+}
+
+model Channel {
+  id            String  @id @default(cuid())
+  eventId       String
+  event         Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label         String  // "annonces", "logistique"
+  discordChannelId String
+  webhookUrl    String?
+
+  announcements Announcement[]
+
+  @@unique([eventId, label])
+}
+
+model Announcement {
+  id        String    @id @default(cuid())
+  eventId   String
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  channelId String
+  channel   Channel   @relation(fields: [channelId], references: [id])
+  body      String
+  sentAt    DateTime?
+  authorId  String
+  author    Person    @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@index([eventId])
+}
