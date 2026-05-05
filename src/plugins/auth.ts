@@ -2,11 +2,14 @@ import fp from "fastify-plugin";
 import type { User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
-type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId">;
+type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
+  workspaceId: string;
+};
 
 declare module "fastify" {
   interface FastifyRequest {
     userRole: UserRole;
+    workspaceId: string;
     user?: AuthUser;
   }
 }
@@ -37,6 +40,7 @@ function isPublicRoute(url: string): boolean {
 
 export const authPlugin = fp(async (fastify) => {
   fastify.decorateRequest("userRole", "VIEWER");
+  fastify.decorateRequest("workspaceId", "");
   fastify.decorateRequest("user");
 
   fastify.addHook("preHandler", async (request) => {
@@ -66,6 +70,7 @@ export const authPlugin = fp(async (fastify) => {
             image: true,
             role: true,
             personId: true,
+            defaultWorkspaceId: true,
             archivedAt: true,
           },
         },
@@ -78,8 +83,15 @@ export const authPlugin = fp(async (fastify) => {
       throw error;
     }
 
-    const { archivedAt: _archivedAt, ...user } = session.user;
-    request.user = user;
+    if (!session.user.defaultWorkspaceId) {
+      const error = new Error("Aucun espace de travail associe a ce compte");
+      error.name = "ForbiddenError";
+      throw error;
+    }
+
+    const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
+    request.workspaceId = defaultWorkspaceId;
+    request.user = { ...user, workspaceId: defaultWorkspaceId };
     request.userRole = session.user.role;
   });
 });

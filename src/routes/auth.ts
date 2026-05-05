@@ -19,14 +19,40 @@ function randomToken(bytes = 32): string {
 
 async function findOrCreateUser(email: string) {
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return existing;
+  if (existing?.defaultWorkspaceId) return existing;
 
-  const person = await prisma.person.findUnique({ where: { email } });
+  if (existing) {
+    const workspace = await prisma.workspace.create({
+      data: { name: existing.name ?? existing.email },
+    });
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        defaultWorkspaceId: workspace.id,
+        workspaceMemberships: {
+          create: {
+            workspaceId: workspace.id,
+            role: existing.role,
+          },
+        },
+      },
+    });
+  }
+
+  const workspace = await prisma.workspace.create({
+    data: { name: email },
+  });
   return prisma.user.create({
     data: {
       email,
-      role: "VIEWER",
-      personId: person?.id,
+      role: "ADMIN",
+      defaultWorkspaceId: workspace.id,
+      workspaceMemberships: {
+        create: {
+          workspaceId: workspace.id,
+          role: "ADMIN",
+        },
+      },
     },
   });
 }
@@ -102,6 +128,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         image: user.image,
         role: user.role,
         personId: user.personId,
+        workspaceId: user.defaultWorkspaceId,
       },
     });
   });

@@ -83,6 +83,8 @@ model User {
   emailVerified DateTime?
   role          UserRole  @default(VIEWER)
   discordUserId String?   @unique
+  defaultWorkspaceId String?
+  defaultWorkspace   Workspace? @relation("DefaultWorkspace", fields: [defaultWorkspaceId], references: [id])
   personId      String?   @unique
   person        Person?   @relation(fields: [personId], references: [id])
   createdAt     DateTime  @default(now())
@@ -90,6 +92,37 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
+  workspaceMemberships WorkspaceMember[]
+
+  @@index([defaultWorkspaceId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  defaultUsers User[] @relation("DefaultWorkspace")
+  members      WorkspaceMember[]
+  persons      Person[]
+  venues       Venue[]
+  suppliers    Supplier[]
+  equipmentItems EquipmentItem[]
+  events       Event[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        UserRole  @default(VIEWER)
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 model Account {
@@ -131,10 +164,12 @@ model VerificationToken {
 
 model Person {
   id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   fullName      String
-  email         String?   @unique
+  email         String?
   phone         String?
-  discordUserId String?   @unique
+  discordUserId String?
   notes         String?
   tags          String[]
   archivedAt    DateTime?
@@ -152,10 +187,15 @@ model Person {
   updatedAt     DateTime @updatedAt
 
   @@index([archivedAt])
+  @@index([workspaceId])
+  @@unique([workspaceId, email])
+  @@unique([workspaceId, discordUserId])
 }
 
 model Venue {
   id         String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name       String
   address    String?
   capacity   Int?
@@ -163,19 +203,27 @@ model Venue {
   archivedAt DateTime?
 
   events     Event[]
+
+  @@index([workspaceId])
 }
 
 model Supplier {
   id         String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name       String
   category   String
   contact    String?
   notes      String?
   archivedAt DateTime?
+
+  @@index([workspaceId])
 }
 
 model EquipmentItem {
   id         String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name       String
   category   String    // son, lumière, mobilier, déco
   ownership  Ownership
@@ -186,6 +234,7 @@ model EquipmentItem {
 
   usages     EquipmentUsage[]
 
+  @@index([workspaceId])
   @@index([category])
 }
 
@@ -195,6 +244,8 @@ model EquipmentItem {
 
 model Event {
   id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name          String
   startsAt      DateTime
   endsAt        DateTime?
@@ -219,6 +270,7 @@ model Event {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([workspaceId])
   @@index([startsAt])
   @@index([status])
 }
