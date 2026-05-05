@@ -147,6 +147,8 @@ jobs:
                   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
                 expose:
                   - "4000"
+                volumes:
+                  - uploads:/app/uploads
 
               frontend:
                 image: ${FRONTEND_IMAGE}
@@ -162,6 +164,7 @@ jobs:
 
             volumes:
               pgdata:
+              uploads:
             COMPOSE
 
             docker compose pull backend

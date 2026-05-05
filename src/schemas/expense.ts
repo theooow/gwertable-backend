@@ -7,6 +7,6 @@ export const expenseSchema = z.object({
   paidById: z.string().optional().or(z.literal("")),
   paidAt: z.string().optional().or(z.literal("")),
   reimbursement: z.enum(["PENDING", "DONE", "NOT_OWED"]).default("PENDING"),
-  receiptUrl: z.string().url("URL invalide").optional().or(z.literal("")),
+  receiptUrl: z.string().optional().or(z.literal("")),
   notes: z.string().optional().or(z.literal("")),
 });

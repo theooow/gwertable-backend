@@ -13,6 +13,10 @@ export const errorsPlugin = fp(async (fastify) => {
       });
     }
 
+    if (err.name === "ValidationError") {
+      return reply.status(400).send({ error: "ValidationError", message: err.message });
+    }
+
     if (err.name === "UnauthorizedError") {
       return reply.status(401).send({ error: "Unauthorized", message: err.message });
     }

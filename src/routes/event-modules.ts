@@ -1,3 +1,6 @@
+import crypto from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -18,6 +21,36 @@ const eventItemParamsSchema = z.object({
   id: z.string().min(1),
 });
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const receiptUploadSchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.string().min(1),
+  data: z.string().min(1),
+});
+const allowedReceiptTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+
+function extensionForContentType(contentType: string) {
+  switch (contentType) {
+    case "application/pdf":
+      return ".pdf";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    case "image/gif":
+      return ".gif";
+    default:
+      return "";
+  }
+}
 
 async function requireEventInWorkspace(eventId: string, workspaceId: string) {
   const event = await prisma.event.findFirst({
@@ -129,6 +162,67 @@ function normalizeShoppingItem(item: Awaited<ReturnType<typeof prisma.shoppingIt
 }
 
 export async function eventModuleRoutes(fastify: FastifyInstance) {
+  fastify.get("/uploads/receipts/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) {
+      const error = new Error("Justificatif introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    const filePath = path.join(uploadRoot, "receipts", fileName);
+    const data = await readFile(filePath).catch(() => null);
+    if (!data) {
+      const error = new Error("Justificatif introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const extension = path.extname(fileName);
+    const contentType =
+      extension === ".pdf"
+        ? "application/pdf"
+        : extension === ".jpg"
+          ? "image/jpeg"
+          : extension === ".png"
+            ? "image/png"
+            : extension === ".webp"
+              ? "image/webp"
+              : extension === ".gif"
+                ? "image/gif"
+                : "application/octet-stream";
+    return reply.type(contentType).send(data);
+  });
+
+  fastify.post("/api/uploads/expense-receipts", async (request, reply) => {
+    requireCan(request.userRole, "budget.write");
+    const parsed = receiptUploadSchema.parse(request.body);
+
+    if (!allowedReceiptTypes.has(parsed.contentType)) {
+      const error = new Error("Format de justificatif non supporte");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 8 * 1024 * 1024) {
+      const error = new Error("Le justificatif ne doit pas depasser 8 Mo");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "receipts");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    return reply.status(201).send({
+      url: `/uploads/receipts/${fileName}`,
+      fileName: parsed.fileName,
+      contentType: parsed.contentType,
+      size: buffer.byteLength,
+    });
+  });
+
   fastify.get("/api/events/:eventId/participants", async (request) => {
     requireCan(request.userRole, "participant.read");
     const { eventId } = eventParamsSchema.parse(request.params);
