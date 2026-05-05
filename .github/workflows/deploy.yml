@@ -91,7 +91,79 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ~/gwertable
-            export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            upsert_env() {
+              key="$1"
+              value="$2"
+              touch .env
+              if grep -q "^${key}=" .env; then
+                sed -i "s|^${key}=.*|${key}=${value}|" .env
+              else
+                printf '%s=%s\n' "$key" "$value" >> .env
+              fi
+            }
+            ensure_env() {
+              key="$1"
+              value="$2"
+              touch .env
+              if ! grep -q "^${key}=" .env; then
+                printf '%s=%s\n' "$key" "$value" >> .env
+              fi
+            }
+
+            upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:latest"
+
+            cat > docker-compose.yml <<'COMPOSE'
+            services:
+              db:
+                image: postgres:17
+                restart: unless-stopped
+                volumes:
+                  - pgdata:/var/lib/postgresql/data
+                environment:
+                  POSTGRES_DB: gwertable
+                  POSTGRES_USER: gwertable
+                  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U gwertable"]
+                  interval: 5s
+                  timeout: 3s
+                  retries: 10
+
+              backend:
+                image: ${BACKEND_IMAGE}
+                restart: unless-stopped
+                depends_on:
+                  db:
+                    condition: service_healthy
+                environment:
+                  NODE_ENV: production
+                  DATABASE_URL: postgresql://gwertable:${POSTGRES_PASSWORD}@db:5432/gwertable
+                  PORT: 4000
+                  HOST: 0.0.0.0
+                  CORS_ORIGIN: ${FRONTEND_URL}
+                  FRONTEND_URL: ${FRONTEND_URL}
+                  AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-15}
+                  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+                expose:
+                  - "4000"
+
+              frontend:
+                image: ${FRONTEND_IMAGE}
+                restart: unless-stopped
+                depends_on:
+                  - backend
+                environment:
+                  NODE_ENV: production
+                  BACKEND_API_URL: http://backend:4000
+                  NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+                ports:
+                  - "127.0.0.1:3000:3000"
+
+            volumes:
+              pgdata:
+            COMPOSE
+
             docker compose pull backend
-            docker compose up -d --remove-orphans
+            docker compose up -d backend
             docker image prune -f
