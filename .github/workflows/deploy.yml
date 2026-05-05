@@ -167,6 +167,8 @@ jobs:
               uploads:
             COMPOSE
 
+            docker compose up -d db
             docker compose pull backend
+            docker compose run --rm backend npx prisma migrate deploy
             docker compose up -d --force-recreate backend
             docker image prune -f
