@@ -220,6 +220,8 @@ function buildTasksCalendar(event: {
     "PRODID:-//Gwertable//Tasks//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT15M",
+    "X-PUBLISHED-TTL:PT15M",
     `X-WR-CALNAME:${escapeIcsText(`Taches - ${event.name}`)}`,
   ];
 
@@ -242,6 +244,7 @@ function buildTasksCalendar(event: {
       `DTSTART:${formatIcsDate(startsAt)}`,
       `DTEND:${formatIcsDate(endsAt)}`,
       `LAST-MODIFIED:${formatIcsDate(task.updatedAt)}`,
+      `SEQUENCE:${Math.floor(task.updatedAt.getTime() / 1000)}`,
       `SUMMARY:${escapeIcsText(task.title)}`,
       `DESCRIPTION:${escapeIcsText(description)}`,
       `CATEGORIES:${escapeIcsText(task.category)}`,

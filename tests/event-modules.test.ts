@@ -69,6 +69,8 @@ describe("event module routes", () => {
     assert.match(calendar.body, /BEGIN:VCALENDAR/);
     assert.match(calendar.body, /SUMMARY:Prepare bar/);
     assert.match(calendar.body, /BEGIN:VALARM/);
+    assert.match(calendar.body, /REFRESH-INTERVAL;VALUE=DURATION:PT15M/);
+    assert.match(calendar.body, /SEQUENCE:/);
     const subscription = await request("GET", `/api/events/${event.id}/tasks/calendar-subscription`, authorization);
     assert.equal(subscription.statusCode, 200);
     const subscriptionToken = json<{ token: string }>(subscription).token;
