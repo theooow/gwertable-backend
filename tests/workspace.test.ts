@@ -50,6 +50,47 @@ describe("workspace routes", () => {
     assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Gwertable Prod");
   });
 
+  it("updates and removes workspace members", async () => {
+    const { authorization, workspace } = await seedAdminSession();
+    const memberUser = await prisma.user.create({
+      data: {
+        email: "member@gwertable.test",
+        role: "VIEWER",
+        defaultWorkspaceId: workspace.id,
+        workspaceMemberships: {
+          create: { workspaceId: workspace.id, role: "VIEWER" },
+        },
+      },
+      include: { workspaceMemberships: true },
+    });
+    const memberId = memberUser.workspaceMemberships[0]!.id;
+
+    const updated = await request("PUT", `/api/workspace/members/${memberId}`, authorization, {
+      role: "ORGANIZER",
+    });
+    assert.equal(updated.statusCode, 200);
+    assert.equal(json<{ role: string }>(updated).role, "ORGANIZER");
+
+    const removed = await request("DELETE", `/api/workspace/members/${memberId}`, authorization);
+    assert.equal(removed.statusCode, 200);
+    assert.deepEqual(json(removed), { ok: true });
+    assert.equal(await prisma.workspaceMember.count({ where: { id: memberId } }), 0);
+  });
+
+  it("keeps at least one workspace admin", async () => {
+    const { authorization } = await seedAdminSession();
+    const members = await request("GET", "/api/workspace/members", authorization);
+    const adminMember = json<{ members: { id: string }[] }>(members).members[0]!;
+
+    const demote = await request("PUT", `/api/workspace/members/${adminMember.id}`, authorization, {
+      role: "VIEWER",
+    });
+    assert.equal(demote.statusCode, 400);
+
+    const remove = await request("DELETE", `/api/workspace/members/${adminMember.id}`, authorization);
+    assert.equal(remove.statusCode, 400);
+  });
+
   it("deletes the current workspace after confirmation", async () => {
     const { authorization, workspace } = await seedAdminSession();
 

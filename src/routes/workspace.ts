@@ -9,6 +9,12 @@ const inviteSchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
   role: z.enum(["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"]),
 });
+const workspaceMemberParamsSchema = z.object({
+  memberId: z.string().min(1),
+});
+const updateWorkspaceMemberSchema = z.object({
+  role: z.enum(["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"]),
+});
 const updateAccountSchema = z.object({
   name: z.string().trim().max(120).optional().or(z.literal("")),
 });
@@ -21,6 +27,34 @@ const deleteConfirmationSchema = z.object({
 
 function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
+}
+
+async function getWorkspaceMemberOrThrow(memberId: string, workspaceId: string) {
+  const member = await prisma.workspaceMember.findFirst({
+    where: { id: memberId, workspaceId },
+    select: { id: true, userId: true, role: true },
+  });
+  if (!member) {
+    const error = new Error("Membre introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+  return member;
+}
+
+async function assertNotLastAdmin(memberId: string, workspaceId: string) {
+  const [member, adminCount] = await Promise.all([
+    getWorkspaceMemberOrThrow(memberId, workspaceId),
+    prisma.workspaceMember.count({ where: { workspaceId, role: "ADMIN" } }),
+  ]);
+
+  if (member.role === "ADMIN" && adminCount <= 1) {
+    const error = new Error("Impossible de retirer le dernier admin du workspace");
+    error.name = "ValidationError";
+    throw error;
+  }
+
+  return member;
 }
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
@@ -178,6 +212,55 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         };
       }),
     };
+  });
+
+  fastify.put("/api/workspace/members/:memberId", async (request) => {
+    requireCan(request.userRole, "user.manage");
+    const { memberId } = workspaceMemberParamsSchema.parse(request.params);
+    const parsed = updateWorkspaceMemberSchema.parse(request.body);
+    const member = await assertNotLastAdmin(memberId, request.workspaceId);
+
+    return prisma.workspaceMember.update({
+      where: { id: member.id },
+      data: { role: parsed.role },
+      select: {
+        id: true,
+        role: true,
+        createdAt: true,
+        user: { select: { id: true, email: true, name: true, image: true, role: true } },
+      },
+    });
+  });
+
+  fastify.delete("/api/workspace/members/:memberId", async (request) => {
+    requireCan(request.userRole, "user.manage");
+    const { memberId } = workspaceMemberParamsSchema.parse(request.params);
+    const member = await assertNotLastAdmin(memberId, request.workspaceId);
+
+    if (member.userId === request.user!.id) {
+      const error = new Error("Utilise la suppression du compte pour retirer ton propre acces");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    await prisma.workspaceMember.delete({ where: { id: member.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: member.userId },
+      select: { defaultWorkspaceId: true },
+    });
+    if (user?.defaultWorkspaceId === request.workspaceId) {
+      const fallbackMembership = await prisma.workspaceMember.findFirst({
+        where: { userId: member.userId },
+        orderBy: { createdAt: "asc" },
+        select: { workspaceId: true },
+      });
+      await prisma.user.update({
+        where: { id: member.userId },
+        data: { defaultWorkspaceId: fallbackMembership?.workspaceId ?? null },
+      });
+    }
+
+    return { ok: true };
   });
 
   fastify.post("/api/workspace/invitations", async (request, reply) => {
