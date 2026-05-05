@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { prisma } from "../src/prisma.js";
 import {
   eventPayload,
   json,
@@ -73,5 +74,64 @@ describe("people and event routes", () => {
       })).statusCode,
       200,
     );
+  });
+
+  it("does not expose people, venues or events from another workspace", async () => {
+    const { authorization } = await seedAdminSession();
+    const otherWorkspace = await prisma.workspace.create({
+      data: { name: "Other association" },
+    });
+    const otherPerson = await prisma.person.create({
+      data: {
+        workspaceId: otherWorkspace.id,
+        fullName: "Hidden Person",
+        email: "hidden@gwertable.test",
+        tags: ["hidden"],
+      },
+    });
+    const otherVenue = await prisma.venue.create({
+      data: {
+        workspaceId: otherWorkspace.id,
+        name: "Hidden Venue",
+      },
+    });
+    await prisma.event.create({
+      data: {
+        workspaceId: otherWorkspace.id,
+        name: "Hidden Event",
+        startsAt: new Date("2026-07-01T20:00:00.000Z"),
+        status: "PLANNING",
+        venueId: otherVenue.id,
+      },
+    });
+
+    const people = await request("GET", "/api/people?search=Hidden", authorization);
+    assert.equal(people.statusCode, 200);
+    assert.deepEqual(json(people), []);
+
+    const tags = await request("GET", "/api/people/tags", authorization);
+    assert.equal(tags.statusCode, 200);
+    assert.deepEqual(json(tags), []);
+
+    const search = await request("GET", "/api/people/search?q=Hidden", authorization);
+    assert.equal(search.statusCode, 200);
+    assert.deepEqual(json(search), []);
+
+    const venues = await request("GET", "/api/events/venues", authorization);
+    assert.equal(venues.statusCode, 200);
+    assert.deepEqual(json(venues), []);
+
+    const events = await request("GET", "/api/events", authorization);
+    assert.equal(events.statusCode, 200);
+    assert.deepEqual(json(events), []);
+
+    const eventFromOtherWorkspace = await prisma.event.findFirstOrThrow({
+      where: { workspaceId: otherWorkspace.id },
+    });
+    const eventById = await request("GET", `/api/events/${eventFromOtherWorkspace.id}`, authorization);
+    assert.equal(eventById.statusCode, 404);
+
+    const personById = await request("GET", `/api/people/${otherPerson.id}`, authorization);
+    assert.equal(personById.statusCode, 404);
   });
 });

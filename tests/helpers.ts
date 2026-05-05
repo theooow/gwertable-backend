@@ -27,7 +27,9 @@ export async function resetDatabase() {
       "Supplier",
       "User",
       "Venue",
-      "VerificationToken"
+      "VerificationToken",
+      "WorkspaceMember",
+      "Workspace"
     RESTART IDENTITY CASCADE
   `);
 }
@@ -48,10 +50,20 @@ export function setupTestApp() {
 }
 
 export async function seedAdminSession() {
+  const workspace = await prisma.workspace.create({
+    data: { name: "Test workspace" },
+  });
   const user = await prisma.user.create({
     data: {
       email: "admin@gwertable.test",
       role: "ADMIN",
+      defaultWorkspaceId: workspace.id,
+      workspaceMemberships: {
+        create: {
+          workspaceId: workspace.id,
+          role: "ADMIN",
+        },
+      },
     },
   });
   const session = await prisma.session.create({
@@ -64,6 +76,7 @@ export async function seedAdminSession() {
 
   return {
     authorization: `Bearer ${session.sessionToken}`,
+    workspace,
     user,
   };
 }

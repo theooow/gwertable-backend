@@ -30,11 +30,13 @@ describe("auth and health routes", () => {
       token: token.token,
     });
     assert.equal(verified.statusCode, 200);
-    const verifiedPayload = json<{ sessionToken: string; user: { email: string; role: string } }>(
-      verified,
-    );
+    const verifiedPayload = json<{
+      sessionToken: string;
+      user: { email: string; role: string; workspaceId: string };
+    }>(verified);
     assert.equal(verifiedPayload.user.email, "admin@gwertable.test");
-    assert.equal(verifiedPayload.user.role, "VIEWER");
+    assert.equal(verifiedPayload.user.role, "ADMIN");
+    assert.ok(verifiedPayload.user.workspaceId);
 
     const me = await request("GET", "/api/auth/me", `Bearer ${verifiedPayload.sessionToken}`);
     assert.equal(me.statusCode, 200);
