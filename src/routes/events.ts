@@ -15,7 +15,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
       where: { workspaceId: request.workspaceId },
       include: {
         venue: { select: { name: true } },
-        _count: { select: { participants: true, tasks: true, expenses: true } },
+        _count: { select: { participants: true, tasks: true, expenses: true, runOfShow: true } },
       },
       orderBy: { startsAt: "desc" },
     });
@@ -86,6 +86,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
             expenses: true,
             shopping: true,
             shifts: true,
+            runOfShow: true,
           },
         },
       },

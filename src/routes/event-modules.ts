@@ -9,6 +9,7 @@ import { parseEuros } from "../lib/money.js";
 import { participantSchema } from "../schemas/participant.js";
 import { taskSchema, taskStatusSchema } from "../schemas/task.js";
 import { expenseSchema } from "../schemas/expense.js";
+import { runOfShowSchema } from "../schemas/run-of-show.js";
 import {
   boughtSchema,
   boughtWithExpenseSchema,
@@ -123,6 +124,18 @@ async function requireShoppingItemInWorkspace(id: string, workspaceId: string) {
     throw error;
   }
   return item;
+}
+
+async function requireRunOfShowItemInWorkspace(id: string, workspaceId: string, eventId?: string) {
+  const item = await prisma.runOfShowItem.findFirst({
+    where: { id, eventId, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!item) {
+    const error = new Error("Element de conducteur introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
 }
 
 function normalizeParticipant(participant: Awaited<ReturnType<typeof prisma.eventParticipant.findMany>>[number], canSeeSensitive: boolean) {
@@ -452,6 +465,87 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     await requireTaskInWorkspace(id, request.workspaceId);
     return prisma.task.delete({ where: { id } });
+  });
+
+  fastify.get("/api/events/:eventId/run-of-show", async (request) => {
+    requireCan(request.userRole, "runOfShow.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.runOfShowItem.findMany({
+      where: { eventId, event: { workspaceId: request.workspaceId } },
+      orderBy: [{ startsAt: "asc" }, { title: "asc" }],
+    });
+  });
+
+  fastify.post("/api/events/:eventId/run-of-show", async (request, reply) => {
+    requireCan(request.userRole, "runOfShow.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const parsed = runOfShowSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const item = await prisma.runOfShowItem.create({
+      data: {
+        eventId,
+        startsAt: new Date(parsed.startsAt),
+        durationMin: parsed.durationMin,
+        title: parsed.title,
+        responsible: parsed.responsible || null,
+        notes: parsed.notes || null,
+      },
+    });
+
+    return reply.status(201).send(item);
+  });
+
+  fastify.put("/api/events/:eventId/run-of-show/:id", async (request) => {
+    requireCan(request.userRole, "runOfShow.write");
+    const { eventId, id } = eventItemParamsSchema.parse(request.params);
+    const parsed = runOfShowSchema.parse(request.body);
+    await requireRunOfShowItemInWorkspace(id, request.workspaceId, eventId);
+
+    return prisma.runOfShowItem.update({
+      where: { id },
+      data: {
+        startsAt: new Date(parsed.startsAt),
+        durationMin: parsed.durationMin,
+        title: parsed.title,
+        responsible: parsed.responsible || null,
+        notes: parsed.notes || null,
+      },
+    });
+  });
+
+  fastify.put("/api/run-of-show/:id", async (request) => {
+    requireCan(request.userRole, "runOfShow.write");
+    const { id } = idParamsSchema.parse(request.params);
+    const parsed = runOfShowSchema.parse(request.body);
+    await requireRunOfShowItemInWorkspace(id, request.workspaceId);
+
+    return prisma.runOfShowItem.update({
+      where: { id },
+      data: {
+        startsAt: new Date(parsed.startsAt),
+        durationMin: parsed.durationMin,
+        title: parsed.title,
+        responsible: parsed.responsible || null,
+        notes: parsed.notes || null,
+      },
+    });
+  });
+
+  fastify.delete("/api/events/:eventId/run-of-show/:id", async (request) => {
+    requireCan(request.userRole, "runOfShow.write");
+    const { eventId, id } = eventItemParamsSchema.parse(request.params);
+    await requireRunOfShowItemInWorkspace(id, request.workspaceId, eventId);
+    return prisma.runOfShowItem.delete({ where: { id } });
+  });
+
+  fastify.delete("/api/run-of-show/:id", async (request) => {
+    requireCan(request.userRole, "runOfShow.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await requireRunOfShowItemInWorkspace(id, request.workspaceId);
+    return prisma.runOfShowItem.delete({ where: { id } });
   });
 
   fastify.get("/api/events/:eventId/expenses", async (request) => {

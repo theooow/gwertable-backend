@@ -14,6 +14,8 @@ export const actions = {
   "budget.write": ["ADMIN", "ORGANIZER", "TREASURER"],
   "shopping.read": ["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER"],
   "shopping.write": ["ADMIN", "ORGANIZER", "VOLUNTEER"],
+  "runOfShow.read": ["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"],
+  "runOfShow.write": ["ADMIN", "ORGANIZER", "VOLUNTEER"],
   "equipment.read": ["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"],
   "equipment.write": ["ADMIN", "ORGANIZER"],
   "announcement.read": ["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"],

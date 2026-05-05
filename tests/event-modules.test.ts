@@ -80,6 +80,35 @@ describe("event module routes", () => {
       200,
     );
 
+    const runOfShowPayload = {
+      startsAt: "2026-06-01T20:00:00.000Z",
+      durationMin: 45,
+      title: "Ouverture des portes",
+      responsible: "Regie",
+      notes: "Verifier l'accueil et la billetterie",
+    };
+    const createdRunOfShow = await request(
+      "POST",
+      `/api/events/${event.id}/run-of-show`,
+      authorization,
+      runOfShowPayload,
+    );
+    assert.equal(createdRunOfShow.statusCode, 201);
+    const runOfShow = json<{ id: string }>(createdRunOfShow);
+
+    assert.equal((await request("GET", `/api/events/${event.id}/run-of-show`, authorization)).statusCode, 200);
+    assert.equal(
+      (await request("PUT", `/api/events/${event.id}/run-of-show/${runOfShow.id}`, authorization, {
+        ...runOfShowPayload,
+        durationMin: 50,
+      })).statusCode,
+      200,
+    );
+    assert.equal(
+      (await request("PUT", `/api/run-of-show/${runOfShow.id}`, authorization, runOfShowPayload)).statusCode,
+      200,
+    );
+
     const expensePayload = {
       label: "Boissons",
       amount: "42.50",
@@ -215,6 +244,21 @@ describe("event module routes", () => {
     assert.equal(secondTask.statusCode, 201);
     assert.equal(
       (await request("DELETE", `/api/tasks/${json<{ id: string }>(secondTask).id}`, authorization)).statusCode,
+      200,
+    );
+
+    assert.equal(
+      (await request("DELETE", `/api/events/${event.id}/run-of-show/${runOfShow.id}`, authorization)).statusCode,
+      200,
+    );
+    const secondRunOfShow = await request("POST", `/api/events/${event.id}/run-of-show`, authorization, {
+      ...runOfShowPayload,
+      title: "Debrief",
+    });
+    assert.equal(secondRunOfShow.statusCode, 201);
+    assert.equal(
+      (await request("DELETE", `/api/run-of-show/${json<{ id: string }>(secondRunOfShow).id}`, authorization))
+        .statusCode,
       200,
     );
 
