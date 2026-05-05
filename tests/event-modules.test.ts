@@ -64,6 +64,17 @@ describe("event module routes", () => {
     const task = json<{ id: string }>(createdTask);
 
     assert.equal((await request("GET", `/api/events/${event.id}/tasks`, authorization)).statusCode, 200);
+    const calendar = await request("GET", `/api/events/${event.id}/tasks/calendar.ics`, authorization);
+    assert.equal(calendar.statusCode, 200);
+    assert.match(calendar.body, /BEGIN:VCALENDAR/);
+    assert.match(calendar.body, /SUMMARY:Prepare bar/);
+    assert.match(calendar.body, /BEGIN:VALARM/);
+    const subscription = await request("GET", `/api/events/${event.id}/tasks/calendar-subscription`, authorization);
+    assert.equal(subscription.statusCode, 200);
+    const subscriptionToken = json<{ token: string }>(subscription).token;
+    const syncedCalendar = await request("GET", `/calendar/tasks/${subscriptionToken}`);
+    assert.equal(syncedCalendar.statusCode, 200);
+    assert.match(syncedCalendar.body, /SUMMARY:Prepare bar/);
     assert.equal(
       (await request("PUT", `/api/events/${event.id}/tasks/${task.id}`, authorization, taskPayload)).statusCode,
       200,

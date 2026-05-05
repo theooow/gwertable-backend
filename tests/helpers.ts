@@ -25,6 +25,7 @@ export async function resetDatabase() {
       "Shift",
       "ShoppingItem",
       "Supplier",
+      "TaskCalendarSubscription",
       "User",
       "Venue",
       "VerificationToken",

@@ -283,6 +283,7 @@ model Event {
   announcements   Announcement[]
   documents       Document[]
   channels        Channel[]
+  taskCalendarSubscriptions TaskCalendarSubscription[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -290,6 +291,17 @@ model Event {
   @@index([workspaceId])
   @@index([startsAt])
   @@index([status])
+}
+
+model TaskCalendarSubscription {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  @@unique([eventId])
+  @@index([token])
 }
 
 model EventParticipant {

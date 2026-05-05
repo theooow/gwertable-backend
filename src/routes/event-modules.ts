@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireCan, can } from "../lib/permissions.js";
@@ -17,6 +17,7 @@ import {
 } from "../schemas/shopping.js";
 
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
+const tokenParamsSchema = z.object({ token: z.string().min(24) });
 const eventItemParamsSchema = z.object({
   eventId: z.string().min(1),
   id: z.string().min(1),
@@ -174,7 +175,138 @@ function normalizeShoppingItem(item: Awaited<ReturnType<typeof prisma.shoppingIt
   };
 }
 
+function escapeIcsText(value: string) {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll(";", "\\;")
+    .replaceAll(",", "\\,")
+    .replaceAll(/\r?\n/g, "\\n");
+}
+
+function formatIcsDate(date: Date) {
+  return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".000", "");
+}
+
+function foldIcsLine(line: string) {
+  const chunks: string[] = [];
+  let remaining = line;
+  while (remaining.length > 74) {
+    chunks.push(remaining.slice(0, 74));
+    remaining = ` ${remaining.slice(74)}`;
+  }
+  chunks.push(remaining);
+  return chunks.join("\r\n");
+}
+
+function buildTasksCalendar(event: {
+  id: string;
+  name: string;
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    category: string;
+    status: string;
+    priority: string;
+    dueAt: Date | null;
+    assignee: { fullName: string } | null;
+    updatedAt: Date;
+  }>;
+}) {
+  const now = formatIcsDate(new Date());
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Gwertable//Tasks//FR",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeIcsText(`Taches - ${event.name}`)}`,
+  ];
+
+  for (const task of event.tasks) {
+    if (!task.dueAt) continue;
+    const startsAt = task.dueAt;
+    const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
+    const description = [
+      task.description,
+      `Statut: ${task.status}`,
+      `Priorite: ${task.priority}`,
+      `Categorie: ${task.category}`,
+      task.assignee ? `Assigne a: ${task.assignee.fullName}` : null,
+    ].filter(Boolean).join("\n");
+
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:gwertable-task-${task.id}@gwertable`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${formatIcsDate(startsAt)}`,
+      `DTEND:${formatIcsDate(endsAt)}`,
+      `LAST-MODIFIED:${formatIcsDate(task.updatedAt)}`,
+      `SUMMARY:${escapeIcsText(task.title)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+      `CATEGORIES:${escapeIcsText(task.category)}`,
+      "BEGIN:VALARM",
+      "ACTION:DISPLAY",
+      "TRIGGER:-PT30M",
+      `DESCRIPTION:${escapeIcsText(task.title)}`,
+      "END:VALARM",
+      "END:VEVENT",
+    );
+  }
+
+  lines.push("END:VCALENDAR");
+  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+}
+
+async function findEventForTasksCalendar(eventId: string, workspaceId: string) {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, workspaceId },
+    select: {
+      id: true,
+      name: true,
+      tasks: {
+        where: { dueAt: { not: null } },
+        include: { assignee: { select: { fullName: true } } },
+        orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
+      },
+    },
+  });
+
+  if (!event) {
+    const error = new Error("Evenement introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+
+  return event;
+}
+
+function sendTasksCalendar(reply: FastifyReply, event: Awaited<ReturnType<typeof findEventForTasksCalendar>>) {
+  return reply
+    .type("text/calendar; charset=utf-8")
+    .header("content-disposition", `attachment; filename="gwertable-taches-${event.id}.ics"`)
+    .header("cache-control", "private, no-store")
+    .send(buildTasksCalendar(event));
+}
+
 export async function eventModuleRoutes(fastify: FastifyInstance) {
+  fastify.get("/calendar/tasks/:token", async (request, reply) => {
+    const { token } = tokenParamsSchema.parse(request.params);
+    const subscription = await prisma.taskCalendarSubscription.findUnique({
+      where: { token },
+      select: { eventId: true, event: { select: { workspaceId: true } } },
+    });
+
+    if (!subscription) {
+      const error = new Error("Abonnement calendrier introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const event = await findEventForTasksCalendar(subscription.eventId, subscription.event.workspaceId);
+    return sendTasksCalendar(reply, event);
+  });
+
   fastify.get("/uploads/receipts/:fileName", async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) {
@@ -370,6 +502,30 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       include: { assignee: { select: { id: true, fullName: true } } },
       orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
     });
+  });
+
+  fastify.get("/api/events/:eventId/tasks/calendar.ics", async (request, reply) => {
+    requireCan(request.userRole, "task.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const event = await findEventForTasksCalendar(eventId, request.workspaceId);
+    return sendTasksCalendar(reply, event);
+  });
+
+  fastify.get("/api/events/:eventId/tasks/calendar-subscription", async (request) => {
+    requireCan(request.userRole, "task.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const subscription = await prisma.taskCalendarSubscription.upsert({
+      where: { eventId },
+      create: {
+        eventId,
+        token: crypto.randomBytes(32).toString("base64url"),
+      },
+      update: {},
+    });
+
+    return { token: subscription.token };
   });
 
   fastify.post("/api/events/:eventId/tasks", async (request, reply) => {
