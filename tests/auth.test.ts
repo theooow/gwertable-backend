@@ -18,9 +18,9 @@ describe("auth and health routes", () => {
       email: "Admin@Abregi.test",
     });
     assert.equal(loginLink.statusCode, 200);
-    const loginPayload = json<{ email: string; devVerificationUrl: string }>(loginLink);
+    const loginPayload = json<{ email: string }>(loginLink);
     assert.equal(loginPayload.email, "admin@abregi.test");
-    assert.match(loginPayload.devVerificationUrl, /token=/);
+    assert.doesNotMatch(loginLink.body, /token=/);
 
     const token = await prisma.verificationToken.findFirstOrThrow({
       where: { identifier: "admin@abregi.test" },
@@ -87,7 +87,7 @@ describe("auth and health routes", () => {
       inviteToken,
     });
     assert.equal(loginLink.statusCode, 200);
-    assert.match(json<{ devVerificationUrl: string }>(loginLink).devVerificationUrl, /invite=/);
+    assert.doesNotMatch(loginLink.body, /invite=/);
 
     const verificationToken = await prisma.verificationToken.findFirstOrThrow({
       where: { identifier: "collab@abregi.test" },

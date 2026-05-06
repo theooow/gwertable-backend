@@ -10,6 +10,16 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default("http://localhost:3001"),
   AUTH_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(15),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  MAIL_TRANSPORT: z.enum(["smtp", "log"]).default(process.env.NODE_ENV === "test" ? "log" : "smtp"),
+  MAIL_FROM: z.string().default("Abregi <no-reply@abregi.local>"),
+  SMTP_HOST: z.string().default("127.0.0.1"),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

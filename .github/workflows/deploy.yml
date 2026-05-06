@@ -132,12 +132,20 @@ jobs:
                   timeout: 3s
                   retries: 10
 
+              mailhog:
+                image: mailhog/mailhog:v1.0.1
+                restart: unless-stopped
+                ports:
+                  - "127.0.0.1:8025:8025"
+
               backend:
                 image: ${BACKEND_IMAGE}
                 restart: unless-stopped
                 depends_on:
                   db:
                     condition: service_healthy
+                  mailhog:
+                    condition: service_started
                 environment:
                   NODE_ENV: production
                   DATABASE_URL: postgresql://gwertable:${POSTGRES_PASSWORD}@db:5432/gwertable
@@ -147,6 +155,13 @@ jobs:
                   FRONTEND_URL: ${FRONTEND_URL}
                   AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-15}
                   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+                  MAIL_TRANSPORT: smtp
+                  MAIL_FROM: "${MAIL_FROM:-Abregi <no-reply@abregi.local>}"
+                  SMTP_HOST: "${SMTP_HOST:-mailhog}"
+                  SMTP_PORT: "${SMTP_PORT:-1025}"
+                  SMTP_SECURE: "${SMTP_SECURE:-false}"
+                  SMTP_USER: "${SMTP_USER:-}"
+                  SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
                 expose:
                   - "4000"
                 volumes:
@@ -169,7 +184,7 @@ jobs:
               uploads:
             COMPOSE
 
-            docker compose up -d db
+            docker compose up -d db mailhog
             docker compose pull backend frontend
             docker compose run --rm backend npx prisma migrate deploy
             for attempt in 1 2 3; do

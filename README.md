@@ -23,6 +23,9 @@ L'API utilise les tables Prisma `VerificationToken`, `Session` et `User`.
 Le login crée un lien magique via `POST /api/auth/login-link`, puis `POST /api/auth/verify`
 crée une session. Les routes applicatives attendent `Authorization: Bearer <sessionToken>`.
 
+En développement, configure un SMTP local MailHog avec `SMTP_HOST=127.0.0.1` et
+`SMTP_PORT=1025`. L'interface MailHog est disponible sur `http://127.0.0.1:8025`.
+
 ## Routes
 
 - `GET /health`

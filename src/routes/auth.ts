@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
+import { sendMagicLinkEmail } from "../lib/mailer.js";
 import { prisma } from "../prisma.js";
 
 const loginLinkSchema = z.object({
@@ -168,12 +169,12 @@ export async function authRoutes(fastify: FastifyInstance) {
     url.searchParams.set("token", token);
     if (inviteToken) url.searchParams.set("invite", inviteToken);
 
-    fastify.log.info({ email, url: url.toString() }, "Magic login link created");
+    await sendMagicLinkEmail({ email, url: url.toString() });
+    fastify.log.info({ email }, "Magic login link sent");
 
     return {
       ok: true,
       email,
-      devVerificationUrl: url.toString(),
     };
   });
 
