@@ -217,7 +217,7 @@ function buildTasksCalendar(event: {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Gwertable//Tasks//FR",
+    "PRODID:-//Abregi//Tasks//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "REFRESH-INTERVAL;VALUE=DURATION:PT15M",
@@ -239,7 +239,7 @@ function buildTasksCalendar(event: {
 
     lines.push(
       "BEGIN:VEVENT",
-      `UID:gwertable-task-${task.id}@gwertable`,
+      `UID:abregi-task-${task.id}@abregi`,
       `DTSTAMP:${now}`,
       `DTSTART:${formatIcsDate(startsAt)}`,
       `DTEND:${formatIcsDate(endsAt)}`,
@@ -287,7 +287,7 @@ async function findEventForTasksCalendar(eventId: string, workspaceId: string) {
 function sendTasksCalendar(reply: FastifyReply, event: Awaited<ReturnType<typeof findEventForTasksCalendar>>) {
   return reply
     .type("text/calendar; charset=utf-8")
-    .header("content-disposition", `attachment; filename="gwertable-taches-${event.id}.ics"`)
+    .header("content-disposition", `attachment; filename="abregi-taches-${event.id}.ics"`)
     .header("cache-control", "private, no-store")
     .send(buildTasksCalendar(event));
 }

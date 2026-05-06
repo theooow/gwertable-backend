@@ -33,7 +33,7 @@ describe("people and event routes", () => {
     assert.equal(
       (await request("PUT", `/api/people/${person.id}`, authorization, {
         fullName: "Alice Martin Updated",
-        email: "alice@gwertable.test",
+        email: "alice@abregi.test",
         phone: "",
         discordUserId: "",
         tags: ["staff"],
@@ -87,7 +87,7 @@ describe("people and event routes", () => {
       data: {
         workspaceId: otherWorkspace.id,
         fullName: "Hidden Person",
-        email: "hidden@gwertable.test",
+        email: "hidden@abregi.test",
         tags: ["hidden"],
       },
     });

@@ -14,12 +14,12 @@ describe("workspace routes", () => {
     assert.equal(json<{ workspace: { id: string } }>(workspaceResponse).workspace.id, workspace.id);
 
     const invitation = await request("POST", "/api/workspace/invitations", authorization, {
-      email: "collab@gwertable.test",
+      email: "collab@abregi.test",
       role: "VOLUNTEER",
     });
     assert.equal(invitation.statusCode, 201);
     const invitationPayload = json<{ email: string; role: string; inviteUrl: string }>(invitation);
-    assert.equal(invitationPayload.email, "collab@gwertable.test");
+    assert.equal(invitationPayload.email, "collab@abregi.test");
     assert.equal(invitationPayload.role, "VOLUNTEER");
     assert.match(invitationPayload.inviteUrl, /invite=/);
 
@@ -31,7 +31,7 @@ describe("workspace routes", () => {
     }>(members);
     assert.equal(membersPayload.members.length, 1);
     assert.equal(membersPayload.invitations.length, 1);
-    assert.equal(membersPayload.invitations[0].email, "collab@gwertable.test");
+    assert.equal(membersPayload.invitations[0].email, "collab@abregi.test");
   });
 
   it("updates account and workspace settings", async () => {
@@ -44,17 +44,17 @@ describe("workspace routes", () => {
     assert.equal(json<{ user: { name: string } }>(account).user.name, "Theo Selim");
 
     const workspace = await request("PUT", "/api/workspace", authorization, {
-      name: "Gwertable Prod",
+      name: "Abregi Prod",
     });
     assert.equal(workspace.statusCode, 200);
-    assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Gwertable Prod");
+    assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Abregi Prod");
   });
 
   it("updates and removes workspace members", async () => {
     const { authorization, workspace } = await seedAdminSession();
     const memberUser = await prisma.user.create({
       data: {
-        email: "member@gwertable.test",
+        email: "member@abregi.test",
         role: "VIEWER",
         defaultWorkspaceId: workspace.id,
         workspaceMemberships: {
@@ -111,7 +111,7 @@ describe("workspace routes", () => {
     const { authorization, user } = await seedAdminSession();
 
     const blocked = await request("DELETE", "/api/account", authorization, {
-      confirm: "wrong@gwertable.test",
+      confirm: "wrong@abregi.test",
     });
     assert.equal(blocked.statusCode, 400);
 
@@ -127,7 +127,7 @@ describe("workspace routes", () => {
     const { workspace } = await seedAdminSession();
     const user = await prisma.user.create({
       data: {
-        email: "viewer@gwertable.test",
+        email: "viewer@abregi.test",
         role: "VIEWER",
         defaultWorkspaceId: workspace.id,
         workspaceMemberships: {
@@ -141,10 +141,10 @@ describe("workspace routes", () => {
         },
       },
     });
-    assert.equal(user.email, "viewer@gwertable.test");
+    assert.equal(user.email, "viewer@abregi.test");
 
     const response = await request("POST", "/api/workspace/invitations", "Bearer viewer-session", {
-      email: "blocked@gwertable.test",
+      email: "blocked@abregi.test",
       role: "VIEWER",
     });
     assert.equal(response.statusCode, 403);

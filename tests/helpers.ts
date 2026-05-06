@@ -57,7 +57,7 @@ export async function seedAdminSession() {
   });
   const user = await prisma.user.create({
     data: {
-      email: "admin@gwertable.test",
+      email: "admin@abregi.test",
       role: "ADMIN",
       defaultWorkspaceId: workspace.id,
       workspaceMemberships: {
@@ -103,7 +103,7 @@ export function json<T>(response: InjectResponse): T {
 
 export const personPayload = {
   fullName: "Alice Martin",
-  email: "alice@gwertable.test",
+  email: "alice@abregi.test",
   phone: "0600000000",
   discordUserId: "",
   tags: ["staff", "bar"],

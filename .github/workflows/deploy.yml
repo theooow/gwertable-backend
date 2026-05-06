@@ -16,20 +16,20 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: gwertable_test
-          POSTGRES_USER: gwertable
-          POSTGRES_PASSWORD: gwertable
+          POSTGRES_DB: abregi_test
+          POSTGRES_USER: abregi
+          POSTGRES_PASSWORD: abregi
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U gwertable -d gwertable_test"
+          --health-cmd "pg_isready -U abregi -d abregi_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://gwertable:gwertable@localhost:5432/gwertable_test?schema=public
+      DATABASE_URL: postgresql://abregi:abregi@localhost:5432/abregi_test?schema=public
       CORS_ORIGIN: http://localhost:3000
       FRONTEND_URL: http://localhost:3000
 
@@ -92,7 +92,7 @@ jobs:
           script_stop: true
           script: |
             set -eu
-            cd ~/gwertable
+            cd ~/abregi
             upsert_env() {
               key="$1"
               value="$2"
@@ -113,7 +113,7 @@ jobs:
             }
 
             upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:latest"
+            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/abregi-frontend:latest"
 
             cat > docker-compose.yml <<'COMPOSE'
             services:
@@ -123,11 +123,11 @@ jobs:
                 volumes:
                   - pgdata:/var/lib/postgresql/data
                 environment:
-                  POSTGRES_DB: gwertable
-                  POSTGRES_USER: gwertable
+                  POSTGRES_DB: abregi
+                  POSTGRES_USER: abregi
                   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
                 healthcheck:
-                  test: ["CMD-SHELL", "pg_isready -U gwertable"]
+                  test: ["CMD-SHELL", "pg_isready -U abregi"]
                   interval: 5s
                   timeout: 3s
                   retries: 10
@@ -140,7 +140,7 @@ jobs:
                     condition: service_healthy
                 environment:
                   NODE_ENV: production
-                  DATABASE_URL: postgresql://gwertable:${POSTGRES_PASSWORD}@db:5432/gwertable
+                  DATABASE_URL: postgresql://abregi:${POSTGRES_PASSWORD}@db:5432/abregi
                   PORT: 4000
                   HOST: 0.0.0.0
                   CORS_ORIGIN: ${FRONTEND_URL}

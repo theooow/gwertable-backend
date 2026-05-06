@@ -21,7 +21,7 @@ CREATE TABLE "WorkspaceMember" (
 
 -- Seed one workspace for existing production data.
 INSERT INTO "Workspace" ("id", "name", "createdAt", "updatedAt")
-VALUES ('legacy_workspace', 'Gwertable', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES ('legacy_workspace', 'Abregi', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- AlterTable
 ALTER TABLE "User" ADD COLUMN "defaultWorkspaceId" TEXT;

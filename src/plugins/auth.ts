@@ -4,6 +4,7 @@ import { prisma } from "../prisma.js";
 
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
   workspaceId: string;
+  workspaceName: string;
 };
 
 declare module "fastify" {
@@ -53,7 +54,7 @@ export const authPlugin = fp(async (fastify) => {
       : request.headers.authorization;
     const token =
       getBearerToken(authorization) ??
-      getCookieValue(request.headers.cookie, "gwertable_session");
+      getCookieValue(request.headers.cookie, "abregi_session");
 
     if (!token) {
       const error = new Error("Non authentifie");
@@ -98,7 +99,12 @@ export const authPlugin = fp(async (fastify) => {
           userId: session.user.id,
         },
       },
-      select: { role: true },
+      select: {
+        role: true,
+        workspace: {
+          select: { name: true },
+        },
+      },
     });
     if (!membership) {
       const error = new Error("Compte non membre de cet espace de travail");
@@ -108,7 +114,12 @@ export const authPlugin = fp(async (fastify) => {
 
     const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
     request.workspaceId = defaultWorkspaceId;
-    request.user = { ...user, role: membership.role, workspaceId: defaultWorkspaceId };
+    request.user = {
+      ...user,
+      role: membership.role,
+      workspaceId: defaultWorkspaceId,
+      workspaceName: membership.workspace.name,
+    };
     request.userRole = membership.role;
   });
 });

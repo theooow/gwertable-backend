@@ -11,22 +11,22 @@ describe("auth and health routes", () => {
     assert.equal(health.statusCode, 200);
     assert.deepEqual(json(health), {
       status: "ok",
-      service: "gwertable-backend",
+      service: "abregi-backend",
     });
 
     const loginLink = await request("POST", "/api/auth/login-link", undefined, {
-      email: "Admin@Gwertable.test",
+      email: "Admin@Abregi.test",
     });
     assert.equal(loginLink.statusCode, 200);
     const loginPayload = json<{ email: string; devVerificationUrl: string }>(loginLink);
-    assert.equal(loginPayload.email, "admin@gwertable.test");
+    assert.equal(loginPayload.email, "admin@abregi.test");
     assert.match(loginPayload.devVerificationUrl, /token=/);
 
     const token = await prisma.verificationToken.findFirstOrThrow({
-      where: { identifier: "admin@gwertable.test" },
+      where: { identifier: "admin@abregi.test" },
     });
     const verified = await request("POST", "/api/auth/verify", undefined, {
-      email: "admin@gwertable.test",
+      email: "admin@abregi.test",
       token: token.token,
     });
     assert.equal(verified.statusCode, 200);
@@ -34,13 +34,13 @@ describe("auth and health routes", () => {
       sessionToken: string;
       user: { email: string; role: string; workspaceId: string };
     }>(verified);
-    assert.equal(verifiedPayload.user.email, "admin@gwertable.test");
+    assert.equal(verifiedPayload.user.email, "admin@abregi.test");
     assert.equal(verifiedPayload.user.role, "ADMIN");
     assert.ok(verifiedPayload.user.workspaceId);
 
     const me = await request("GET", "/api/auth/me", `Bearer ${verifiedPayload.sessionToken}`);
     assert.equal(me.statusCode, 200);
-    assert.equal(json<{ user: { email: string } }>(me).user.email, "admin@gwertable.test");
+    assert.equal(json<{ user: { email: string } }>(me).user.email, "admin@abregi.test");
 
     const logout = await request("POST", "/api/auth/logout", `Bearer ${verifiedPayload.sessionToken}`);
     assert.equal(logout.statusCode, 200);
@@ -57,7 +57,7 @@ describe("auth and health routes", () => {
     const workspace = await prisma.workspace.create({ data: { name: "Inviting workspace" } });
     const admin = await prisma.user.create({
       data: {
-        email: "owner@gwertable.test",
+        email: "owner@abregi.test",
         role: "ADMIN",
         defaultWorkspaceId: workspace.id,
         workspaceMemberships: {
@@ -74,7 +74,7 @@ describe("auth and health routes", () => {
     });
 
     const invitation = await request("POST", "/api/workspace/invitations", "Bearer owner-session", {
-      email: "collab@gwertable.test",
+      email: "collab@abregi.test",
       role: "ORGANIZER",
     });
     assert.equal(invitation.statusCode, 201);
@@ -83,17 +83,17 @@ describe("auth and health routes", () => {
     assert.ok(inviteToken);
 
     const loginLink = await request("POST", "/api/auth/login-link", undefined, {
-      email: "collab@gwertable.test",
+      email: "collab@abregi.test",
       inviteToken,
     });
     assert.equal(loginLink.statusCode, 200);
     assert.match(json<{ devVerificationUrl: string }>(loginLink).devVerificationUrl, /invite=/);
 
     const verificationToken = await prisma.verificationToken.findFirstOrThrow({
-      where: { identifier: "collab@gwertable.test" },
+      where: { identifier: "collab@abregi.test" },
     });
     const verified = await request("POST", "/api/auth/verify", undefined, {
-      email: "collab@gwertable.test",
+      email: "collab@abregi.test",
       token: verificationToken.token,
       inviteToken,
     });
@@ -103,7 +103,7 @@ describe("auth and health routes", () => {
     assert.equal(verifiedPayload.user.workspaceId, workspace.id);
 
     const member = await prisma.workspaceMember.findFirstOrThrow({
-      where: { workspaceId: workspace.id, user: { email: "collab@gwertable.test" } },
+      where: { workspaceId: workspace.id, user: { email: "collab@abregi.test" } },
     });
     assert.equal(member.role, "ORGANIZER");
 

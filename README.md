@@ -1,6 +1,6 @@
-# Gwer Table Backend
+# Abregi Backend
 
-Backend REST séparé pour Gwer Table.
+Backend REST séparé pour Abregi.
 
 ## Stack
 

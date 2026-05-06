@@ -202,6 +202,9 @@ export async function authRoutes(fastify: FastifyInstance) {
     await acceptInvitation(email, inviteToken, user.id);
     const workspaceId = user.defaultWorkspaceId;
     const role = workspaceId ? await getWorkspaceRole(user.id, workspaceId) : user.role;
+    const workspace = workspaceId
+      ? await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } })
+      : null;
     const sessionToken = randomToken();
     const expires = new Date(Date.now() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
@@ -224,6 +227,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         role,
         personId: user.personId,
         workspaceId,
+        workspaceName: workspace?.name ?? "",
       },
     });
   });
