@@ -3,9 +3,10 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireCan } from "../lib/permissions.js";
 import { eventSchema } from "../schemas/event.js";
+import { LIMITS, requiredText } from "../schemas/limits.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
-const createVenueSchema = z.object({ name: z.string().trim().min(1, "Le nom du lieu est requis") });
+const createVenueSchema = z.object({ name: requiredText("Le nom du lieu", LIMITS.name) });
 
 export async function eventRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events", async (request) => {

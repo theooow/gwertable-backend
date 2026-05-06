@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { LIMITS, optionalText, requiredText } from "./limits.js";
 
 export const eventSchema = z
   .object({
-    name: z.string().min(1, "Le nom est requis"),
+    name: requiredText("Le nom", LIMITS.name),
     startsAt: z.string().min(1, "La date de debut est requise"),
     endsAt: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "PLANNING", "LIVE", "DONE", "ARCHIVED"]).default("DRAFT"),
-    description: z.string().optional().or(z.literal("")),
+    description: optionalText("La description", LIMITS.longText),
     venueId: z.string().optional().or(z.literal("")),
   })
   .refine(

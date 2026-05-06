@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { LIMITS, optionalText, requiredText } from "./limits.js";
 
 export const expenseSchema = z.object({
-  label: z.string().min(1, "Le libelle est requis"),
-  amount: z.string().min(1, "Le montant est requis"),
-  category: z.string().min(1, "La categorie est requise"),
+  label: requiredText("Le libelle", LIMITS.name),
+  amount: requiredText("Le montant", LIMITS.money),
+  category: requiredText("La categorie", LIMITS.shortText),
   paidById: z.string().optional().or(z.literal("")),
   paidAt: z.string().optional().or(z.literal("")),
   reimbursement: z.enum(["PENDING", "DONE", "NOT_OWED"]).default("PENDING"),
-  receiptUrl: z.string().optional().or(z.literal("")),
-  notes: z.string().optional().or(z.literal("")),
+  receiptUrl: optionalText("L'URL du justificatif", LIMITS.url),
+  notes: optionalText("Les notes", LIMITS.longText),
 });
