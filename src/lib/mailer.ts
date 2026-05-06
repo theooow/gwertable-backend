@@ -51,11 +51,17 @@ export async function sendMagicLinkEmail({ email, url }: { email: string; url: s
     <p>Si tu n'es pas a l'origine de cette demande, ignore cet email.</p>
   `;
 
-  await createTransport().sendMail({
-    from: env.MAIL_FROM,
-    to: email,
-    subject,
-    text,
-    html,
-  });
+  try {
+    await createTransport().sendMail({
+      from: env.MAIL_FROM,
+      to: email,
+      subject,
+      text,
+      html,
+    });
+  } catch (cause) {
+    const error = new Error("Impossible d'envoyer le lien de connexion par email");
+    error.name = "EmailDeliveryError";
+    throw Object.assign(error, { cause });
+  }
 }

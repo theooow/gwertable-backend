@@ -33,6 +33,11 @@ export const errorsPlugin = fp(async (fastify) => {
       return reply.status(409).send({ error: "Conflict", message: err.message });
     }
 
+    if (err.name === "EmailDeliveryError") {
+      fastify.log.error(error);
+      return reply.status(502).send({ error: "EmailDeliveryError", message: err.message });
+    }
+
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return reply.status(404).send({ error: "NotFound", message: "Ressource introuvable" });
     }
