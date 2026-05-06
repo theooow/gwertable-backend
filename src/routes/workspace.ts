@@ -1,4 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
@@ -17,6 +19,12 @@ const updateWorkspaceMemberSchema = z.object({
 });
 const updateAccountSchema = z.object({
   name: z.string().trim().max(120).optional().or(z.literal("")),
+  image: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+const profileImageUploadSchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.string().min(1),
+  data: z.string().min(1),
 });
 const updateWorkspaceSchema = z.object({
   name: z.string().trim().min(1, "Le nom de l'espace est requis").max(120),
@@ -27,6 +35,23 @@ const switchWorkspaceSchema = z.object({
 const deleteConfirmationSchema = z.object({
   confirm: z.string(),
 });
+const allowedProfileImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+
+function extensionForContentType(contentType: string) {
+  switch (contentType) {
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    case "image/gif":
+      return ".gif";
+    default:
+      return "";
+  }
+}
 
 function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
@@ -61,6 +86,65 @@ async function assertNotLastAdmin(memberId: string, workspaceId: string) {
 }
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
+  fastify.get("/uploads/profile-images/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) {
+      const error = new Error("Image de profil introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const filePath = path.join(uploadRoot, "profile-images", fileName);
+    const data = await readFile(filePath).catch(() => null);
+    if (!data) {
+      const error = new Error("Image de profil introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const extension = path.extname(fileName);
+    const contentType =
+      extension === ".jpg"
+        ? "image/jpeg"
+        : extension === ".png"
+          ? "image/png"
+          : extension === ".webp"
+            ? "image/webp"
+            : extension === ".gif"
+              ? "image/gif"
+              : "application/octet-stream";
+    return reply.type(contentType).send(data);
+  });
+
+  fastify.post("/api/uploads/profile-images", async (request, reply) => {
+    const parsed = profileImageUploadSchema.parse(request.body);
+
+    if (!allowedProfileImageTypes.has(parsed.contentType)) {
+      const error = new Error("Format d'image de profil non supporte");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 2 * 1024 * 1024) {
+      const error = new Error("L'image de profil ne doit pas depasser 2 Mo");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const fileName = `${request.user!.id}-${randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "profile-images");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    return reply.status(201).send({
+      url: `/uploads/profile-images/${fileName}`,
+      fileName: parsed.fileName,
+      contentType: parsed.contentType,
+      size: buffer.byteLength,
+    });
+  });
+
   fastify.get("/api/account", async (request) => ({
     user: request.user,
   }));
@@ -70,7 +154,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
     const user = await prisma.user.update({
       where: { id: request.user!.id },
-      data: { name: parsed.name || null },
+      data: { name: parsed.name || null, image: parsed.image || null },
       select: {
         id: true,
         email: true,
