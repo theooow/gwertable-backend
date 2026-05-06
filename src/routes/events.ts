@@ -44,6 +44,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
         endsAt: parsed.endsAt ? new Date(parsed.endsAt) : null,
         status: parsed.status,
         description: parsed.description || null,
+        bannerUrl: parsed.bannerUrl || null,
         workspaceId: request.workspaceId,
         venueId: parsed.venueId || null,
       },
@@ -126,6 +127,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
         endsAt: parsed.endsAt ? new Date(parsed.endsAt) : null,
         status: parsed.status,
         description: parsed.description || null,
+        bannerUrl: parsed.bannerUrl || null,
         venueId: parsed.venueId || null,
       },
     });

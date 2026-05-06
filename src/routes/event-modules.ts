@@ -35,6 +35,7 @@ const allowedReceiptTypes = new Set([
   "image/webp",
   "image/gif",
 ]);
+const allowedBannerTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
 function extensionForContentType(contentType: string) {
@@ -341,6 +342,35 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     return reply.type(contentType).send(data);
   });
 
+  fastify.get("/uploads/event-banners/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) {
+      const error = new Error("Banniere introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    const filePath = path.join(uploadRoot, "event-banners", fileName);
+    const data = await readFile(filePath).catch(() => null);
+    if (!data) {
+      const error = new Error("Banniere introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const extension = path.extname(fileName);
+    const contentType =
+      extension === ".jpg"
+        ? "image/jpeg"
+        : extension === ".png"
+          ? "image/png"
+          : extension === ".webp"
+            ? "image/webp"
+            : extension === ".gif"
+              ? "image/gif"
+              : "application/octet-stream";
+    return reply.type(contentType).send(data);
+  });
+
   fastify.post("/api/uploads/expense-receipts", async (request, reply) => {
     requireCan(request.userRole, "budget.write");
     const parsed = receiptUploadSchema.parse(request.body);
@@ -365,6 +395,36 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
 
     return reply.status(201).send({
       url: `/uploads/receipts/${fileName}`,
+      fileName: parsed.fileName,
+      contentType: parsed.contentType,
+      size: buffer.byteLength,
+    });
+  });
+
+  fastify.post("/api/uploads/event-banners", async (request, reply) => {
+    requireCan(request.userRole, "event.write");
+    const parsed = receiptUploadSchema.parse(request.body);
+
+    if (!allowedBannerTypes.has(parsed.contentType)) {
+      const error = new Error("Format de banniere non supporte");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 5 * 1024 * 1024) {
+      const error = new Error("La banniere ne doit pas depasser 5 Mo");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "event-banners");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    return reply.status(201).send({
+      url: `/uploads/event-banners/${fileName}`,
       fileName: parsed.fileName,
       contentType: parsed.contentType,
       size: buffer.byteLength,

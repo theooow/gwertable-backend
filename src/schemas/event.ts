@@ -8,6 +8,7 @@ export const eventSchema = z
     endsAt: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "PLANNING", "LIVE", "DONE", "ARCHIVED"]).default("DRAFT"),
     description: optionalText("La description", LIMITS.longText),
+    bannerUrl: optionalText("L'URL de la banniere", LIMITS.url),
     venueId: z.string().optional().or(z.literal("")),
   })
   .refine(

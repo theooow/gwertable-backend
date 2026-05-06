@@ -35,6 +35,7 @@ function isPublicRoute(url: string): boolean {
   return (
     url === "/health" ||
     url.startsWith("/uploads/receipts/") ||
+    url.startsWith("/uploads/event-banners/") ||
     url.startsWith("/calendar/tasks/") ||
     url.startsWith("/api/auth/login-link") ||
     url.startsWith("/api/auth/verify")
