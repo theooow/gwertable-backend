@@ -50,6 +50,41 @@ describe("workspace routes", () => {
     assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Abregi Prod");
   });
 
+  it("lists, creates and switches user workspaces", async () => {
+    const { authorization, workspace, user } = await seedAdminSession();
+
+    const listed = await request("GET", "/api/workspaces", authorization);
+    assert.equal(listed.statusCode, 200);
+    const initialPayload = json<{
+      workspaces: { id: string; name: string; role: string; current: boolean }[];
+    }>(listed);
+    assert.equal(initialPayload.workspaces.length, 1);
+    assert.equal(initialPayload.workspaces[0]!.id, workspace.id);
+    assert.equal(initialPayload.workspaces[0]!.name, workspace.name);
+    assert.equal(initialPayload.workspaces[0]!.role, "ADMIN");
+    assert.equal(initialPayload.workspaces[0]!.current, true);
+
+    const created = await request("POST", "/api/workspaces", authorization, {
+      name: "Nouveau collectif",
+    });
+    assert.equal(created.statusCode, 201);
+    const createdWorkspace = json<{ workspace: { id: string; name: string } }>(created).workspace;
+    assert.equal(createdWorkspace.name, "Nouveau collectif");
+    assert.equal(
+      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).defaultWorkspaceId,
+      createdWorkspace.id,
+    );
+
+    const switched = await request("PUT", "/api/account/workspace", authorization, {
+      workspaceId: workspace.id,
+    });
+    assert.equal(switched.statusCode, 200);
+    const switchedPayload = json<{ user: { workspaceId: string; workspaceName: string; role: string } }>(switched);
+    assert.equal(switchedPayload.user.workspaceId, workspace.id);
+    assert.equal(switchedPayload.user.workspaceName, workspace.name);
+    assert.equal(switchedPayload.user.role, "ADMIN");
+  });
+
   it("updates and removes workspace members", async () => {
     const { authorization, workspace } = await seedAdminSession();
     const memberUser = await prisma.user.create({

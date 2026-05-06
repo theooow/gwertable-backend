@@ -21,6 +21,9 @@ const updateAccountSchema = z.object({
 const updateWorkspaceSchema = z.object({
   name: z.string().trim().min(1, "Le nom de l'espace est requis").max(120),
 });
+const switchWorkspaceSchema = z.object({
+  workspaceId: z.string().min(1),
+});
 const deleteConfirmationSchema = z.object({
   confirm: z.string(),
 });
@@ -83,6 +86,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         ...user,
         role: request.userRole,
         workspaceId: request.workspaceId,
+        workspaceName: request.user!.workspaceName,
       },
     };
   });
@@ -130,6 +134,110 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     });
 
     return { workspace };
+  });
+
+  fastify.get("/api/workspaces", async (request) => {
+    const memberships = await prisma.workspaceMember.findMany({
+      where: { userId: request.user!.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        role: true,
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    return {
+      workspaces: memberships.map((membership) => ({
+        id: membership.workspace.id,
+        name: membership.workspace.name,
+        role: membership.role,
+        current: membership.workspace.id === request.workspaceId,
+        createdAt: membership.workspace.createdAt,
+        updatedAt: membership.workspace.updatedAt,
+      })),
+    };
+  });
+
+  fastify.post("/api/workspaces", async (request, reply) => {
+    const parsed = updateWorkspaceSchema.parse(request.body);
+
+    const workspace = await prisma.$transaction(async (tx) => {
+      const created = await tx.workspace.create({
+        data: {
+          name: parsed.name,
+          members: {
+            create: {
+              userId: request.user!.id,
+              role: "ADMIN",
+            },
+          },
+        },
+        select: { id: true, name: true, createdAt: true, updatedAt: true },
+      });
+
+      await tx.user.update({
+        where: { id: request.user!.id },
+        data: { defaultWorkspaceId: created.id },
+      });
+
+      return created;
+    });
+
+    return reply.status(201).send({ workspace });
+  });
+
+  fastify.put("/api/account/workspace", async (request) => {
+    const parsed = switchWorkspaceSchema.parse(request.body);
+
+    const membership = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: parsed.workspaceId,
+          userId: request.user!.id,
+        },
+      },
+      select: {
+        role: true,
+        workspace: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+    if (!membership) {
+      const error = new Error("Espace de travail introuvable pour ce compte");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { defaultWorkspaceId: parsed.workspaceId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+        role: true,
+        personId: true,
+      },
+    });
+
+    return {
+      user: {
+        ...user,
+        role: membership.role,
+        workspaceId: membership.workspace.id,
+        workspaceName: membership.workspace.name,
+      },
+    };
   });
 
   fastify.put("/api/workspace", async (request) => {
