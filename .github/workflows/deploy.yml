@@ -92,7 +92,7 @@ jobs:
           script_stop: true
           script: |
             set -eu
-            cd ~/abregi
+            cd ~/gwertable
             upsert_env() {
               key="$1"
               value="$2"
