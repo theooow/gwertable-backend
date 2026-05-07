@@ -1247,14 +1247,26 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "shopping.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     await requireShoppingItemInWorkspace(id, request.workspaceId);
-    return prisma.shoppingItem.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.shoppingItem.delete({ where: { id } });
+      if (item.expenseId) {
+        await tx.expense.delete({ where: { id: item.expenseId } });
+      }
+      return item;
+    });
   });
 
   fastify.delete("/api/shopping/:id", async (request) => {
     requireCan(request.userRole, "shopping.write");
     const { id } = idParamsSchema.parse(request.params);
     await requireShoppingItemInWorkspace(id, request.workspaceId);
-    return prisma.shoppingItem.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.shoppingItem.delete({ where: { id } });
+      if (item.expenseId) {
+        await tx.expense.delete({ where: { id: item.expenseId } });
+      }
+      return item;
+    });
   });
 
   fastify.get("/api/events/:eventId/shopping/persons", async (request) => {
