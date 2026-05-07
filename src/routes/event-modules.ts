@@ -10,6 +10,7 @@ import { parseEuros } from "../lib/money.js";
 import { participantSchema } from "../schemas/participant.js";
 import { taskSchema, taskStatusSchema } from "../schemas/task.js";
 import { expenseSchema } from "../schemas/expense.js";
+import { ticketTierSchema } from "../schemas/ticket-tier.js";
 import { runOfShowSchema } from "../schemas/run-of-show.js";
 import {
   boughtSchema,
@@ -116,6 +117,18 @@ async function requireTaskInWorkspace(id: string, workspaceId: string) {
   });
   if (!task) {
     const error = new Error("Tache introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireTicketTierInWorkspace(id: string, workspaceId: string) {
+  const tier = await prisma.ticketTier.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!tier) {
+    const error = new Error("Tarif billet introuvable");
     error.name = "NotFoundError";
     throw error;
   }
@@ -1281,6 +1294,49 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     });
 
     return participants.map((participant) => participant.person);
+  });
+
+  // ── Ticket tiers ────────────────────────────────────────────────────────────
+
+  fastify.get("/api/events/:eventId/ticket-tiers", async (request) => {
+    requireCan(request.userRole, "budget.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.ticketTier.findMany({
+      where: { eventId },
+      orderBy: { organizerRevenueCents: "asc" },
+    });
+  });
+
+  fastify.post("/api/events/:eventId/ticket-tiers", async (request, reply) => {
+    requireCan(request.userRole, "budget.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = ticketTierSchema.parse(request.body);
+
+    const tier = await prisma.ticketTier.create({
+      data: { eventId, ...parsed },
+    });
+    reply.status(201);
+    return tier;
+  });
+
+  fastify.put("/api/ticket-tiers/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await requireTicketTierInWorkspace(id, request.workspaceId);
+    const parsed = ticketTierSchema.parse(request.body);
+
+    return prisma.ticketTier.update({ where: { id }, data: parsed });
+  });
+
+  fastify.delete("/api/ticket-tiers/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await requireTicketTierInWorkspace(id, request.workspaceId);
+
+    return prisma.ticketTier.delete({ where: { id } });
   });
 
   fastify.get("/api/people/search", async (request) => {
