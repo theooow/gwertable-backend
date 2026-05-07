@@ -71,6 +71,11 @@ enum RsvpStatus {
   MAYBE
 }
 
+enum TicketSource {
+  MANUAL
+  // TODO: API_SHOTGUN, API_HELLOASSO, etc. — ajouter les valeurs lors des intégrations billetterie
+}
+
 // ============================================================
 // PERSISTENT ENTITIES (pas liées à un event spécifique)
 // ============================================================
@@ -273,6 +278,7 @@ model Event {
   venueId       String?
   venue         Venue?      @relation(fields: [venueId], references: [id])
   parentEventId String?     // si cloné depuis un autre event
+  nbCollectifs  Int     @default(1)
 
   participants    EventParticipant[]
   tasks           Task[]
@@ -286,6 +292,7 @@ model Event {
   documents       Document[]
   channels        Channel[]
   taskCalendarSubscriptions TaskCalendarSubscription[]
+  ticketTiers   TicketTier[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -423,8 +430,22 @@ model Income {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   label       String
   amountCents Int
-  category    String   // bar, contributions, sponsor
+  category    String   // bar, merch, caisse, sponsor, autre
   receivedAt  DateTime?
+
+  @@index([eventId])
+}
+
+model TicketTier {
+  id                    String       @id @default(cuid())
+  eventId               String
+  event                 Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                  String
+  organizerRevenueCents Int
+  publicPriceCents      Int
+  quantity              Int
+  sold                  Int          @default(0)
+  source                TicketSource @default(MANUAL)
 
   @@index([eventId])
 }
