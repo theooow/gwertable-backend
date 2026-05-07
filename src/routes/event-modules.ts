@@ -11,6 +11,7 @@ import { participantSchema } from "../schemas/participant.js";
 import { taskSchema, taskStatusSchema } from "../schemas/task.js";
 import { expenseSchema } from "../schemas/expense.js";
 import { ticketTierSchema } from "../schemas/ticket-tier.js";
+import { incomeSchema } from "../schemas/income.js";
 import { runOfShowSchema } from "../schemas/run-of-show.js";
 import {
   boughtSchema,
@@ -117,6 +118,18 @@ async function requireTaskInWorkspace(id: string, workspaceId: string) {
   });
   if (!task) {
     const error = new Error("Tache introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+}
+
+async function requireIncomeInWorkspace(id: string, workspaceId: string) {
+  const income = await prisma.income.findFirst({
+    where: { id, event: { workspaceId } },
+    select: { id: true },
+  });
+  if (!income) {
+    const error = new Error("Revenu introuvable");
     error.name = "NotFoundError";
     throw error;
   }
@@ -1294,6 +1307,63 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     });
 
     return participants.map((participant) => participant.person);
+  });
+
+  // ── Incomes ─────────────────────────────────────────────────────────────────
+
+  fastify.get("/api/events/:eventId/incomes", async (request) => {
+    requireCan(request.userRole, "budget.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.income.findMany({
+      where: { eventId },
+      orderBy: { receivedAt: "desc" },
+    });
+  });
+
+  fastify.post("/api/events/:eventId/incomes", async (request, reply) => {
+    requireCan(request.userRole, "budget.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = incomeSchema.parse(request.body);
+
+    const income = await prisma.income.create({
+      data: {
+        eventId,
+        label: parsed.label,
+        amountCents: parsed.amountCents,
+        category: parsed.category,
+        receivedAt: parsed.receivedAt ? new Date(parsed.receivedAt) : null,
+      },
+    });
+    reply.status(201);
+    return income;
+  });
+
+  fastify.put("/api/incomes/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await requireIncomeInWorkspace(id, request.workspaceId);
+    const parsed = incomeSchema.parse(request.body);
+
+    return prisma.income.update({
+      where: { id },
+      data: {
+        label: parsed.label,
+        amountCents: parsed.amountCents,
+        category: parsed.category,
+        receivedAt: parsed.receivedAt ? new Date(parsed.receivedAt) : null,
+      },
+    });
+  });
+
+  fastify.delete("/api/incomes/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await requireIncomeInWorkspace(id, request.workspaceId);
+
+    return prisma.income.delete({ where: { id } });
   });
 
   // ── Ticket tiers ────────────────────────────────────────────────────────────
