@@ -8,7 +8,12 @@ const envSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   FRONTEND_URL: z.string().default("http://localhost:3001"),
-  AUTH_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  AUTH_TOKEN_TTL_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15)
+    .transform((value) => Math.min(value, 15)),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   MAIL_TRANSPORT: z.enum(["smtp", "log"]).default(process.env.NODE_ENV === "test" ? "log" : "smtp"),
   MAIL_FROM: z.string().default("Abregi <no-reply@abregi.local>"),

@@ -53,6 +53,41 @@ describe("auth and health routes", () => {
     assert.equal(json<{ error: string }>(response).error, "Unauthorized");
   });
 
+  it("rejects expired magic links", async () => {
+    await prisma.verificationToken.create({
+      data: {
+        identifier: "expired@abregi.test",
+        token: "expired-token",
+        expires: new Date(Date.now() - 60 * 1000),
+      },
+    });
+
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "expired@abregi.test",
+      token: "expired-token",
+    });
+    assert.equal(verified.statusCode, 401);
+    assert.equal(await prisma.session.count(), 0);
+    assert.equal(await prisma.verificationToken.count({ where: { token: "expired-token" } }), 0);
+  });
+
+  it("rejects magic links with an excessive stored expiration", async () => {
+    await prisma.verificationToken.create({
+      data: {
+        identifier: "too-long@abregi.test",
+        token: "too-long-token",
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "too-long@abregi.test",
+      token: "too-long-token",
+    });
+    assert.equal(verified.statusCode, 401);
+    assert.equal(await prisma.session.count(), 0);
+  });
+
   it("accepts a workspace invitation during magic-link login", async () => {
     const workspace = await prisma.workspace.create({ data: { name: "Inviting workspace" } });
     const admin = await prisma.user.create({

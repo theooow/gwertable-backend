@@ -180,24 +180,26 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/auth/verify", async (request, reply) => {
     const { email, token, inviteToken } = verifySchema.parse(request.body);
+    const now = new Date();
+    const latestAllowedExpires = new Date(now.getTime() + env.AUTH_TOKEN_TTL_MINUTES * 60 * 1000);
 
-    const verificationToken = await prisma.verificationToken.findUnique({
-      where: { token },
+    await prisma.verificationToken.deleteMany({
+      where: { expires: { lte: now } },
     });
 
-    if (
-      !verificationToken ||
-      verificationToken.identifier !== email ||
-      verificationToken.expires <= new Date()
-    ) {
+    const verificationToken = await prisma.verificationToken.deleteMany({
+      where: {
+        identifier: email,
+        token,
+        expires: { gt: now, lte: latestAllowedExpires },
+      },
+    });
+
+    if (verificationToken.count !== 1) {
       const error = new Error("Lien de connexion invalide ou expire");
       error.name = "UnauthorizedError";
       throw error;
     }
-
-    await prisma.verificationToken.delete({
-      where: { token },
-    });
 
     const user = await findOrCreateUser(email, inviteToken);
     await acceptInvitation(email, inviteToken, user.id);
