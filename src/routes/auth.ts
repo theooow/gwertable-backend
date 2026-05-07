@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "../env.js";
 import { sendMagicLinkEmail } from "../lib/mailer.js";
 import { prisma } from "../prisma.js";
+import type { UserRole } from "@prisma/client";
 
 const loginLinkSchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
@@ -16,34 +17,131 @@ const verifySchema = z.object({
   inviteToken: z.string().optional(),
 });
 
+type WorkspaceInvitationRecord = {
+  kind: "workspace";
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: UserRole;
+  acceptedAt: Date | null;
+  expires: Date;
+};
+
+type EventInvitationRecord = {
+  kind: "event";
+  id: string;
+  eventId: string;
+  workspaceId: string;
+  email: string;
+  role: UserRole;
+  acceptedAt: Date | null;
+  expires: Date;
+};
+
+type InvitationRecord = WorkspaceInvitationRecord | EventInvitationRecord;
+
 function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");
 }
 
-async function getValidInvitation(email: string, inviteToken: string | undefined) {
+async function getValidInvitation(email: string, inviteToken: string | undefined): Promise<InvitationRecord | null> {
   if (!inviteToken) return null;
 
   const invitation = await prisma.workspaceInvitation.findUnique({
     where: { token: inviteToken },
   });
+  if (invitation) {
+    if (invitation.email !== email || invitation.acceptedAt || invitation.expires <= new Date()) {
+      const error = new Error("Invitation invalide ou expiree");
+      error.name = "UnauthorizedError";
+      throw error;
+    }
+
+    return {
+      kind: "workspace",
+      id: invitation.id,
+      workspaceId: invitation.workspaceId,
+      email: invitation.email,
+      role: invitation.role,
+      acceptedAt: invitation.acceptedAt,
+      expires: invitation.expires,
+    };
+  }
+
+  const collaborator = await prisma.eventCollaborator.findUnique({
+    where: { token: inviteToken },
+    include: { event: { select: { workspaceId: true } } },
+  });
   if (
-    !invitation ||
-    invitation.email !== email ||
-    invitation.acceptedAt ||
-    invitation.expires <= new Date()
+    !collaborator ||
+    collaborator.email !== email ||
+    collaborator.acceptedAt ||
+    collaborator.expires <= new Date()
   ) {
     const error = new Error("Invitation invalide ou expiree");
     error.name = "UnauthorizedError";
     throw error;
   }
 
-  return invitation;
+  return {
+    kind: "event",
+    id: collaborator.id,
+    eventId: collaborator.eventId,
+    workspaceId: collaborator.event.workspaceId,
+    email: collaborator.email,
+    role: collaborator.role,
+    acceptedAt: collaborator.acceptedAt,
+    expires: collaborator.expires,
+  };
+}
+
+async function getAccessibleWorkspaceMembership(userId: string, workspaceId: string) {
+  const membership = await prisma.workspaceMember.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId,
+        userId,
+      },
+    },
+    select: {
+      role: true,
+      workspace: { select: { name: true } },
+    },
+  });
+  if (membership) {
+    return {
+      kind: "workspace" as const,
+      role: membership.role,
+      workspaceName: membership.workspace.name,
+    };
+  }
+
+  const collaborator = await prisma.eventCollaborator.findFirst({
+    where: {
+      workspaceId,
+      acceptedAt: { not: null },
+      userId,
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      role: true,
+      workspace: { select: { name: true } },
+    },
+  });
+
+  if (!collaborator) return null;
+
+  return {
+    kind: "event" as const,
+    role: collaborator.role,
+    workspaceName: collaborator.workspace.name,
+  };
 }
 
 async function findOrCreateUser(email: string, inviteToken?: string) {
   const invitation = await getValidInvitation(email, inviteToken);
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && invitation) {
+  if (existing && invitation?.kind === "workspace") {
     return prisma.user.update({
       where: { id: existing.id },
       data: {
@@ -65,6 +163,15 @@ async function findOrCreateUser(email: string, inviteToken?: string) {
             },
           },
         },
+      },
+    });
+  }
+
+  if (existing && invitation?.kind === "event") {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        defaultWorkspaceId: invitation.workspaceId,
       },
     });
   }
@@ -99,51 +206,67 @@ async function findOrCreateUser(email: string, inviteToken?: string) {
       email,
       role: invitation?.role ?? "ADMIN",
       defaultWorkspaceId: invitation?.workspaceId ?? workspace?.id,
-      workspaceMemberships: {
-        create: {
-          workspaceId: invitation?.workspaceId ?? workspace!.id,
-          role: invitation?.role ?? "ADMIN",
-        },
-      },
+      ...(invitation?.kind === "workspace"
+        ? {
+            workspaceMemberships: {
+              create: {
+                workspaceId: invitation.workspaceId,
+                role: invitation.role,
+              },
+            },
+          }
+        : {
+            workspaceMemberships: workspace
+              ? {
+                  create: {
+                    workspaceId: workspace.id,
+                    role: "ADMIN",
+                  },
+                }
+              : undefined,
+          }),
     },
   });
 }
 
 async function getWorkspaceRole(userId: string, workspaceId: string) {
-  const membership = await prisma.workspaceMember.findUnique({
-    where: {
-      workspaceId_userId: {
-        workspaceId,
-        userId,
-      },
-    },
-    select: { role: true },
-  });
-  return membership?.role ?? "VIEWER";
+  const access = await getAccessibleWorkspaceMembership(userId, workspaceId);
+  return access?.role ?? "VIEWER";
 }
 
 async function acceptInvitation(email: string, inviteToken: string | undefined, userId: string) {
   const invitation = await getValidInvitation(email, inviteToken);
   if (!invitation) return;
 
-  await prisma.workspaceInvitation.update({
-    where: { id: invitation.id },
-    data: { acceptedAt: new Date() },
-  });
-  await prisma.workspaceMember.upsert({
-    where: {
-      workspaceId_userId: {
+  if (invitation.kind === "workspace") {
+    await prisma.workspaceInvitation.update({
+      where: { id: invitation.id },
+      data: { acceptedAt: new Date() },
+    });
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: invitation.workspaceId,
+          userId,
+        },
+      },
+      create: {
         workspaceId: invitation.workspaceId,
         userId,
+        role: invitation.role,
       },
-    },
-    create: {
-      workspaceId: invitation.workspaceId,
+      update: {
+        role: invitation.role,
+      },
+    });
+    return;
+  }
+
+  await prisma.eventCollaborator.update({
+    where: { id: invitation.id },
+    data: {
+      acceptedAt: new Date(),
       userId,
-      role: invitation.role,
-    },
-    update: {
-      role: invitation.role,
     },
   });
 }
@@ -203,11 +326,28 @@ export async function authRoutes(fastify: FastifyInstance) {
 
     const user = await findOrCreateUser(email, inviteToken);
     await acceptInvitation(email, inviteToken, user.id);
-    const workspaceId = user.defaultWorkspaceId;
-    const role = workspaceId ? await getWorkspaceRole(user.id, workspaceId) : user.role;
-    const workspace = workspaceId
+    let workspaceId = user.defaultWorkspaceId;
+    let role = workspaceId ? await getWorkspaceRole(user.id, workspaceId) : user.role;
+    let workspace = workspaceId
       ? await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } })
       : null;
+
+    if (!workspaceId) {
+      const access = await prisma.eventCollaborator.findFirst({
+        where: { acceptedAt: { not: null }, userId: user.id },
+        orderBy: { createdAt: "asc" },
+        select: {
+          role: true,
+          workspaceId: true,
+          workspace: { select: { name: true } },
+        },
+      });
+      if (access) {
+        workspaceId = access.workspaceId;
+        role = access.role;
+        workspace = access.workspace;
+      }
+    }
     const sessionToken = randomToken();
     const expires = new Date(Date.now() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 

@@ -6,6 +6,7 @@ import { requireCan } from "../lib/permissions.js";
 import { personSchema } from "../schemas/person.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const workspaceIdParamsSchema = z.object({ workspaceId: z.string().min(1) });
 const peopleQuerySchema = z.object({
   search: z.string().optional().default(""),
   tags: z
@@ -45,6 +46,44 @@ export async function peopleRoutes(fastify: FastifyInstance) {
 
     return prisma.person.findMany({
       where,
+      orderBy: { fullName: "asc" },
+    });
+  });
+
+  fastify.get("/api/workspaces/:workspaceId/people", async (request) => {
+    requireCan(request.userRole, "person.read");
+    const { workspaceId } = workspaceIdParamsSchema.parse(request.params);
+    const accessible = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: request.user!.id,
+        },
+      },
+      select: { id: true },
+    });
+    const collaborator = accessible
+      ? null
+      : await prisma.eventCollaborator.findFirst({
+          where: {
+            workspaceId,
+            acceptedAt: { not: null },
+            OR: [{ userId: request.user!.id }, { email: request.user!.email }],
+          },
+          select: { id: true },
+        });
+
+    if (!accessible && !collaborator) {
+      const error = new Error("Workspace introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return prisma.person.findMany({
+      where: {
+        workspaceId,
+        archivedAt: null,
+      },
       orderBy: { fullName: "asc" },
     });
   });

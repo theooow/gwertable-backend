@@ -12,6 +12,29 @@ export async function eventRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events", async (request) => {
     requireCan(request.userRole, "event.read");
 
+    if (request.eventScoped) {
+      const collaboratorEvents = await prisma.eventCollaborator.findMany({
+        where: {
+          acceptedAt: { not: null },
+          workspaceId: request.workspaceId,
+          OR: [{ userId: request.user!.id }, { email: request.user!.email }],
+        },
+        select: { eventId: true },
+      });
+
+      return prisma.event.findMany({
+        where: {
+          workspaceId: request.workspaceId,
+          id: { in: collaboratorEvents.map((entry) => entry.eventId) },
+        },
+        include: {
+          venue: { select: { name: true } },
+          _count: { select: { participants: true, tasks: true, expenses: true, runOfShow: true } },
+        },
+        orderBy: { startsAt: "desc" },
+      });
+    }
+
     return prisma.event.findMany({
       where: { workspaceId: request.workspaceId },
       include: {
@@ -76,6 +99,23 @@ export async function eventRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events/:id", async (request) => {
     requireCan(request.userRole, "event.read");
     const { id } = idParamsSchema.parse(request.params);
+
+    if (request.eventScoped) {
+      const collaborator = await prisma.eventCollaborator.findFirst({
+        where: {
+          eventId: id,
+          workspaceId: request.workspaceId,
+          acceptedAt: { not: null },
+          OR: [{ userId: request.user!.id }, { email: request.user!.email }],
+        },
+        select: { id: true },
+      });
+      if (!collaborator) {
+        const error = new Error("Evenement introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+    }
 
     const event = await prisma.event.findUnique({
       where: { id, workspaceId: request.workspaceId },

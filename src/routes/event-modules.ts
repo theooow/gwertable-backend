@@ -25,7 +25,15 @@ const eventItemParamsSchema = z.object({
   eventId: z.string().min(1),
   id: z.string().min(1),
 });
+const eventCollaboratorParamsSchema = z.object({
+  eventId: z.string().min(1),
+  collaboratorId: z.string().min(1),
+});
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const eventCollaboratorSchema = z.object({
+  email: z.string().email().transform((email) => email.toLowerCase()),
+  role: z.enum(["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"]),
+});
 const receiptUploadSchema = z.object({
   fileName: z.string().min(1),
   contentType: z.string().min(1),
@@ -734,6 +742,106 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     });
 
     return participants;
+  });
+
+  fastify.get("/api/events/:eventId/collaborators", async (request) => {
+    requireCan(request.userRole, "event.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+    const collaborators = await prisma.eventCollaborator.findMany({
+      where: { eventId, workspaceId: request.workspaceId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        token: true,
+        expires: true,
+        acceptedAt: true,
+        createdAt: true,
+        userId: true,
+      },
+    });
+
+    return collaborators.map((collaborator) => ({
+      ...collaborator,
+      inviteUrl: (() => {
+        const inviteUrl = new URL("/login", frontendUrl);
+        inviteUrl.searchParams.set("invite", collaborator.token);
+        return inviteUrl.toString();
+      })(),
+    }));
+  });
+
+  fastify.post("/api/events/:eventId/collaborators", async (request, reply) => {
+    requireCan(request.userRole, "event.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const parsed = eventCollaboratorSchema.parse(request.body);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const existing = await prisma.eventCollaborator.findUnique({
+      where: { eventId_email: { eventId, email: parsed.email } },
+    });
+    if (existing?.acceptedAt) {
+      const error = new Error("Ce compte a deja acces a cet evenement");
+      error.name = "ConflictError";
+      throw error;
+    }
+
+    const token = crypto.randomBytes(32).toString("base64url");
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const collaborator = await prisma.eventCollaborator.upsert({
+      where: { eventId_email: { eventId, email: parsed.email } },
+      create: {
+        eventId,
+        workspaceId: request.workspaceId,
+        email: parsed.email,
+        role: parsed.role,
+        token,
+        expires,
+      },
+      update: {
+        role: parsed.role,
+        token,
+        expires,
+        acceptedAt: null,
+        userId: null,
+      },
+    });
+
+    const inviteUrl = new URL("/login", process.env.FRONTEND_URL ?? "http://localhost:3000");
+    inviteUrl.searchParams.set("invite", collaborator.token);
+
+    return reply.status(201).send({
+      id: collaborator.id,
+      email: collaborator.email,
+      role: collaborator.role,
+      expires: collaborator.expires,
+      createdAt: collaborator.createdAt,
+      acceptedAt: collaborator.acceptedAt,
+      inviteUrl: inviteUrl.toString(),
+    });
+  });
+
+  fastify.delete("/api/events/:eventId/collaborators/:collaboratorId", async (request) => {
+    requireCan(request.userRole, "event.write");
+    const { eventId, collaboratorId } = eventCollaboratorParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const collaborator = await prisma.eventCollaborator.findFirst({
+      where: { id: collaboratorId, eventId, workspaceId: request.workspaceId },
+      select: { id: true },
+    });
+    if (!collaborator) {
+      const error = new Error("Collaborateur introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    await prisma.eventCollaborator.delete({ where: { id: collaborator.id } });
+    return { ok: true };
   });
 
   fastify.get("/api/events/:eventId/tasks", async (request) => {

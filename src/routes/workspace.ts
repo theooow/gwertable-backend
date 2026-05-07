@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
+import type { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { env } from "../env.js";
 import { prisma } from "../prisma.js";
@@ -31,6 +32,10 @@ const updateWorkspaceSchema = z.object({
 });
 const switchWorkspaceSchema = z.object({
   workspaceId: z.string().min(1),
+});
+const contactTransferSchema = z.object({
+  sourceWorkspaceId: z.string().min(1),
+  excludedPersonIds: z.array(z.string().min(1)).default([]),
 });
 const deleteConfirmationSchema = z.object({
   confirm: z.string(),
@@ -71,6 +76,147 @@ async function getWorkspaceMemberOrThrow(memberId: string, workspaceId: string) 
     throw error;
   }
   return member;
+}
+
+async function hasWorkspaceAccess(userId: string, email: string, workspaceId: string) {
+  const membership = await prisma.workspaceMember.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId,
+        userId,
+      },
+    },
+    select: { id: true },
+  });
+  if (membership) return true;
+
+  const collaborator = await prisma.eventCollaborator.findFirst({
+    where: {
+      workspaceId,
+      acceptedAt: { not: null },
+      OR: [{ userId }, { email }],
+    },
+    select: { id: true },
+  });
+
+  return Boolean(collaborator);
+}
+
+async function getAccessibleWorkspaces(userId: string, email: string) {
+  const [memberships, collaborators] = await Promise.all([
+    prisma.workspaceMember.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        role: true,
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    }),
+    prisma.eventCollaborator.findMany({
+      where: {
+        acceptedAt: { not: null },
+        OR: [{ userId }, { email }],
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        role: true,
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const map = new Map<string, { id: string; name: string; role: UserRole; createdAt: Date; updatedAt: Date }>();
+  for (const membership of memberships) {
+    map.set(membership.workspace.id, {
+      ...membership.workspace,
+      role: membership.role,
+    });
+  }
+  for (const collaborator of collaborators) {
+    if (!map.has(collaborator.workspace.id)) {
+      map.set(collaborator.workspace.id, {
+        ...collaborator.workspace,
+        role: collaborator.role,
+      });
+    }
+  }
+
+  return [...map.values()];
+}
+
+async function copyWorkspaceContacts(
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  excludedPersonIds: string[],
+) {
+  const sourcePeople = await prisma.person.findMany({
+    where: {
+      workspaceId: sourceWorkspaceId,
+      archivedAt: null,
+      ...(excludedPersonIds.length ? { id: { notIn: excludedPersonIds } } : {}),
+    },
+    orderBy: { fullName: "asc" },
+  });
+
+  const stats = { created: 0, updated: 0 };
+
+  for (const person of sourcePeople) {
+    const uniqueWhere = person.email
+      ? { workspaceId_email: { workspaceId: targetWorkspaceId, email: person.email } }
+      : person.discordUserId
+        ? { workspaceId_discordUserId: { workspaceId: targetWorkspaceId, discordUserId: person.discordUserId } }
+        : null;
+
+    if (uniqueWhere) {
+      const existing = await prisma.person.findUnique({ where: uniqueWhere });
+      if (existing) {
+        await prisma.person.update({
+          where: { id: existing.id },
+          data: {
+            fullName: person.fullName,
+            email: person.email,
+            phone: person.phone,
+            discordUserId: person.discordUserId,
+            notes: person.notes,
+            tags: person.tags,
+            archivedAt: person.archivedAt,
+          },
+        });
+        stats.updated += 1;
+        continue;
+      }
+    }
+
+    await prisma.person.create({
+      data: {
+        workspaceId: targetWorkspaceId,
+        fullName: person.fullName,
+        email: person.email,
+        phone: person.phone,
+        discordUserId: person.discordUserId,
+        notes: person.notes,
+        tags: person.tags,
+        archivedAt: person.archivedAt,
+      },
+    });
+    stats.created += 1;
+  }
+
+  return stats;
 }
 
 async function assertNotLastAdmin(memberId: string, workspaceId: string) {
@@ -224,32 +370,38 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/workspaces", async (request) => {
-    const memberships = await prisma.workspaceMember.findMany({
-      where: { userId: request.user!.id },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        role: true,
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
-      },
-    });
+    const memberships = await getAccessibleWorkspaces(request.user!.id, request.user!.email);
 
     return {
-      workspaces: memberships.map((membership) => ({
-        id: membership.workspace.id,
-        name: membership.workspace.name,
-        role: membership.role,
-        current: membership.workspace.id === request.workspaceId,
-        createdAt: membership.workspace.createdAt,
-        updatedAt: membership.workspace.updatedAt,
+      workspaces: memberships.map((workspace) => ({
+        id: workspace.id,
+        name: workspace.name,
+        role: workspace.role,
+        current: workspace.id === request.workspaceId,
+        createdAt: workspace.createdAt,
+        updatedAt: workspace.updatedAt,
       })),
+    };
+  });
+
+  fastify.post("/api/workspace/contacts/transfer", async (request) => {
+    requireCan(request.userRole, "person.write");
+    const parsed = contactTransferSchema.parse(request.body);
+
+    const sourceAccess = await hasWorkspaceAccess(request.user!.id, request.user!.email, parsed.sourceWorkspaceId);
+    if (!sourceAccess) {
+      const error = new Error("Source introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const stats = await prisma.$transaction(async () =>
+      copyWorkspaceContacts(parsed.sourceWorkspaceId, request.workspaceId, parsed.excludedPersonIds),
+    );
+
+    return {
+      ok: true,
+      ...stats,
     };
   });
 
@@ -551,6 +703,15 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       where: { token: parsed.inviteToken },
       include: { workspace: { select: { id: true, name: true } } },
     });
+    const collaborator = invitation
+      ? null
+      : await prisma.eventCollaborator.findUnique({
+          where: { token: parsed.inviteToken },
+          include: {
+            event: { select: { id: true } },
+            workspace: { select: { id: true, name: true } },
+          },
+        });
 
     if (
       !invitation ||
@@ -558,41 +719,62 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       invitation.acceptedAt ||
       invitation.expires <= new Date()
     ) {
-      const error = new Error("Invitation invalide ou expiree");
-      error.name = "UnauthorizedError";
-      throw error;
+      if (
+        !collaborator ||
+        collaborator.email !== request.user!.email ||
+        collaborator.acceptedAt ||
+        collaborator.expires <= new Date()
+      ) {
+        const error = new Error("Invitation invalide ou expiree");
+        error.name = "UnauthorizedError";
+        throw error;
+      }
     }
 
-    await prisma.$transaction([
-      prisma.workspaceMember.upsert({
-        where: {
-          workspaceId_userId: {
+    if (invitation) {
+      await prisma.$transaction([
+        prisma.workspaceMember.upsert({
+          where: {
+            workspaceId_userId: {
+              workspaceId: invitation.workspaceId,
+              userId: request.user!.id,
+            },
+          },
+          create: {
             workspaceId: invitation.workspaceId,
             userId: request.user!.id,
+            role: invitation.role,
           },
-        },
-        create: {
-          workspaceId: invitation.workspaceId,
+          update: {
+            role: invitation.role,
+          },
+        }),
+        prisma.user.update({
+          where: { id: request.user!.id },
+          data: { defaultWorkspaceId: invitation.workspaceId },
+        }),
+        prisma.workspaceInvitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: new Date() },
+        }),
+      ]);
+    } else if (collaborator) {
+      await prisma.eventCollaborator.update({
+        where: { id: collaborator.id },
+        data: {
+          acceptedAt: new Date(),
           userId: request.user!.id,
-          role: invitation.role,
         },
-        update: {
-          role: invitation.role,
-        },
-      }),
-      prisma.user.update({
+      });
+      await prisma.user.update({
         where: { id: request.user!.id },
-        data: { defaultWorkspaceId: invitation.workspaceId },
-      }),
-      prisma.workspaceInvitation.update({
-        where: { id: invitation.id },
-        data: { acceptedAt: new Date() },
-      }),
-    ]);
+        data: { defaultWorkspaceId: collaborator.workspaceId },
+      });
+    }
 
     return {
       ok: true,
-      workspace: invitation.workspace,
+      workspace: invitation?.workspace ?? collaborator!.workspace,
     };
   });
 }

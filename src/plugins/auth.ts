@@ -11,6 +11,7 @@ declare module "fastify" {
   interface FastifyRequest {
     userRole: UserRole;
     workspaceId: string;
+    eventScoped: boolean;
     user?: AuthUser;
   }
 }
@@ -46,6 +47,7 @@ function isPublicRoute(url: string): boolean {
 export const authPlugin = fp(async (fastify) => {
   fastify.decorateRequest("userRole", "VIEWER");
   fastify.decorateRequest("workspaceId", "");
+  fastify.decorateRequest("eventScoped", false);
   fastify.decorateRequest("user");
 
   fastify.addHook("preHandler", async (request) => {
@@ -88,38 +90,60 @@ export const authPlugin = fp(async (fastify) => {
       throw error;
     }
 
-    if (!session.user.defaultWorkspaceId) {
-      const error = new Error("Aucun espace de travail associe a ce compte");
-      error.name = "ForbiddenError";
-      throw error;
+    let workspaceId = session.user.defaultWorkspaceId;
+    let membership = workspaceId
+      ? await prisma.workspaceMember.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId,
+              userId: session.user.id,
+            },
+          },
+          select: {
+            role: true,
+            workspace: {
+              select: { name: true },
+            },
+          },
+        })
+      : null;
+
+    let eventScoped = false;
+
+    if (!membership) {
+      const collaborator = await prisma.eventCollaborator.findFirst({
+        where: {
+          acceptedAt: { not: null },
+          OR: [{ userId: session.user.id }, { email: session.user.email }],
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          role: true,
+          workspaceId: true,
+          workspace: { select: { name: true } },
+        },
+      });
+
+      if (collaborator) {
+        workspaceId = collaborator.workspaceId;
+        membership = { role: collaborator.role, workspace: collaborator.workspace };
+        eventScoped = true;
+      }
     }
 
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        workspaceId_userId: {
-          workspaceId: session.user.defaultWorkspaceId,
-          userId: session.user.id,
-        },
-      },
-      select: {
-        role: true,
-        workspace: {
-          select: { name: true },
-        },
-      },
-    });
-    if (!membership) {
-      const error = new Error("Compte non membre de cet espace de travail");
+    if (!workspaceId || !membership) {
+      const error = new Error("Aucun acces associe a ce compte");
       error.name = "ForbiddenError";
       throw error;
     }
 
     const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
-    request.workspaceId = defaultWorkspaceId;
+    request.workspaceId = workspaceId;
+    request.eventScoped = eventScoped;
     request.user = {
       ...user,
       role: membership.role,
-      workspaceId: defaultWorkspaceId,
+      workspaceId,
       workspaceName: membership.workspace.name,
     };
     request.userRole = membership.role;

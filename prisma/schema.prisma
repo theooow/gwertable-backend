@@ -98,6 +98,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   workspaceMemberships WorkspaceMember[]
+  eventCollaborations   EventCollaborator[]
 
   @@index([defaultWorkspaceId])
 }
@@ -111,11 +112,34 @@ model Workspace {
   defaultUsers User[] @relation("DefaultWorkspace")
   members      WorkspaceMember[]
   invitations  WorkspaceInvitation[]
+  eventCollaborators EventCollaborator[]
   persons      Person[]
   venues       Venue[]
   suppliers    Supplier[]
   equipmentItems EquipmentItem[]
   events       Event[]
+}
+
+model EventCollaborator {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  role        UserRole
+  token       String   @unique
+  expires     DateTime
+  acceptedAt  DateTime?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+  @@index([workspaceId])
+  @@index([email])
+  @@index([userId])
+  @@unique([eventId, email])
 }
 
 model WorkspaceMember {
@@ -293,6 +317,7 @@ model Event {
   channels        Channel[]
   taskCalendarSubscriptions TaskCalendarSubscription[]
   ticketTiers   TicketTier[]
+  collaborators  EventCollaborator[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
