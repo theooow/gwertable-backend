@@ -126,8 +126,30 @@ describe("workspace routes", () => {
     assert.equal(remove.statusCode, 400);
   });
 
-  it("deletes the current workspace after confirmation", async () => {
+  it("clears the current workspace after confirmation when it is the user's last workspace", async () => {
     const { authorization, workspace } = await seedAdminSession();
+    const person = await prisma.person.create({
+      data: {
+        workspaceId: workspace.id,
+        fullName: "Workspace Contact",
+      },
+    });
+    await prisma.event.create({
+      data: {
+        workspaceId: workspace.id,
+        name: "Workspace Event",
+        startsAt: new Date("2026-07-01T18:00:00.000Z"),
+      },
+    });
+    await prisma.equipmentItem.create({
+      data: {
+        workspaceId: workspace.id,
+        name: "Console",
+        category: "son",
+        ownership: "OWNED",
+        ownerId: person.id,
+      },
+    });
 
     const blocked = await request("DELETE", "/api/workspace", authorization, {
       confirm: "wrong",
@@ -138,8 +160,37 @@ describe("workspace routes", () => {
       confirm: workspace.name,
     });
     assert.equal(deleted.statusCode, 200);
-    assert.deepEqual(json(deleted), { ok: true });
+    assert.deepEqual(json(deleted), { ok: true, deletedWorkspace: false });
+    assert.equal(await prisma.workspace.count({ where: { id: workspace.id } }), 1);
+    assert.equal(await prisma.event.count({ where: { workspaceId: workspace.id } }), 0);
+    assert.equal(await prisma.person.count({ where: { workspaceId: workspace.id } }), 0);
+    assert.equal(await prisma.equipmentItem.count({ where: { workspaceId: workspace.id } }), 0);
+  });
+
+  it("deletes the current workspace and switches to another workspace when available", async () => {
+    const { authorization, workspace, user } = await seedAdminSession();
+    const fallbackWorkspace = await prisma.workspace.create({
+      data: {
+        name: "Fallback workspace",
+        members: {
+          create: {
+            userId: user.id,
+            role: "ADMIN",
+          },
+        },
+      },
+    });
+
+    const deleted = await request("DELETE", "/api/workspace", authorization, {
+      confirm: workspace.name,
+    });
+    assert.equal(deleted.statusCode, 200);
+    assert.deepEqual(json(deleted), { ok: true, deletedWorkspace: true });
     assert.equal(await prisma.workspace.count({ where: { id: workspace.id } }), 0);
+    assert.equal(
+      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).defaultWorkspaceId,
+      fallbackWorkspace.id,
+    );
   });
 
   it("deletes the current account after email confirmation", async () => {

@@ -351,15 +351,55 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       throw error;
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.user.updateMany({
-        where: { defaultWorkspaceId: request.workspaceId },
-        data: { defaultWorkspaceId: null },
-      });
-      await tx.workspace.delete({ where: { id: request.workspaceId } });
+    const nextMembership = await prisma.workspaceMember.findFirst({
+      where: {
+        userId: request.user!.id,
+        workspaceId: { not: request.workspaceId },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { workspaceId: true },
     });
 
-    return { ok: true };
+    const deletedWorkspace = await prisma.$transaction(async (tx) => {
+      if (!nextMembership) {
+        await tx.event.deleteMany({ where: { workspaceId: request.workspaceId } });
+        await tx.equipmentItem.deleteMany({ where: { workspaceId: request.workspaceId } });
+        await tx.workspaceInvitation.deleteMany({ where: { workspaceId: request.workspaceId } });
+        await tx.supplier.deleteMany({ where: { workspaceId: request.workspaceId } });
+        await tx.venue.deleteMany({ where: { workspaceId: request.workspaceId } });
+        await tx.user.updateMany({
+          where: { person: { workspaceId: request.workspaceId } },
+          data: { personId: null },
+        });
+        await tx.person.deleteMany({ where: { workspaceId: request.workspaceId } });
+        return false;
+      }
+
+      const defaultUsers = await tx.user.findMany({
+        where: { defaultWorkspaceId: request.workspaceId },
+        select: { id: true },
+      });
+
+      for (const user of defaultUsers) {
+        const fallbackMembership = await tx.workspaceMember.findFirst({
+          where: {
+            userId: user.id,
+            workspaceId: { not: request.workspaceId },
+          },
+          orderBy: { createdAt: "asc" },
+          select: { workspaceId: true },
+        });
+        await tx.user.update({
+          where: { id: user.id },
+          data: { defaultWorkspaceId: fallbackMembership?.workspaceId ?? null },
+        });
+      }
+
+      await tx.workspace.delete({ where: { id: request.workspaceId } });
+      return true;
+    });
+
+    return { ok: true, deletedWorkspace };
   });
 
   fastify.get("/api/workspace/members", async (request) => {
