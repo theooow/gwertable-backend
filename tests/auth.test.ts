@@ -147,4 +147,48 @@ describe("auth and health routes", () => {
     });
     assert.ok(acceptedInvitation.acceptedAt);
   });
+
+  it("accepts a workspace invitation for an already signed-in user", async () => {
+    const ownWorkspace = await prisma.workspace.create({ data: { name: "Own workspace" } });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: "existing@abregi.test",
+        role: "ADMIN",
+        defaultWorkspaceId: ownWorkspace.id,
+        workspaceMemberships: {
+          create: { workspaceId: ownWorkspace.id, role: "ADMIN" },
+        },
+        sessions: {
+          create: {
+            sessionToken: "existing-session",
+            expires: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        },
+      },
+    });
+    const invitingWorkspace = await prisma.workspace.create({ data: { name: "Inviting workspace" } });
+    await prisma.workspaceInvitation.create({
+      data: {
+        workspaceId: invitingWorkspace.id,
+        email: invitedUser.email,
+        role: "ORGANIZER",
+        token: "existing-invite-token",
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const accepted = await request("POST", "/api/workspace/invitations/accept", "Bearer existing-session", {
+      inviteToken: "existing-invite-token",
+    });
+    assert.equal(accepted.statusCode, 200);
+    assert.equal(
+      (await prisma.user.findUniqueOrThrow({ where: { id: invitedUser.id } })).defaultWorkspaceId,
+      invitingWorkspace.id,
+    );
+
+    const member = await prisma.workspaceMember.findFirstOrThrow({
+      where: { workspaceId: invitingWorkspace.id, userId: invitedUser.id },
+    });
+    assert.equal(member.role, "ORGANIZER");
+  });
 });

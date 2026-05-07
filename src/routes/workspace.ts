@@ -35,6 +35,9 @@ const switchWorkspaceSchema = z.object({
 const deleteConfirmationSchema = z.object({
   confirm: z.string(),
 });
+const acceptInvitationSchema = z.object({
+  inviteToken: z.string().min(1),
+});
 const allowedProfileImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
@@ -540,5 +543,56 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       expires: invitation.expires,
       inviteUrl: inviteUrl.toString(),
     });
+  });
+
+  fastify.post("/api/workspace/invitations/accept", async (request) => {
+    const parsed = acceptInvitationSchema.parse(request.body);
+    const invitation = await prisma.workspaceInvitation.findUnique({
+      where: { token: parsed.inviteToken },
+      include: { workspace: { select: { id: true, name: true } } },
+    });
+
+    if (
+      !invitation ||
+      invitation.email !== request.user!.email ||
+      invitation.acceptedAt ||
+      invitation.expires <= new Date()
+    ) {
+      const error = new Error("Invitation invalide ou expiree");
+      error.name = "UnauthorizedError";
+      throw error;
+    }
+
+    await prisma.$transaction([
+      prisma.workspaceMember.upsert({
+        where: {
+          workspaceId_userId: {
+            workspaceId: invitation.workspaceId,
+            userId: request.user!.id,
+          },
+        },
+        create: {
+          workspaceId: invitation.workspaceId,
+          userId: request.user!.id,
+          role: invitation.role,
+        },
+        update: {
+          role: invitation.role,
+        },
+      }),
+      prisma.user.update({
+        where: { id: request.user!.id },
+        data: { defaultWorkspaceId: invitation.workspaceId },
+      }),
+      prisma.workspaceInvitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      workspace: invitation.workspace,
+    };
   });
 }
