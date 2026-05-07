@@ -129,6 +129,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
         description: parsed.description || null,
         bannerUrl: parsed.bannerUrl || null,
         venueId: parsed.venueId || null,
+        nbCollectifs: parsed.nbCollectifs,
       },
     });
   });

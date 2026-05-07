@@ -10,6 +10,7 @@ export const eventSchema = z
     description: optionalText("La description", LIMITS.longText),
     bannerUrl: optionalText("L'URL de la banniere", LIMITS.url),
     venueId: z.string().optional().or(z.literal("")),
+    nbCollectifs: z.number().int().min(1).optional().default(1),
   })
   .refine(
     (data) => {
