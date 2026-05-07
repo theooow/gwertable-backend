@@ -35,6 +35,7 @@ export async function peopleRoutes(fastify: FastifyInstance) {
             OR: [
               { fullName: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
+              { phone: { contains: search, mode: "insensitive" } },
               { tags: { hasSome: [search.toLowerCase()] } },
             ],
           }

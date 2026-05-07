@@ -25,6 +25,10 @@ describe("people and event routes", () => {
     assert.equal(people.statusCode, 200);
     assert.equal(json<unknown[]>(people).length, 1);
 
+    const phoneSearch = await request("GET", "/api/people?search=0600000000", authorization);
+    assert.equal(phoneSearch.statusCode, 200);
+    assert.equal(json<unknown[]>(phoneSearch).length, 1);
+
     const tags = await request("GET", "/api/people/tags", authorization);
     assert.equal(tags.statusCode, 200);
     assert.deepEqual(json(tags), ["bar", "staff"]);
