@@ -329,6 +329,7 @@ model EventParticipant {
 
   // Notes internes orga (sensibles)
   internalNotes String?
+  autoExpense   Expense?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -398,6 +399,8 @@ model Expense {
   id            String      @id @default(cuid())
   eventId       String
   event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sourceParticipantId String? @unique
+  sourceParticipant    EventParticipant? @relation(fields: [sourceParticipantId], references: [id], onDelete: Cascade)
   label         String
   amountCents   Int
   category      String

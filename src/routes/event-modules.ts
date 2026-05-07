@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -130,6 +131,76 @@ async function requireExpenseInWorkspace(id: string, workspaceId: string) {
     error.name = "NotFoundError";
     throw error;
   }
+}
+
+function normalizeParticipantFeeValue(fee: string | null | undefined, roles: string[]) {
+  if (!roles.includes("ARTIST")) return null;
+  if (fee === null || fee === undefined || fee.trim() === "") return null;
+  return parseFloat(fee);
+}
+
+async function syncArtistExpenseForParticipant(
+  tx: Prisma.TransactionClient,
+  participant: {
+    id: string;
+    eventId: string;
+    personId: string;
+    roles: string[];
+    fee: { toString(): string } | null;
+  },
+) {
+  const feeValue = participant.fee?.toString() ?? null;
+  const amountCents = normalizeParticipantFeeValue(feeValue, participant.roles);
+
+  if (amountCents === null) {
+    const existingExpense = await tx.expense.findUnique({
+      where: { sourceParticipantId: participant.id },
+      select: { id: true },
+    });
+    if (existingExpense) {
+      await tx.expense.delete({ where: { id: existingExpense.id } });
+    }
+    return;
+  }
+
+  const person = await tx.person.findUnique({
+    where: { id: participant.personId },
+    select: { fullName: true },
+  });
+  const label = `Cachet ${person?.fullName ?? "participant"}`;
+  await tx.expense.upsert({
+    where: { sourceParticipantId: participant.id },
+    create: {
+      eventId: participant.eventId,
+      sourceParticipantId: participant.id,
+      label,
+      amountCents: Math.round(amountCents * 100),
+      category: "artistes",
+      reimbursement: "PENDING",
+    },
+    update: {
+      eventId: participant.eventId,
+      label,
+      amountCents: Math.round(amountCents * 100),
+      category: "artistes",
+    },
+  });
+}
+
+async function syncParticipantFeeFromExpense(tx: Prisma.TransactionClient, expense: { sourceParticipantId: string | null; amountCents: number }) {
+  if (!expense.sourceParticipantId) return;
+  await tx.eventParticipant.update({
+    where: { id: expense.sourceParticipantId },
+    data: { fee: expense.amountCents / 100 },
+  });
+}
+
+async function clearParticipantFeeFromExpense(tx: Prisma.TransactionClient, sourceParticipantId: string | null) {
+  if (!sourceParticipantId) return;
+  await tx.eventParticipant.update({
+    where: { id: sourceParticipantId },
+    data: { fee: null },
+  });
 }
 
 async function requireShoppingItemInWorkspace(id: string, workspaceId: string) {
@@ -528,20 +599,26 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       throw error;
     }
 
-    const participant = await prisma.eventParticipant.create({
-      data: {
-        eventId,
-        personId: parsed.personId,
-        roles: parsed.roles,
-        rsvpStatus: parsed.rsvpStatus,
-        plusOnes: parsed.plusOnes,
-        dietary: parsed.dietary || null,
-        setStart: parsed.setStart ? new Date(parsed.setStart) : null,
-        setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
-        fee: parsed.fee ? parseFloat(parsed.fee) : null,
-        contractSigned: parsed.contractSigned,
-        internalNotes: parsed.internalNotes || null,
-      },
+    const participant = await prisma.$transaction(async (tx) => {
+      const created = await tx.eventParticipant.create({
+        data: {
+          eventId,
+          personId: parsed.personId,
+          roles: parsed.roles,
+          rsvpStatus: parsed.rsvpStatus,
+          plusOnes: parsed.plusOnes,
+          dietary: parsed.dietary || null,
+          setStart: parsed.setStart ? new Date(parsed.setStart) : null,
+          setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
+          fee: normalizeParticipantFeeValue(parsed.fee, parsed.roles),
+          contractSigned: parsed.contractSigned,
+          internalNotes: parsed.internalNotes || null,
+        },
+        include: { person: { select: { id: true, fullName: true } } },
+      });
+
+      await syncArtistExpenseForParticipant(tx, created);
+      return created;
     });
 
     return reply.status(201).send(participant);
@@ -554,19 +631,25 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireParticipantInWorkspace(id, request.workspaceId);
     await requirePersonInWorkspace(parsed.personId, request.workspaceId);
 
-    return prisma.eventParticipant.update({
-      where: { id },
-      data: {
-        roles: parsed.roles,
-        rsvpStatus: parsed.rsvpStatus,
-        plusOnes: parsed.plusOnes,
-        dietary: parsed.dietary || null,
-        setStart: parsed.setStart ? new Date(parsed.setStart) : null,
-        setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
-        fee: parsed.fee ? parseFloat(parsed.fee) : null,
-        contractSigned: parsed.contractSigned,
-        internalNotes: parsed.internalNotes || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.eventParticipant.update({
+        where: { id },
+        data: {
+          roles: parsed.roles,
+          rsvpStatus: parsed.rsvpStatus,
+          plusOnes: parsed.plusOnes,
+          dietary: parsed.dietary || null,
+          setStart: parsed.setStart ? new Date(parsed.setStart) : null,
+          setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
+          fee: normalizeParticipantFeeValue(parsed.fee, parsed.roles),
+          contractSigned: parsed.contractSigned,
+          internalNotes: parsed.internalNotes || null,
+        },
+        include: { person: { select: { id: true, fullName: true } } },
+      });
+
+      await syncArtistExpenseForParticipant(tx, updated);
+      return updated;
     });
   });
 
@@ -577,19 +660,25 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireParticipantInWorkspace(id, request.workspaceId);
     await requirePersonInWorkspace(parsed.personId, request.workspaceId);
 
-    return prisma.eventParticipant.update({
-      where: { id },
-      data: {
-        roles: parsed.roles,
-        rsvpStatus: parsed.rsvpStatus,
-        plusOnes: parsed.plusOnes,
-        dietary: parsed.dietary || null,
-        setStart: parsed.setStart ? new Date(parsed.setStart) : null,
-        setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
-        fee: parsed.fee ? parseFloat(parsed.fee) : null,
-        contractSigned: parsed.contractSigned,
-        internalNotes: parsed.internalNotes || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.eventParticipant.update({
+        where: { id },
+        data: {
+          roles: parsed.roles,
+          rsvpStatus: parsed.rsvpStatus,
+          plusOnes: parsed.plusOnes,
+          dietary: parsed.dietary || null,
+          setStart: parsed.setStart ? new Date(parsed.setStart) : null,
+          setEnd: parsed.setEnd ? new Date(parsed.setEnd) : null,
+          fee: normalizeParticipantFeeValue(parsed.fee, parsed.roles),
+          contractSigned: parsed.contractSigned,
+          internalNotes: parsed.internalNotes || null,
+        },
+        include: { person: { select: { id: true, fullName: true } } },
+      });
+
+      await syncArtistExpenseForParticipant(tx, updated);
+      return updated;
     });
   });
 
@@ -918,18 +1007,23 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireExpenseInWorkspace(id, request.workspaceId);
     if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
-    return prisma.expense.update({
-      where: { id },
-      data: {
-        label: parsed.label,
-        amountCents: parseEuros(parsed.amount),
-        category: parsed.category,
-        paidById: parsed.paidById || null,
-        paidAt: parsed.paidAt ? new Date(parsed.paidAt) : null,
-        reimbursement: parsed.reimbursement,
-        receiptUrl: parsed.receiptUrl || null,
-        notes: parsed.notes || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.update({
+        where: { id },
+        data: {
+          label: parsed.label,
+          amountCents: parseEuros(parsed.amount),
+          category: parsed.category,
+          paidById: parsed.paidById || null,
+          paidAt: parsed.paidAt ? new Date(parsed.paidAt) : null,
+          reimbursement: parsed.reimbursement,
+          receiptUrl: parsed.receiptUrl || null,
+          notes: parsed.notes || null,
+        },
+      });
+
+      await syncParticipantFeeFromExpense(tx, expense);
+      return expense;
     });
   });
 
@@ -940,18 +1034,23 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireExpenseInWorkspace(id, request.workspaceId);
     if (parsed.paidById) await requirePersonInWorkspace(parsed.paidById, request.workspaceId);
 
-    return prisma.expense.update({
-      where: { id },
-      data: {
-        label: parsed.label,
-        amountCents: parseEuros(parsed.amount),
-        category: parsed.category,
-        paidById: parsed.paidById || null,
-        paidAt: parsed.paidAt ? new Date(parsed.paidAt) : null,
-        reimbursement: parsed.reimbursement,
-        receiptUrl: parsed.receiptUrl || null,
-        notes: parsed.notes || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.update({
+        where: { id },
+        data: {
+          label: parsed.label,
+          amountCents: parseEuros(parsed.amount),
+          category: parsed.category,
+          paidById: parsed.paidById || null,
+          paidAt: parsed.paidAt ? new Date(parsed.paidAt) : null,
+          reimbursement: parsed.reimbursement,
+          receiptUrl: parsed.receiptUrl || null,
+          notes: parsed.notes || null,
+        },
+      });
+
+      await syncParticipantFeeFromExpense(tx, expense);
+      return expense;
     });
   });
 
@@ -959,14 +1058,28 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "budget.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     await requireExpenseInWorkspace(id, request.workspaceId);
-    return prisma.expense.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.findFirst({
+        where: { id, event: { workspaceId: request.workspaceId } },
+      });
+      await tx.expense.delete({ where: { id } });
+      await clearParticipantFeeFromExpense(tx, expense?.sourceParticipantId ?? null);
+      return expense;
+    });
   });
 
   fastify.delete("/api/expenses/:id", async (request) => {
     requireCan(request.userRole, "budget.write");
     const { id } = idParamsSchema.parse(request.params);
     await requireExpenseInWorkspace(id, request.workspaceId);
-    return prisma.expense.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const expense = await tx.expense.findFirst({
+        where: { id, event: { workspaceId: request.workspaceId } },
+      });
+      await tx.expense.delete({ where: { id } });
+      await clearParticipantFeeFromExpense(tx, expense?.sourceParticipantId ?? null);
+      return expense;
+    });
   });
 
   fastify.get("/api/events/:eventId/expenses/persons", async (request) => {
