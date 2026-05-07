@@ -61,7 +61,9 @@ describe("event module routes", () => {
     };
     const createdTask = await request("POST", `/api/events/${event.id}/tasks`, authorization, taskPayload);
     assert.equal(createdTask.statusCode, 201);
-    const task = json<{ id: string }>(createdTask);
+    const task = json<{ id: string; autoRunOfShowItem: { id: string; sourceTaskId: string; responsiblePersonId: string } }>(createdTask);
+    assert.equal(task.autoRunOfShowItem.sourceTaskId, task.id);
+    assert.equal(task.autoRunOfShowItem.responsiblePersonId, person.id);
 
     assert.equal((await request("GET", `/api/events/${event.id}/tasks`, authorization)).statusCode, 200);
     const calendar = await request("GET", `/api/events/${event.id}/tasks/calendar.ics`, authorization);
@@ -98,6 +100,7 @@ describe("event module routes", () => {
       durationMin: 45,
       title: "Ouverture des portes",
       responsible: "Regie",
+      responsiblePersonId: person.id,
       notes: "Verifier l'accueil et la billetterie",
     };
     const createdRunOfShow = await request(
@@ -109,7 +112,9 @@ describe("event module routes", () => {
     assert.equal(createdRunOfShow.statusCode, 201);
     const runOfShow = json<{ id: string }>(createdRunOfShow);
 
-    assert.equal((await request("GET", `/api/events/${event.id}/run-of-show`, authorization)).statusCode, 200);
+    const runOfShowList = await request("GET", `/api/events/${event.id}/run-of-show`, authorization);
+    assert.equal(runOfShowList.statusCode, 200);
+    assert.equal(json<unknown[]>(runOfShowList).length, 2);
     assert.equal(
       (await request("PUT", `/api/events/${event.id}/run-of-show/${runOfShow.id}`, authorization, {
         ...runOfShowPayload,

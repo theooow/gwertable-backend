@@ -199,6 +199,7 @@ model Person {
   shoppingItems  ShoppingItem[]     @relation("ShoppingBuyer")
   equipmentOwned EquipmentItem[]    @relation("EquipmentOwner")
   announcements  Announcement[]     @relation("AnnouncementAuthor")
+  runOfShowResponsible RunOfShowItem[] @relation("RunOfShowResponsible")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -349,6 +350,7 @@ model Task {
   dueAt       DateTime?
   assigneeId  String?
   assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  runOfShowItem RunOfShowItem?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -382,9 +384,14 @@ model RunOfShowItem {
   durationMin Int
   title       String
   responsible String?
+  responsiblePersonId String?
+  responsiblePerson   Person? @relation("RunOfShowResponsible", fields: [responsiblePersonId], references: [id])
+  sourceTaskId String? @unique
+  sourceTask   Task?   @relation(fields: [sourceTaskId], references: [id], onDelete: SetNull)
   notes       String?
 
   @@index([eventId, startsAt])
+  @@index([responsiblePersonId])
 }
 
 model Expense {

@@ -10,5 +10,6 @@ export const runOfShowSchema = z.object({
     .max(1440, "La duree ne peut pas depasser 24 heures"),
   title: requiredText("Le titre", LIMITS.name),
   responsible: optionalText("Le responsable", LIMITS.shortText),
+  responsiblePersonId: z.string().optional().or(z.literal("")),
   notes: optionalText("Les notes", LIMITS.longText),
 });
