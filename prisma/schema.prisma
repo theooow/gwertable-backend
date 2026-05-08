@@ -73,6 +73,7 @@ enum RsvpStatus {
 
 enum TicketSource {
   MANUAL
+  API_SHOTGUN
   // TODO: API_SHOTGUN, API_HELLOASSO, etc. — ajouter les valeurs lors des intégrations billetterie
 }
 
@@ -106,6 +107,8 @@ model User {
 model Workspace {
   id        String   @id @default(cuid())
   name      String
+  shotgunOrganizerId String?
+  shotgunApiToken    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -294,6 +297,7 @@ model Event {
   workspaceId   String
   workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name          String
+  shotgunEventId Int?        @unique
   startsAt      DateTime
   endsAt        DateTime?
   status        EventStatus @default(DRAFT)
@@ -466,6 +470,7 @@ model TicketTier {
   eventId               String
   event                 Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name                  String
+  shotgunDealId         Int?         @unique
   organizerRevenueCents Int
   publicPriceCents      Int
   quantity              Int

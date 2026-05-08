@@ -29,6 +29,18 @@ const profileImageUploadSchema = z.object({
 });
 const updateWorkspaceSchema = z.object({
   name: z.string().trim().min(1, "Le nom de l'espace est requis").max(120),
+  shotgunOrganizerId: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .or(z.literal("")),
+  shotgunApiToken: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .or(z.literal("")),
 });
 const switchWorkspaceSchema = z.object({
   workspaceId: z.string().min(1),
@@ -414,10 +426,23 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get("/api/workspace", async (request) => {
     const workspace = await prisma.workspace.findUniqueOrThrow({
       where: { id: request.workspaceId },
-      select: { id: true, name: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        shotgunOrganizerId: true,
+        shotgunApiToken: true,
+      },
     });
 
-    return { workspace };
+    return {
+      workspace: {
+        ...workspace,
+        shotgunConnected: Boolean(workspace.shotgunApiToken),
+        shotgunApiToken: null,
+      },
+    };
   });
 
   fastify.get("/api/workspaces", async (request) => {
@@ -547,13 +572,40 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "user.manage");
     const parsed = updateWorkspaceSchema.parse(request.body);
 
-    const workspace = await prisma.workspace.update({
+    const current = await prisma.workspace.findUniqueOrThrow({
       where: { id: request.workspaceId },
-      data: { name: parsed.name },
-      select: { id: true, name: true, createdAt: true, updatedAt: true },
+      select: { shotgunApiToken: true },
     });
 
-    return { workspace };
+    const shotgunApiToken =
+      parsed.shotgunApiToken && parsed.shotgunApiToken.trim()
+        ? parsed.shotgunApiToken.trim()
+        : current.shotgunApiToken;
+
+    const workspace = await prisma.workspace.update({
+      where: { id: request.workspaceId },
+      data: {
+        name: parsed.name,
+        shotgunOrganizerId: parsed.shotgunOrganizerId?.trim() || null,
+        shotgunApiToken,
+      },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        shotgunOrganizerId: true,
+        shotgunApiToken: true,
+      },
+    });
+
+    return {
+      workspace: {
+        ...workspace,
+        shotgunConnected: Boolean(workspace.shotgunApiToken),
+        shotgunApiToken: null,
+      },
+    };
   });
 
   fastify.delete("/api/workspace", async (request) => {
