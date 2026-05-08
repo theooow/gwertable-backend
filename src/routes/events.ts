@@ -177,6 +177,8 @@ export async function eventRoutes(fastify: FastifyInstance) {
         bannerUrl: parsed.bannerUrl || null,
         venueId: parsed.venueId || null,
         nbCollectifs: parsed.nbCollectifs,
+        kegUnitPriceCents: parsed.kegUnitPriceCents,
+        avgBasketCents: parsed.avgBasketCents,
       },
     });
 

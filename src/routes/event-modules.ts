@@ -13,6 +13,7 @@ import { expenseSchema } from "../schemas/expense.js";
 import { ticketTierSchema } from "../schemas/ticket-tier.js";
 import { incomeSchema } from "../schemas/income.js";
 import { runOfShowSchema } from "../schemas/run-of-show.js";
+import { consumableSchema } from "../schemas/consumable.js";
 import {
   boughtSchema,
   boughtWithExpenseSchema,
@@ -1719,6 +1720,71 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireEventInWorkspace(eventId, request.workspaceId);
     await syncShotgunTicketTiers(eventId, request.workspaceId);
     return { ok: true };
+  });
+
+  // ── Consumables ──────────────────────────────────────────────────────────
+
+  fastify.get("/api/events/:eventId/consumables", async (request) => {
+    requireCan(request.userRole, "budget.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.consumableItem.findMany({
+      where: { eventId },
+      orderBy: { name: "asc" },
+    });
+  });
+
+  fastify.post("/api/events/:eventId/consumables", async (request, reply) => {
+    requireCan(request.userRole, "budget.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = consumableSchema.parse(request.body);
+
+    const item = await prisma.consumableItem.create({
+      data: {
+        eventId,
+        name: parsed.name,
+        unitPriceCents: parsed.unitPriceCents,
+        estimatedQty: parsed.estimatedQty,
+      },
+    });
+
+    return reply.status(201).send(item);
+  });
+
+  fastify.put("/api/consumables/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const item = await prisma.consumableItem.findUnique({ where: { id }, select: { event: { select: { workspaceId: true } } } });
+    if (!item || item.event.workspaceId !== request.workspaceId) {
+      const error = new Error("Consommable introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    const parsed = consumableSchema.parse(request.body);
+
+    return prisma.consumableItem.update({
+      where: { id },
+      data: {
+        name: parsed.name,
+        unitPriceCents: parsed.unitPriceCents,
+        estimatedQty: parsed.estimatedQty,
+      },
+    });
+  });
+
+  fastify.delete("/api/consumables/:id", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const item = await prisma.consumableItem.findUnique({ where: { id }, select: { event: { select: { workspaceId: true } } } });
+    if (!item || item.event.workspaceId !== request.workspaceId) {
+      const error = new Error("Consommable introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return prisma.consumableItem.delete({ where: { id } });
   });
 
   fastify.get("/api/people/search", async (request) => {

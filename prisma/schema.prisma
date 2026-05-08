@@ -305,8 +305,10 @@ model Event {
   bannerUrl     String?
   venueId       String?
   venue         Venue?      @relation(fields: [venueId], references: [id])
-  parentEventId String?     // si cloné depuis un autre event
-  nbCollectifs  Int     @default(1)
+  parentEventId      String?     // si cloné depuis un autre event
+  nbCollectifs       Int     @default(1)
+  kegUnitPriceCents  Int     @default(0)
+  avgBasketCents     Int     @default(0)
 
   participants    EventParticipant[]
   tasks           Task[]
@@ -320,8 +322,9 @@ model Event {
   documents       Document[]
   channels        Channel[]
   taskCalendarSubscriptions TaskCalendarSubscription[]
-  ticketTiers   TicketTier[]
-  collaborators  EventCollaborator[]
+  ticketTiers      TicketTier[]
+  consumables      ConsumableItem[]
+  collaborators    EventCollaborator[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -476,6 +479,17 @@ model TicketTier {
   quantity              Int
   sold                  Int          @default(0)
   source                TicketSource @default(MANUAL)
+
+  @@index([eventId])
+}
+
+model ConsumableItem {
+  id             String  @id @default(cuid())
+  eventId        String
+  event          Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name           String
+  unitPriceCents Int
+  estimatedQty   Decimal @default(0) @db.Decimal(10, 2)
 
   @@index([eventId])
 }

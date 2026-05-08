@@ -12,6 +12,8 @@ export const eventSchema = z
     bannerUrl: optionalText("L'URL de la banniere", LIMITS.url),
     venueId: z.string().optional().or(z.literal("")),
     nbCollectifs: z.number().int().min(1).optional().default(1),
+    kegUnitPriceCents: z.number().int().min(0).optional().default(0),
+    avgBasketCents: z.number().int().min(0).optional().default(0),
   })
   .refine(
     (data) => {
