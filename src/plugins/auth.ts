@@ -38,6 +38,7 @@ function isPublicRoute(url: string): boolean {
     url.startsWith("/uploads/receipts/") ||
     url.startsWith("/uploads/event-banners/") ||
     url.startsWith("/uploads/profile-images/") ||
+    url.startsWith("/uploads/equipment-quotes/") ||
     url.startsWith("/calendar/tasks/") ||
     url.startsWith("/api/auth/login-link") ||
     url.startsWith("/api/auth/verify")

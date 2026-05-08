@@ -14,7 +14,7 @@ import { ticketTierSchema } from "../schemas/ticket-tier.js";
 import { incomeSchema } from "../schemas/income.js";
 import { runOfShowSchema } from "../schemas/run-of-show.js";
 import { consumableSchema } from "../schemas/consumable.js";
-import { equipmentUsageSchema, equipmentUsageUpdateSchema } from "../schemas/equipment.js";
+import { equipmentUsageSchema, equipmentUsageUpdateSchema, equipmentQuoteSchema } from "../schemas/equipment.js";
 import {
   boughtSchema,
   boughtWithExpenseSchema,
@@ -1788,41 +1788,68 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     return prisma.consumableItem.delete({ where: { id } });
   });
 
-  // ── Equipment sync expense helper ────────────────────────────────────────
+  // ── Equipment sync expenses helper ───────────────────────────────────────
 
-  async function syncEquipmentExpense(eventId: string) {
-    const usages = await prisma.equipmentUsage.findMany({
+  async function syncEquipmentExpenses(eventId: string) {
+    // Wipe all existing sync expenses for this event and recreate them
+    await prisma.expense.deleteMany({ where: { eventId, isEquipmentSync: true } });
+
+    // One expense per quote (net = subtotal - discount), receiptUrl = quote file
+    const quotes = await prisma.equipmentQuote.findMany({
       where: { eventId },
-      select: { unitPriceCents: true, rentalCoef: true, quantity: true },
+      include: { usages: true },
     });
 
-    const totalCents = usages.reduce(
-      (sum, u) => sum + Math.round(u.unitPriceCents * Number(u.rentalCoef)) * u.quantity,
-      0,
-    );
+    for (const quote of quotes) {
+      const subtotal = quote.usages.reduce(
+        (s, u) => s + Math.round(u.unitPriceCents * Number(u.rentalCoef)) * u.quantity,
+        0,
+      );
+      if (subtotal === 0) continue;
 
-    const existing = await prisma.expense.findFirst({
-      where: { eventId, isEquipmentSync: true },
-      select: { id: true },
+      const discountAmt = quote.discountCents != null
+        ? quote.discountCents
+        : quote.discountPct != null
+          ? Math.round(subtotal * Number(quote.discountPct) / 100)
+          : 0;
+      const net = Math.max(0, subtotal - discountAmt);
+      if (net === 0) continue;
+
+      await prisma.expense.create({
+        data: {
+          eventId,
+          label: quote.label,
+          amountCents: net,
+          category: "matériel",
+          reimbursement: "NOT_OWED",
+          isEquipmentSync: true,
+          equipmentQuoteId: quote.id,
+          receiptUrl: quote.fileUrl ?? null,
+        },
+      });
+    }
+
+    // One expense per standalone usage (no quote, priced)
+    const standaloneUsages = await prisma.equipmentUsage.findMany({
+      where: { eventId, quoteId: null },
+      include: { item: { select: { name: true } } },
     });
 
-    if (totalCents > 0) {
-      if (existing) {
-        await prisma.expense.update({ where: { id: existing.id }, data: { amountCents: totalCents } });
-      } else {
-        await prisma.expense.create({
-          data: {
-            eventId,
-            label: "Matériel",
-            amountCents: totalCents,
-            category: "matériel",
-            reimbursement: "NOT_OWED",
-            isEquipmentSync: true,
-          },
-        });
-      }
-    } else if (existing) {
-      await prisma.expense.delete({ where: { id: existing.id } });
+    for (const usage of standaloneUsages) {
+      const amount = Math.round(usage.unitPriceCents * Number(usage.rentalCoef)) * usage.quantity;
+      if (amount === 0) continue;
+
+      const label = usage.name ?? usage.item?.name ?? "Matériel";
+      await prisma.expense.create({
+        data: {
+          eventId,
+          label,
+          amountCents: amount,
+          category: "matériel",
+          reimbursement: "NOT_OWED",
+          isEquipmentSync: true,
+        },
+      });
     }
   }
 
@@ -1923,7 +1950,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
         },
         include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
       });
-      await syncEquipmentExpense(eventId);
+      await syncEquipmentExpenses(eventId);
       return reply.status(201).send(usage);
     }
 
@@ -1940,7 +1967,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
         notes: parsed.notes || null,
       },
     });
-    await syncEquipmentExpense(eventId);
+    await syncEquipmentExpenses(eventId);
     return reply.status(201).send(usage);
   });
 
@@ -1992,20 +2019,37 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // If assigning to a quote, verify it belongs to the same event
+    if (parsed.quoteId) {
+      const quote = await prisma.equipmentQuote.findUnique({
+        where: { id: parsed.quoteId },
+        select: { eventId: true },
+      });
+      if (!quote || quote.eventId !== eventId) {
+        const error = new Error("Devis introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+    }
+
     const updated = await prisma.equipmentUsage.update({
       where: { id: usageId },
       data: {
         quantity: parsed.quantity,
         unitPriceCents: parsed.unitPriceCents,
         rentalCoef: parsed.rentalCoef,
+        quoteId: parsed.quoteId,
         conditionBefore: parsed.conditionBefore,
         conditionAfter: parsed.conditionAfter,
         returned: parsed.returned,
         notes: parsed.notes,
       },
-      include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
+      include: {
+        item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } },
+        quote: { select: { id: true, label: true } },
+      },
     });
-    await syncEquipmentExpense(eventId);
+    await syncEquipmentExpenses(eventId);
     return updated;
   });
 
@@ -2027,8 +2071,172 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     }
 
     await prisma.equipmentUsage.delete({ where: { id: usageId } });
-    await syncEquipmentExpense(eventId);
+    await syncEquipmentExpenses(eventId);
     return { ok: true };
+  });
+
+  // ── Equipment Quotes ─────────────────────────────────────────────────────
+
+  const quoteParamsSchema = z.object({ eventId: z.string().min(1), quoteId: z.string().min(1) });
+  const allowedQuoteFileTypes = new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ]);
+
+  fastify.get("/api/events/:eventId/equipment-quotes", async (request) => {
+    requireCan(request.userRole, "equipment.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.equipmentQuote.findMany({
+      where: { eventId },
+      include: {
+        usages: {
+          include: {
+            item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } },
+          },
+        },
+      },
+      orderBy: { label: "asc" },
+    });
+  });
+
+  fastify.post("/api/events/:eventId/equipment-quotes", async (request, reply) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = equipmentQuoteSchema.parse(request.body);
+
+    const quote = await prisma.equipmentQuote.create({
+      data: {
+        eventId,
+        label: parsed.label,
+        discountCents: parsed.discountCents ?? null,
+        discountPct: parsed.discountPct ?? null,
+      },
+      include: { usages: true },
+    });
+    return reply.status(201).send(quote);
+  });
+
+  fastify.put("/api/events/:eventId/equipment-quotes/:quoteId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = equipmentQuoteSchema.parse(request.body);
+
+    const quote = await prisma.equipmentQuote.findUnique({ where: { id: quoteId, eventId }, select: { id: true } });
+    if (!quote) {
+      const error = new Error("Devis introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const updated = await prisma.equipmentQuote.update({
+      where: { id: quoteId },
+      data: {
+        label: parsed.label,
+        discountCents: parsed.discountCents ?? null,
+        discountPct: parsed.discountPct ?? null,
+      },
+      include: { usages: { include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } } } },
+    });
+    await syncEquipmentExpenses(eventId);
+    return updated;
+  });
+
+  fastify.delete("/api/events/:eventId/equipment-quotes/:quoteId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const quote = await prisma.equipmentQuote.findUnique({ where: { id: quoteId, eventId }, select: { id: true } });
+    if (!quote) {
+      const error = new Error("Devis introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    // Usages are unlinked (quoteId set to null) via onDelete: SetNull
+    await prisma.equipmentQuote.delete({ where: { id: quoteId } });
+    await syncEquipmentExpenses(eventId);
+    return { ok: true };
+  });
+
+  fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", async (request, reply) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const quote = await prisma.equipmentQuote.findUnique({ where: { id: quoteId, eventId }, select: { id: true } });
+    if (!quote) {
+      const error = new Error("Devis introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    const parsed = receiptUploadSchema.parse(request.body);
+    if (!allowedQuoteFileTypes.has(parsed.contentType)) {
+      const error = new Error("Format non supporté (PDF, image, Word)");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 20 * 1024 * 1024) {
+      const error = new Error("Le fichier ne doit pas dépasser 20 Mo");
+      error.name = "ValidationError";
+      throw error;
+    }
+
+    const ext = parsed.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ? ".docx"
+      : parsed.contentType === "application/msword"
+        ? ".doc"
+        : extensionForContentType(parsed.contentType);
+
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${ext}`;
+    const directory = path.join(uploadRoot, "equipment-quotes");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    const fileUrl = `/uploads/equipment-quotes/${fileName}`;
+    await prisma.equipmentQuote.update({ where: { id: quoteId }, data: { fileUrl } });
+    await syncEquipmentExpenses(eventId);
+
+    return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
+  });
+
+  fastify.get("/uploads/equipment-quotes/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) {
+      return reply.status(400).send({ error: "Invalid file name" });
+    }
+
+    const filePath = path.join(uploadRoot, "equipment-quotes", fileName);
+    const data = await readFile(filePath).catch(() => null);
+    if (!data) return reply.status(404).send({ error: "File not found" });
+
+    const ext = path.extname(fileName).toLowerCase();
+    const contentTypeMap: Record<string, string> = {
+      ".pdf": "application/pdf",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".webp": "image/webp",
+      ".gif": "image/gif",
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    };
+    const contentType = contentTypeMap[ext] ?? "application/octet-stream";
+    reply.header("content-type", contentType);
+    reply.header("cache-control", "private, max-age=3600");
+    return reply.send(data);
   });
 
   fastify.get("/api/people/search", async (request) => {

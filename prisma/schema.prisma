@@ -327,6 +327,7 @@ model Event {
   taskCalendarSubscriptions TaskCalendarSubscription[]
   ticketTiers      TicketTier[]
   consumables      ConsumableItem[]
+  equipmentQuotes  EquipmentQuote[]
   collaborators    EventCollaborator[]
 
   createdAt     DateTime @default(now())
@@ -452,7 +453,8 @@ model Expense {
   reimbursement    ReimbStatus @default(PENDING)
   receiptUrl       String?
   notes            String?
-  isEquipmentSync  Boolean     @default(false)
+  isEquipmentSync   Boolean @default(false)
+  equipmentQuoteId  String?
 
   createdAt     DateTime @default(now())
 
@@ -483,6 +485,19 @@ model TicketTier {
   quantity              Int
   sold                  Int          @default(0)
   source                TicketSource @default(MANUAL)
+
+  @@index([eventId])
+}
+
+model EquipmentQuote {
+  id            String           @id @default(cuid())
+  eventId       String
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label         String
+  discountCents Int?
+  discountPct   Decimal?         @db.Decimal(5, 2)
+  fileUrl       String?
+  usages        EquipmentUsage[]
 
   @@index([eventId])
 }
@@ -531,10 +546,14 @@ model EquipmentUsage {
   returned        Boolean        @default(false)
   notes           String?
 
+  quoteId         String?
+  quote           EquipmentQuote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+
   // Postgres treats NULL != NULL in unique indexes: several one-offs (itemId null) allowed per event
   @@unique([eventId, itemId])
   @@index([eventId])
   @@index([itemId])
+  @@index([quoteId])
 }
 
 model Document {

@@ -36,12 +36,20 @@ export const equipmentUsageUpdateSchema = z.object({
   quantity: z.number().int().min(1).default(1),
   unitPriceCents: z.number().int().min(0).optional(),
   rentalCoef: z.number().min(0).optional(),
+  quoteId: z.string().optional().nullable(),
   conditionBefore: z.string().optional().nullable(),
   conditionAfter: z.string().optional().nullable(),
   returned: z.boolean().optional(),
   notes: optionalText("Les notes", LIMITS.longText),
 });
 
+export const equipmentQuoteSchema = z.object({
+  label: requiredText("Le libellé", LIMITS.name),
+  discountCents: z.number().int().min(0).optional().nullable(),
+  discountPct: z.number().min(0).max(100).optional().nullable(),
+});
+
 export type EquipmentItemInput = z.infer<typeof equipmentItemSchema>;
 export type EquipmentUsageInput = z.infer<typeof equipmentUsageSchema>;
 export type EquipmentUsageUpdateInput = z.infer<typeof equipmentUsageUpdateSchema>;
+export type EquipmentQuoteInput = z.infer<typeof equipmentQuoteSchema>;
