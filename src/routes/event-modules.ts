@@ -14,6 +14,7 @@ import { ticketTierSchema } from "../schemas/ticket-tier.js";
 import { incomeSchema } from "../schemas/income.js";
 import { runOfShowSchema } from "../schemas/run-of-show.js";
 import { consumableSchema } from "../schemas/consumable.js";
+import { equipmentUsageSchema, equipmentUsageUpdateSchema } from "../schemas/equipment.js";
 import {
   boughtSchema,
   boughtWithExpenseSchema,
@@ -1785,6 +1786,205 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     }
 
     return prisma.consumableItem.delete({ where: { id } });
+  });
+
+  // ── Event Equipment ───────────────────────────────────────────────────────
+
+  fastify.get("/api/events/:eventId/equipment", async (request) => {
+    requireCan(request.userRole, "equipment.read");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    return prisma.equipmentUsage.findMany({
+      where: { eventId },
+      include: {
+        item: {
+          select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true },
+        },
+      },
+      orderBy: { id: "asc" },
+    });
+  });
+
+  fastify.post("/api/events/:eventId/equipment", async (request, reply) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const currentEvent = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { startsAt: true, endsAt: true },
+    });
+    if (!currentEvent) {
+      const error = new Error("Evenement introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    const parsed = equipmentUsageSchema.parse(request.body);
+
+    if (parsed.kind === "library") {
+      const libItem = await prisma.equipmentItem.findUnique({
+        where: { id: parsed.itemId, workspaceId: request.workspaceId },
+        select: { id: true, quantity: true, unitPriceCents: true, rentalCoef: true },
+      });
+      if (!libItem) {
+        const error = new Error("Équipement introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+
+      // Conflict detection: sum booked quantity on overlapping events
+      const overlappingUsages = await prisma.equipmentUsage.findMany({
+        where: {
+          itemId: parsed.itemId,
+          eventId: { not: eventId },
+          event: {
+            AND: [
+              { startsAt: { lte: currentEvent.endsAt ?? new Date("2099-01-01") } },
+              {
+                OR: [
+                  { endsAt: null },
+                  { endsAt: { gte: currentEvent.startsAt } },
+                ],
+              },
+            ],
+          },
+        },
+        select: { quantity: true, event: { select: { name: true, startsAt: true } } },
+      });
+
+      const alreadyBooked = overlappingUsages.reduce((s, u) => s + u.quantity, 0);
+      const available = libItem.quantity - alreadyBooked;
+
+      if (parsed.quantity > available) {
+        const conflictNames = [...new Set(overlappingUsages.map((u) => u.event.name))].join(", ");
+        const error = new Error(
+          `Conflit : seulement ${available} unité(s) disponible(s) (déjà sorti(s) sur : ${conflictNames})`,
+        );
+        error.name = "ConflictError";
+        throw error;
+      }
+
+      const existing = await prisma.equipmentUsage.findUnique({
+        where: { eventId_itemId: { eventId, itemId: parsed.itemId } },
+        select: { id: true },
+      });
+      if (existing) {
+        const error = new Error("Cet équipement est déjà ajouté à cet événement");
+        error.name = "ConflictError";
+        throw error;
+      }
+
+      const usage = await prisma.equipmentUsage.create({
+        data: {
+          eventId,
+          itemId: parsed.itemId,
+          quantity: parsed.quantity,
+          unitPriceCents: parsed.unitPriceCents ?? libItem.unitPriceCents,
+          rentalCoef: parsed.rentalCoef ?? libItem.rentalCoef,
+          notes: parsed.notes || null,
+        },
+        include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
+      });
+      return reply.status(201).send(usage);
+    }
+
+    // one-off item
+    const usage = await prisma.equipmentUsage.create({
+      data: {
+        eventId,
+        itemId: null,
+        name: parsed.name,
+        category: parsed.category,
+        quantity: parsed.quantity,
+        unitPriceCents: parsed.unitPriceCents,
+        rentalCoef: parsed.rentalCoef,
+        notes: parsed.notes || null,
+      },
+    });
+    return reply.status(201).send(usage);
+  });
+
+  fastify.put("/api/events/:eventId/equipment/:usageId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId, usageId } = z
+      .object({ eventId: z.string().min(1), usageId: z.string().min(1) })
+      .parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    const parsed = equipmentUsageUpdateSchema.parse(request.body);
+
+    const usage = await prisma.equipmentUsage.findUnique({
+      where: { id: usageId, eventId },
+      select: { id: true, itemId: true, item: { select: { quantity: true } } },
+    });
+    if (!usage) {
+      const error = new Error("Utilisation introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    // Conflict check on quantity change for library items
+    if (usage.itemId && parsed.quantity !== undefined) {
+      const event = await prisma.event.findUnique({ where: { id: eventId }, select: { startsAt: true, endsAt: true } });
+      if (event) {
+        const overlappingUsages = await prisma.equipmentUsage.findMany({
+          where: {
+            itemId: usage.itemId,
+            eventId: { not: eventId },
+            event: {
+              AND: [
+                { startsAt: { lte: event.endsAt ?? new Date("2099-01-01") } },
+                { OR: [{ endsAt: null }, { endsAt: { gte: event.startsAt } }] },
+              ],
+            },
+          },
+          select: { quantity: true, event: { select: { name: true } } },
+        });
+        const alreadyBooked = overlappingUsages.reduce((s, u) => s + u.quantity, 0);
+        const available = (usage.item?.quantity ?? 1) - alreadyBooked;
+        if (parsed.quantity > available) {
+          const conflictNames = [...new Set(overlappingUsages.map((u) => u.event.name))].join(", ");
+          const error = new Error(
+            `Conflit : seulement ${available} unité(s) disponible(s) (déjà sorti(s) sur : ${conflictNames})`,
+          );
+          error.name = "ConflictError";
+          throw error;
+        }
+      }
+    }
+
+    return prisma.equipmentUsage.update({
+      where: { id: usageId },
+      data: {
+        quantity: parsed.quantity,
+        unitPriceCents: parsed.unitPriceCents,
+        rentalCoef: parsed.rentalCoef,
+        conditionBefore: parsed.conditionBefore,
+        conditionAfter: parsed.conditionAfter,
+        returned: parsed.returned,
+        notes: parsed.notes,
+      },
+      include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
+    });
+  });
+
+  fastify.delete("/api/events/:eventId/equipment/:usageId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { eventId, usageId } = z
+      .object({ eventId: z.string().min(1), usageId: z.string().min(1) })
+      .parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+
+    const usage = await prisma.equipmentUsage.findUnique({
+      where: { id: usageId, eventId },
+      select: { id: true },
+    });
+    if (!usage) {
+      const error = new Error("Utilisation introuvable");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return prisma.equipmentUsage.delete({ where: { id: usageId } });
   });
 
   fastify.get("/api/people/search", async (request) => {

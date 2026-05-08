@@ -271,18 +271,21 @@ model Supplier {
 }
 
 model EquipmentItem {
-  id         String    @id @default(cuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name       String
-  category   String    // son, lumière, mobilier, déco
-  ownership  Ownership
-  ownerId    String?
-  owner      Person?   @relation("EquipmentOwner", fields: [ownerId], references: [id])
-  notes      String?
-  archivedAt DateTime?
+  id             String    @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name           String
+  category       String
+  ownership      Ownership
+  ownerId        String?
+  owner          Person?   @relation("EquipmentOwner", fields: [ownerId], references: [id])
+  unitPriceCents Int       @default(0)
+  rentalCoef     Decimal   @default(1) @db.Decimal(5, 2)
+  quantity       Int       @default(1)
+  notes          String?
+  archivedAt     DateTime?
 
-  usages     EquipmentUsage[]
+  usages         EquipmentUsage[]
 
   @@index([workspaceId])
   @@index([category])
@@ -512,18 +515,25 @@ model ShoppingItem {
 }
 
 model EquipmentUsage {
-  id              String        @id @default(cuid())
+  id              String         @id @default(cuid())
   eventId         String
-  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  itemId          String
-  item            EquipmentItem @relation(fields: [itemId], references: [id])
+  event           Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  itemId          String?        // null = item exceptionnel (one-off)
+  item            EquipmentItem? @relation(fields: [itemId], references: [id])
+  name            String?        // nom one-off ou override
+  category        String?        // catégorie one-off
+  unitPriceCents  Int            @default(0)
+  rentalCoef      Decimal        @default(1) @db.Decimal(5, 2)
+  quantity        Int            @default(1)
   conditionBefore String?
   conditionAfter  String?
-  returned        Boolean       @default(false)
+  returned        Boolean        @default(false)
   notes           String?
 
+  // Postgres treats NULL != NULL in unique indexes: several one-offs (itemId null) allowed per event
   @@unique([eventId, itemId])
   @@index([eventId])
+  @@index([itemId])
 }
 
 model Document {
