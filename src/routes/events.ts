@@ -165,7 +165,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
       }
     }
 
-    return prisma.event.update({
+    const updated = await prisma.event.update({
       where: { id, workspaceId: request.workspaceId },
       data: {
         name: parsed.name,
@@ -186,6 +186,8 @@ export async function eventRoutes(fastify: FastifyInstance) {
         where: { eventId: id, source: TicketSource.API_SHOTGUN },
       });
     }
+
+    return updated;
   });
 
   fastify.delete("/api/events/:id", async (request) => {

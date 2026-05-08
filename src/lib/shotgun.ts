@@ -120,6 +120,16 @@ export async function fetchShotgunEvents(config: ShotgunWorkspaceConfig, query: 
   return parsed.data;
 }
 
+export async function fetchShotgunEventsForSearch(config: ShotgunWorkspaceConfig, query: string) {
+  const [futureEvents, pastEvents] = await Promise.all([
+    fetchShotgunEvents(config, { name: query }),
+    fetchShotgunEvents(config, { name: query, pastEvents: true }),
+  ]);
+
+  const all = [...futureEvents, ...pastEvents];
+  return all.filter((shotgunEvent, index, array) => array.findIndex((candidate) => candidate.id === shotgunEvent.id) === index);
+}
+
 export async function fetchShotgunTickets(config: ShotgunWorkspaceConfig, eventId: number) {
   const url = buildShotgunUrl("https://api.shotgun.live/tickets", {
     token: config.apiToken,

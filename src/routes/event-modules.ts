@@ -163,12 +163,13 @@ async function requireTicketTierInWorkspace(id: string, workspaceId: string) {
 }
 
 function shotgunRevenueCentsForDeal(deal: ShotgunEvent["deals"][number]) {
-  const organizerFees = deal.organizer_fees ?? 0;
-  return Math.max(0, Math.round((deal.price - organizerFees) * 100));
+  return Math.max(0, Math.round(deal.price * 100));
 }
 
 function shotgunPublicPriceCentsForDeal(deal: ShotgunEvent["deals"][number]) {
-  return Math.max(0, Math.round(deal.price * 100));
+  const organizerFees = deal.organizer_fees ?? 0;
+  const userFees = deal.user_fees ?? 0;
+  return Math.max(0, Math.round((deal.price + organizerFees + userFees) * 100));
 }
 
 async function syncShotgunTicketTiers(eventId: string, workspaceId: string) {
