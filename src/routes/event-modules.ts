@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Prisma } from "@prisma/client";
+import { TicketSource, type Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -18,6 +18,13 @@ import {
   boughtWithExpenseSchema,
   shoppingSchema,
 } from "../schemas/shopping.js";
+import {
+  fetchShotgunEvents,
+  fetchShotgunTickets,
+  getShotgunWorkspaceConfig,
+  groupShotgunSoldTickets,
+  type ShotgunEvent,
+} from "../lib/shotgun.js";
 
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const tokenParamsSchema = z.object({ token: z.string().min(24) });
@@ -153,6 +160,78 @@ async function requireTicketTierInWorkspace(id: string, workspaceId: string) {
     error.name = "NotFoundError";
     throw error;
   }
+}
+
+function shotgunRevenueCentsForDeal(deal: ShotgunEvent["deals"][number]) {
+  const organizerFees = deal.organizer_fees ?? 0;
+  return Math.max(0, Math.round((deal.price - organizerFees) * 100));
+}
+
+function shotgunPublicPriceCentsForDeal(deal: ShotgunEvent["deals"][number]) {
+  return Math.max(0, Math.round(deal.price * 100));
+}
+
+async function syncShotgunTicketTiers(eventId: string, workspaceId: string) {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, workspaceId },
+    select: { id: true, shotgunEventId: true },
+  });
+  if (!event?.shotgunEventId) {
+    const error = new Error("Cet evenement n'est pas lie a Shotgun");
+    error.name = "ValidationError";
+    throw error;
+  }
+
+  const config = await getShotgunWorkspaceConfig(workspaceId);
+  const shotgunEvents = [
+    ...await fetchShotgunEvents(config, {}),
+    ...await fetchShotgunEvents(config, { pastEvents: true }),
+  ].filter((shotgunEvent, index, array) => array.findIndex((candidate) => candidate.id === shotgunEvent.id) === index);
+  const shotgunEvent = shotgunEvents.find((candidate) => candidate.id === event.shotgunEventId);
+  if (!shotgunEvent) {
+    const error = new Error("Evenement Shotgun introuvable");
+    error.name = "NotFoundError";
+    throw error;
+  }
+
+  const soldCounts = groupShotgunSoldTickets(await fetchShotgunTickets(config, shotgunEvent.id));
+  const remoteDealIds = new Set(shotgunEvent.deals.map((deal) => deal.product_id));
+
+  await prisma.$transaction(async (tx) => {
+    for (const deal of shotgunEvent.deals) {
+      const sold = soldCounts.get(deal.product_id) ?? 0;
+      await tx.ticketTier.upsert({
+        where: { shotgunDealId: deal.product_id },
+        create: {
+          eventId,
+          name: deal.name,
+          shotgunDealId: deal.product_id,
+          organizerRevenueCents: shotgunRevenueCentsForDeal(deal),
+          publicPriceCents: shotgunPublicPriceCentsForDeal(deal),
+          quantity: deal.quantity,
+          sold,
+          source: TicketSource.API_SHOTGUN,
+        },
+        update: {
+          eventId,
+          name: deal.name,
+          organizerRevenueCents: shotgunRevenueCentsForDeal(deal),
+          publicPriceCents: shotgunPublicPriceCentsForDeal(deal),
+          quantity: deal.quantity,
+          sold,
+          source: TicketSource.API_SHOTGUN,
+        },
+      });
+    }
+
+    await tx.ticketTier.deleteMany({
+      where: {
+        eventId,
+        source: TicketSource.API_SHOTGUN,
+        shotgunDealId: { notIn: [...remoteDealIds] },
+      },
+    });
+  });
 }
 
 async function requireExpenseInWorkspace(id: string, workspaceId: string) {
@@ -1591,6 +1670,12 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     const { eventId } = eventParamsSchema.parse(request.params);
     await requireEventInWorkspace(eventId, request.workspaceId);
 
+    try {
+      await syncShotgunTicketTiers(eventId, request.workspaceId);
+    } catch {
+      // Keep the local snapshot available if Shotgun is temporarily unavailable.
+    }
+
     return prisma.ticketTier.findMany({
       where: { eventId },
       orderBy: { organizerRevenueCents: "asc" },
@@ -1625,6 +1710,14 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireTicketTierInWorkspace(id, request.workspaceId);
 
     return prisma.ticketTier.delete({ where: { id } });
+  });
+
+  fastify.post("/api/events/:eventId/shotgun/sync", async (request) => {
+    requireCan(request.userRole, "budget.write");
+    const { eventId } = eventParamsSchema.parse(request.params);
+    await requireEventInWorkspace(eventId, request.workspaceId);
+    await syncShotgunTicketTiers(eventId, request.workspaceId);
+    return { ok: true };
   });
 
   fastify.get("/api/people/search", async (request) => {

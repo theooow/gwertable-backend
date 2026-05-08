@@ -4,6 +4,7 @@ import { LIMITS, optionalText, requiredText } from "./limits.js";
 export const eventSchema = z
   .object({
     name: requiredText("Le nom", LIMITS.name),
+    shotgunEventId: z.number().int().positive().optional().nullable(),
     startsAt: z.string().min(1, "La date de debut est requise"),
     endsAt: z.string().optional().or(z.literal("")),
     status: z.enum(["DRAFT", "PLANNING", "LIVE", "DONE", "ARCHIVED"]).default("DRAFT"),

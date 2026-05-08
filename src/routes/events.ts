@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { TicketSource } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireCan } from "../lib/permissions.js";
 import { eventSchema } from "../schemas/event.js";
@@ -63,6 +64,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const event = await prisma.event.create({
       data: {
         name: parsed.name,
+        shotgunEventId: parsed.shotgunEventId ?? null,
         startsAt: new Date(parsed.startsAt),
         endsAt: parsed.endsAt ? new Date(parsed.endsAt) : null,
         status: parsed.status,
@@ -147,6 +149,10 @@ export async function eventRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "event.write");
     const { id } = idParamsSchema.parse(request.params);
     const parsed = eventSchema.parse(request.body);
+    const current = await prisma.event.findUnique({
+      where: { id, workspaceId: request.workspaceId },
+      select: { shotgunEventId: true },
+    });
     if (parsed.venueId) {
       const venue = await prisma.venue.findFirst({
         where: { id: parsed.venueId, workspaceId: request.workspaceId },
@@ -163,6 +169,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
       where: { id, workspaceId: request.workspaceId },
       data: {
         name: parsed.name,
+        shotgunEventId: parsed.shotgunEventId ?? null,
         startsAt: new Date(parsed.startsAt),
         endsAt: parsed.endsAt ? new Date(parsed.endsAt) : null,
         status: parsed.status,
@@ -172,6 +179,13 @@ export async function eventRoutes(fastify: FastifyInstance) {
         nbCollectifs: parsed.nbCollectifs,
       },
     });
+
+    const currentShotgunEventId = current?.shotgunEventId;
+    if (currentShotgunEventId && currentShotgunEventId !== parsed.shotgunEventId) {
+      await prisma.ticketTier.deleteMany({
+        where: { eventId: id, source: TicketSource.API_SHOTGUN },
+      });
+    }
   });
 
   fastify.delete("/api/events/:id", async (request) => {
