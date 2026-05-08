@@ -104,11 +104,75 @@ describe("event module routes", () => {
     const syncedCalendar = await request("GET", `/calendar/tasks/${subscriptionToken}`);
     assert.equal(syncedCalendar.statusCode, 200);
     assert.match(syncedCalendar.body, /SUMMARY:Prepare bar/);
+
+    const runOfShowAfterTaskCreate = json<
+      Array<{
+        id: string;
+        sourceTaskId: string | null;
+        title: string;
+        startsAt: string;
+        responsiblePersonId: string | null;
+        notes: string | null;
+      }>
+    >(await request("GET", `/api/events/${event.id}/run-of-show`, authorization));
+    const linkedRunOfShow = runOfShowAfterTaskCreate.find((item) => item.sourceTaskId === task.id);
+    assert.ok(linkedRunOfShow);
+    assert.equal(linkedRunOfShow?.title, taskPayload.title);
+    assert.equal(linkedRunOfShow?.responsiblePersonId, person.id);
+
+    const updatedTaskPayload = {
+      ...taskPayload,
+      title: "Prepare the bar",
+      description: "Stock drinks and ice",
+      dueAt: "2026-06-01T19:15:00.000Z",
+      assigneeId: "",
+    };
     assert.equal(
-      (await request("PUT", `/api/events/${event.id}/tasks/${task.id}`, authorization, taskPayload)).statusCode,
+      (await request("PUT", `/api/events/${event.id}/tasks/${task.id}`, authorization, updatedTaskPayload)).statusCode,
       200,
     );
-    assert.equal((await request("PUT", `/api/tasks/${task.id}`, authorization, taskPayload)).statusCode, 200);
+    const runOfShowAfterTaskUpdate = json<
+      Array<{
+        id: string;
+        sourceTaskId: string | null;
+        title: string;
+        startsAt: string;
+        responsiblePersonId: string | null;
+        notes: string | null;
+      }>
+    >(await request("GET", `/api/events/${event.id}/run-of-show`, authorization));
+    const updatedLinkedRunOfShow = runOfShowAfterTaskUpdate.find((item) => item.sourceTaskId === task.id);
+    assert.ok(updatedLinkedRunOfShow);
+    const linkedRunOfShowId = updatedLinkedRunOfShow.id;
+    assert.equal(updatedLinkedRunOfShow?.title, updatedTaskPayload.title);
+    assert.equal(updatedLinkedRunOfShow?.startsAt, updatedTaskPayload.dueAt);
+    assert.equal(updatedLinkedRunOfShow?.responsiblePersonId, null);
+    assert.equal(updatedLinkedRunOfShow?.notes, updatedTaskPayload.description);
+
+    const updatedRunOfShowPayload = {
+      startsAt: "2026-06-01T20:30:00.000Z",
+      durationMin: 50,
+      title: "Ouverture des portes",
+      responsible: "Regie",
+      responsiblePersonId: "",
+      notes: "Verifier l'accueil, la billetterie et les badges",
+    };
+    assert.equal(
+      (await request("PUT", `/api/run-of-show/${linkedRunOfShowId}`, authorization, updatedRunOfShowPayload))
+        .statusCode,
+      200,
+    );
+    const tasksAfterRunOfShowUpdate = json<
+      Array<{ id: string; title: string; description: string | null; dueAt: string | null; assigneeId: string | null }>
+    >(await request("GET", `/api/events/${event.id}/tasks`, authorization));
+    const syncedTask = tasksAfterRunOfShowUpdate.find((item) => item.id === task.id);
+    assert.ok(syncedTask);
+    assert.equal(syncedTask?.title, updatedRunOfShowPayload.title);
+    assert.equal(syncedTask?.description, updatedRunOfShowPayload.notes);
+    assert.equal(syncedTask?.dueAt, updatedRunOfShowPayload.startsAt);
+    assert.equal(syncedTask?.assigneeId, null);
+
+    assert.equal((await request("PUT", `/api/tasks/${task.id}`, authorization, updatedTaskPayload)).statusCode, 200);
     assert.equal(
       (await request("PATCH", `/api/events/${event.id}/tasks/${task.id}/status`, authorization, {
         status: "DONE",
@@ -151,6 +215,21 @@ describe("event module routes", () => {
       (await request("PUT", `/api/run-of-show/${runOfShow.id}`, authorization, runOfShowPayload)).statusCode,
       200,
     );
+
+    const linkedTaskBeforeDelete = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
+      ...taskPayload,
+      title: "Load in",
+      dueAt: "2026-06-01T17:00:00.000Z",
+    });
+    assert.equal(linkedTaskBeforeDelete.statusCode, 201);
+    const secondTask = json<{ id: string }>(linkedTaskBeforeDelete);
+    assert.equal((await request("DELETE", `/api/tasks/${secondTask.id}`, authorization)).statusCode, 200);
+    const tasksAfterDelete = json<Array<{ id: string }>>(await request("GET", `/api/events/${event.id}/tasks`, authorization));
+    assert.equal(tasksAfterDelete.some((item) => item.id === secondTask.id), false);
+
+    assert.equal((await request("DELETE", `/api/run-of-show/${linkedRunOfShowId}`, authorization)).statusCode, 200);
+    const tasksAfterRunOfShowDelete = json<Array<{ id: string }>>(await request("GET", `/api/events/${event.id}/tasks`, authorization));
+    assert.equal(tasksAfterRunOfShowDelete.some((item) => item.id === task.id), false);
 
     const expensePayload = {
       label: "Boissons",
@@ -279,14 +358,13 @@ describe("event module routes", () => {
       200,
     );
 
-    assert.equal((await request("DELETE", `/api/events/${event.id}/tasks/${task.id}`, authorization)).statusCode, 200);
-    const secondTask = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
+    const thirdTask = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
       ...taskPayload,
       title: "Clean room",
     });
-    assert.equal(secondTask.statusCode, 201);
+    assert.equal(thirdTask.statusCode, 201);
     assert.equal(
-      (await request("DELETE", `/api/tasks/${json<{ id: string }>(secondTask).id}`, authorization)).statusCode,
+      (await request("DELETE", `/api/tasks/${json<{ id: string }>(thirdTask).id}`, authorization)).statusCode,
       200,
     );
 
