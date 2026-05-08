@@ -1788,6 +1788,44 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     return prisma.consumableItem.delete({ where: { id } });
   });
 
+  // ── Equipment sync expense helper ────────────────────────────────────────
+
+  async function syncEquipmentExpense(eventId: string) {
+    const usages = await prisma.equipmentUsage.findMany({
+      where: { eventId },
+      select: { unitPriceCents: true, rentalCoef: true, quantity: true },
+    });
+
+    const totalCents = usages.reduce(
+      (sum, u) => sum + Math.round(u.unitPriceCents * Number(u.rentalCoef)) * u.quantity,
+      0,
+    );
+
+    const existing = await prisma.expense.findFirst({
+      where: { eventId, isEquipmentSync: true },
+      select: { id: true },
+    });
+
+    if (totalCents > 0) {
+      if (existing) {
+        await prisma.expense.update({ where: { id: existing.id }, data: { amountCents: totalCents } });
+      } else {
+        await prisma.expense.create({
+          data: {
+            eventId,
+            label: "Matériel",
+            amountCents: totalCents,
+            category: "matériel",
+            reimbursement: "NOT_OWED",
+            isEquipmentSync: true,
+          },
+        });
+      }
+    } else if (existing) {
+      await prisma.expense.delete({ where: { id: existing.id } });
+    }
+  }
+
   // ── Event Equipment ───────────────────────────────────────────────────────
 
   fastify.get("/api/events/:eventId/equipment", async (request) => {
@@ -1885,6 +1923,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
         },
         include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
       });
+      await syncEquipmentExpense(eventId);
       return reply.status(201).send(usage);
     }
 
@@ -1901,6 +1940,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
         notes: parsed.notes || null,
       },
     });
+    await syncEquipmentExpense(eventId);
     return reply.status(201).send(usage);
   });
 
@@ -1952,7 +1992,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       }
     }
 
-    return prisma.equipmentUsage.update({
+    const updated = await prisma.equipmentUsage.update({
       where: { id: usageId },
       data: {
         quantity: parsed.quantity,
@@ -1965,6 +2005,8 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       },
       include: { item: { select: { id: true, name: true, category: true, ownership: true, quantity: true, unitPriceCents: true, rentalCoef: true } } },
     });
+    await syncEquipmentExpense(eventId);
+    return updated;
   });
 
   fastify.delete("/api/events/:eventId/equipment/:usageId", async (request) => {
@@ -1984,7 +2026,9 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       throw error;
     }
 
-    return prisma.equipmentUsage.delete({ where: { id: usageId } });
+    await prisma.equipmentUsage.delete({ where: { id: usageId } });
+    await syncEquipmentExpense(eventId);
+    return { ok: true };
   });
 
   fastify.get("/api/people/search", async (request) => {

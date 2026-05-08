@@ -449,9 +449,10 @@ model Expense {
   paidById      String?
   paidBy        Person?     @relation("PaidBy", fields: [paidById], references: [id])
   paidAt        DateTime?
-  reimbursement ReimbStatus @default(PENDING)
-  receiptUrl    String?
-  notes         String?
+  reimbursement    ReimbStatus @default(PENDING)
+  receiptUrl       String?
+  notes            String?
+  isEquipmentSync  Boolean     @default(false)
 
   createdAt     DateTime @default(now())
 
