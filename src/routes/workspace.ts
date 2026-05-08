@@ -158,6 +158,57 @@ async function getAccessibleWorkspaces(userId: string, email: string) {
   return [...map.values()];
 }
 
+async function getInvitedEvents(userId: string, email: string) {
+  const invitations = await prisma.eventCollaborator.findMany({
+    where: {
+      acceptedAt: { not: null },
+      OR: [{ userId }, { email }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      role: true,
+      event: {
+        select: {
+          id: true,
+          name: true,
+          startsAt: true,
+          workspaceId: true,
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const map = new Map<string, {
+    eventId: string;
+    eventName: string;
+    startsAt: Date;
+    workspaceId: string;
+    workspaceName: string;
+    role: UserRole;
+  }>();
+
+  for (const invitation of invitations) {
+    if (!map.has(invitation.event.id)) {
+      map.set(invitation.event.id, {
+        eventId: invitation.event.id,
+        eventName: invitation.event.name,
+        startsAt: invitation.event.startsAt,
+        workspaceId: invitation.event.workspaceId,
+        workspaceName: invitation.event.workspace.name,
+        role: invitation.role,
+      });
+    }
+  }
+
+  return [...map.values()].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+}
+
 async function copyWorkspaceContacts(
   sourceWorkspaceId: string,
   targetWorkspaceId: string,
@@ -380,6 +431,19 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         current: workspace.id === request.workspaceId,
         createdAt: workspace.createdAt,
         updatedAt: workspace.updatedAt,
+      })),
+    };
+  });
+
+  fastify.get("/api/workspace/invited-events", async (request) => {
+    requireCan(request.userRole, "event.read");
+
+    const events = await getInvitedEvents(request.user!.id, request.user!.email);
+
+    return {
+      events: events.map((event) => ({
+        ...event,
+        startsAt: event.startsAt,
       })),
     };
   });

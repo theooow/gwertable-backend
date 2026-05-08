@@ -34,6 +34,60 @@ describe("workspace routes", () => {
     assert.equal(membersPayload.invitations[0].email, "collab@abregi.test");
   });
 
+  it("lists invited events available to the current user", async () => {
+    const { authorization, user, workspace } = await seedAdminSession();
+    const invitedWorkspace = await prisma.workspace.create({
+      data: {
+        name: "Invited workspace",
+        members: {
+          create: {
+            userId: user.id,
+            role: "ORGANIZER",
+          },
+        },
+      },
+    });
+    const invitedEvent = await prisma.event.create({
+      data: {
+        workspaceId: invitedWorkspace.id,
+        name: "Invited event",
+        startsAt: new Date("2026-08-12T19:00:00.000Z"),
+      },
+    });
+    await prisma.eventCollaborator.create({
+      data: {
+        workspaceId: invitedWorkspace.id,
+        eventId: invitedEvent.id,
+        email: user.email,
+        userId: user.id,
+        role: "ORGANIZER",
+        token: "invite-token",
+        expires: new Date(Date.now() + 60 * 60 * 1000),
+        acceptedAt: new Date(),
+      },
+    });
+
+    const response = await request("GET", "/api/workspace/invited-events", authorization);
+    assert.equal(response.statusCode, 200);
+    const payload = json<{
+      events: {
+        eventId: string;
+        eventName: string;
+        workspaceId: string;
+        workspaceName: string;
+        role: string;
+      }[];
+    }>(response);
+
+    assert.equal(payload.events.length, 1);
+    assert.equal(payload.events[0]!.eventId, invitedEvent.id);
+    assert.equal(payload.events[0]!.eventName, "Invited event");
+    assert.equal(payload.events[0]!.workspaceId, invitedWorkspace.id);
+    assert.equal(payload.events[0]!.workspaceName, invitedWorkspace.name);
+    assert.equal(payload.events[0]!.role, "ORGANIZER");
+    assert.notEqual(payload.events[0]!.workspaceId, workspace.id);
+  });
+
   it("updates account and workspace settings", async () => {
     const { authorization } = await seedAdminSession();
 
