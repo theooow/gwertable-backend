@@ -2205,7 +2205,7 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, fileName), buffer);
 
-    const fileUrl = `/uploads/equipment-quotes/${fileName}`;
+    const fileUrl = `/api/uploads/equipment-quotes/${fileName}`;
     await prisma.equipmentQuote.update({ where: { id: quoteId }, data: { fileUrl } });
     await syncEquipmentExpenses(eventId);
 
