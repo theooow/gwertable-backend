@@ -271,32 +271,54 @@ function getParisDayKey(date: Date) {
   }).format(date);
 }
 
-async function createRunOfShowItemForEventDayTask({
-  eventId,
-  workspaceId,
-  task,
-}: {
-  eventId: string;
-  workspaceId: string;
+async function syncRunOfShowItemForTask(
+  tx: Prisma.TransactionClient,
   task: {
     id: string;
+    eventId: string;
     title: string;
     description: string | null;
     dueAt: Date | null;
     assigneeId: string | null;
-  };
-}) {
-  if (!task.dueAt) return null;
+  },
+) {
+  const existingItem = await tx.runOfShowItem.findUnique({
+    where: { sourceTaskId: task.id },
+    select: { id: true },
+  });
 
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, workspaceId },
+  if (!task.dueAt) {
+    if (existingItem) {
+      await tx.runOfShowItem.delete({ where: { id: existingItem.id } });
+    }
+    return null;
+  }
+
+  if (existingItem) {
+    return tx.runOfShowItem.update({
+      where: { id: existingItem.id },
+      data: {
+        startsAt: task.dueAt,
+        title: task.title,
+        responsiblePersonId: task.assigneeId,
+        notes: task.description,
+      },
+      include: {
+        responsiblePerson: { select: { id: true, fullName: true } },
+        sourceTask: { select: { id: true, title: true } },
+      },
+    });
+  }
+
+  const event = await tx.event.findFirst({
+    where: { id: task.eventId },
     select: { startsAt: true },
   });
   if (!event || getParisDayKey(event.startsAt) !== getParisDayKey(task.dueAt)) return null;
 
-  return prisma.runOfShowItem.create({
+  return tx.runOfShowItem.create({
     data: {
-      eventId,
+      eventId: task.eventId,
       startsAt: task.dueAt,
       durationMin: 30,
       title: task.title,
@@ -307,6 +329,29 @@ async function createRunOfShowItemForEventDayTask({
     include: {
       responsiblePerson: { select: { id: true, fullName: true } },
       sourceTask: { select: { id: true, title: true } },
+    },
+  });
+}
+
+async function syncTaskForRunOfShowItem(
+  tx: Prisma.TransactionClient,
+  item: {
+    sourceTaskId: string | null;
+    title: string;
+    startsAt: Date;
+    responsiblePersonId: string | null;
+    notes: string | null;
+  },
+) {
+  if (!item.sourceTaskId) return null;
+
+  return tx.task.update({
+    where: { id: item.sourceTaskId },
+    data: {
+      title: item.title,
+      description: item.notes,
+      dueAt: item.startsAt,
+      assigneeId: item.responsiblePersonId,
     },
   });
 }
@@ -887,26 +932,25 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireEventInWorkspace(eventId, request.workspaceId);
     if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
-    const task = await prisma.task.create({
-      data: {
-        eventId,
-        title: parsed.title,
-        description: parsed.description || null,
-        category: parsed.category,
-        status: parsed.status,
-        priority: parsed.priority,
-        dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
-        assigneeId: parsed.assigneeId || null,
-      },
-      include: { assignee: { select: { id: true, fullName: true } } },
-    });
-    const autoRunOfShowItem = await createRunOfShowItemForEventDayTask({
-      eventId,
-      workspaceId: request.workspaceId,
-      task,
+    const result = await prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({
+        data: {
+          eventId,
+          title: parsed.title,
+          description: parsed.description || null,
+          category: parsed.category,
+          status: parsed.status,
+          priority: parsed.priority,
+          dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
+          assigneeId: parsed.assigneeId || null,
+        },
+        include: { assignee: { select: { id: true, fullName: true } } },
+      });
+      const autoRunOfShowItem = await syncRunOfShowItemForTask(tx, task);
+      return { task, autoRunOfShowItem };
     });
 
-    return reply.status(201).send({ ...task, autoRunOfShowItem });
+    return reply.status(201).send({ ...result.task, autoRunOfShowItem: result.autoRunOfShowItem });
   });
 
   fastify.put("/api/events/:eventId/tasks/:id", async (request) => {
@@ -916,17 +960,21 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireTaskInWorkspace(id, request.workspaceId);
     if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
-    return prisma.task.update({
-      where: { id },
-      data: {
-        title: parsed.title,
-        description: parsed.description || null,
-        category: parsed.category,
-        status: parsed.status,
-        priority: parsed.priority,
-        dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
-        assigneeId: parsed.assigneeId || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: {
+          title: parsed.title,
+          description: parsed.description || null,
+          category: parsed.category,
+          status: parsed.status,
+          priority: parsed.priority,
+          dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
+          assigneeId: parsed.assigneeId || null,
+        },
+      });
+      await syncRunOfShowItemForTask(tx, task);
+      return task;
     });
   });
 
@@ -937,17 +985,21 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     await requireTaskInWorkspace(id, request.workspaceId);
     if (parsed.assigneeId) await requirePersonInWorkspace(parsed.assigneeId, request.workspaceId);
 
-    return prisma.task.update({
-      where: { id },
-      data: {
-        title: parsed.title,
-        description: parsed.description || null,
-        category: parsed.category,
-        status: parsed.status,
-        priority: parsed.priority,
-        dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
-        assigneeId: parsed.assigneeId || null,
-      },
+    return prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: {
+          title: parsed.title,
+          description: parsed.description || null,
+          category: parsed.category,
+          status: parsed.status,
+          priority: parsed.priority,
+          dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
+          assigneeId: parsed.assigneeId || null,
+        },
+      });
+      await syncRunOfShowItemForTask(tx, task);
+      return task;
     });
   });
 
@@ -971,14 +1023,32 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "task.write");
     const { id } = eventItemParamsSchema.parse(request.params);
     await requireTaskInWorkspace(id, request.workspaceId);
-    return prisma.task.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const linkedItem = await tx.runOfShowItem.findUnique({
+        where: { sourceTaskId: id },
+        select: { id: true },
+      });
+      if (linkedItem) {
+        await tx.runOfShowItem.delete({ where: { id: linkedItem.id } });
+      }
+      return tx.task.delete({ where: { id } });
+    });
   });
 
   fastify.delete("/api/tasks/:id", async (request) => {
     requireCan(request.userRole, "task.write");
     const { id } = idParamsSchema.parse(request.params);
     await requireTaskInWorkspace(id, request.workspaceId);
-    return prisma.task.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const linkedItem = await tx.runOfShowItem.findUnique({
+        where: { sourceTaskId: id },
+        select: { id: true },
+      });
+      if (linkedItem) {
+        await tx.runOfShowItem.delete({ where: { id: linkedItem.id } });
+      }
+      return tx.task.delete({ where: { id } });
+    });
   });
 
   fastify.get("/api/events/:eventId/run-of-show", async (request) => {
@@ -1005,20 +1075,22 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       await requireParticipantPersonInEvent(parsed.responsiblePersonId, eventId, request.workspaceId);
     }
 
-    const item = await prisma.runOfShowItem.create({
-      data: {
-        eventId,
-        startsAt: new Date(parsed.startsAt),
-        durationMin: parsed.durationMin,
-        title: parsed.title,
-        responsible: parsed.responsible || null,
-        responsiblePersonId: parsed.responsiblePersonId || null,
-        notes: parsed.notes || null,
-      },
-      include: {
-        responsiblePerson: { select: { id: true, fullName: true } },
-        sourceTask: { select: { id: true, title: true } },
-      },
+    const item = await prisma.$transaction(async (tx) => {
+      return tx.runOfShowItem.create({
+        data: {
+          eventId,
+          startsAt: new Date(parsed.startsAt),
+          durationMin: parsed.durationMin,
+          title: parsed.title,
+          responsible: parsed.responsible || null,
+          responsiblePersonId: parsed.responsiblePersonId || null,
+          notes: parsed.notes || null,
+        },
+        include: {
+          responsiblePerson: { select: { id: true, fullName: true } },
+          sourceTask: { select: { id: true, title: true } },
+        },
+      });
     });
 
     return reply.status(201).send(item);
@@ -1033,20 +1105,24 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       await requireParticipantPersonInEvent(parsed.responsiblePersonId, eventId, request.workspaceId);
     }
 
-    return prisma.runOfShowItem.update({
-      where: { id },
-      data: {
-        startsAt: new Date(parsed.startsAt),
-        durationMin: parsed.durationMin,
-        title: parsed.title,
-        responsible: parsed.responsible || null,
-        responsiblePersonId: parsed.responsiblePersonId || null,
-        notes: parsed.notes || null,
-      },
-      include: {
-        responsiblePerson: { select: { id: true, fullName: true } },
-        sourceTask: { select: { id: true, title: true } },
-      },
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.runOfShowItem.update({
+        where: { id },
+        data: {
+          startsAt: new Date(parsed.startsAt),
+          durationMin: parsed.durationMin,
+          title: parsed.title,
+          responsible: parsed.responsible || null,
+          responsiblePersonId: parsed.responsiblePersonId || null,
+          notes: parsed.notes || null,
+        },
+        include: {
+          responsiblePerson: { select: { id: true, fullName: true } },
+          sourceTask: { select: { id: true, title: true } },
+        },
+      });
+      await syncTaskForRunOfShowItem(tx, item);
+      return item;
     });
   });
 
@@ -1067,20 +1143,24 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
       await requireParticipantPersonInEvent(parsed.responsiblePersonId, existingItem.eventId, request.workspaceId);
     }
 
-    return prisma.runOfShowItem.update({
-      where: { id },
-      data: {
-        startsAt: new Date(parsed.startsAt),
-        durationMin: parsed.durationMin,
-        title: parsed.title,
-        responsible: parsed.responsible || null,
-        responsiblePersonId: parsed.responsiblePersonId || null,
-        notes: parsed.notes || null,
-      },
-      include: {
-        responsiblePerson: { select: { id: true, fullName: true } },
-        sourceTask: { select: { id: true, title: true } },
-      },
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.runOfShowItem.update({
+        where: { id },
+        data: {
+          startsAt: new Date(parsed.startsAt),
+          durationMin: parsed.durationMin,
+          title: parsed.title,
+          responsible: parsed.responsible || null,
+          responsiblePersonId: parsed.responsiblePersonId || null,
+          notes: parsed.notes || null,
+        },
+        include: {
+          responsiblePerson: { select: { id: true, fullName: true } },
+          sourceTask: { select: { id: true, title: true } },
+        },
+      });
+      await syncTaskForRunOfShowItem(tx, item);
+      return item;
     });
   });
 
@@ -1088,14 +1168,44 @@ export async function eventModuleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "runOfShow.write");
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     await requireRunOfShowItemInWorkspace(id, request.workspaceId, eventId);
-    return prisma.runOfShowItem.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.runOfShowItem.findFirst({
+        where: { id, event: { workspaceId: request.workspaceId } },
+        select: { id: true, sourceTaskId: true },
+      });
+      if (!item) {
+        const error = new Error("Element de conducteur introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+      await tx.runOfShowItem.delete({ where: { id } });
+      if (item.sourceTaskId) {
+        await tx.task.delete({ where: { id: item.sourceTaskId } });
+      }
+      return item;
+    });
   });
 
   fastify.delete("/api/run-of-show/:id", async (request) => {
     requireCan(request.userRole, "runOfShow.write");
     const { id } = idParamsSchema.parse(request.params);
     await requireRunOfShowItemInWorkspace(id, request.workspaceId);
-    return prisma.runOfShowItem.delete({ where: { id } });
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.runOfShowItem.findFirst({
+        where: { id, event: { workspaceId: request.workspaceId } },
+        select: { id: true, sourceTaskId: true },
+      });
+      if (!item) {
+        const error = new Error("Element de conducteur introuvable");
+        error.name = "NotFoundError";
+        throw error;
+      }
+      await tx.runOfShowItem.delete({ where: { id } });
+      if (item.sourceTaskId) {
+        await tx.task.delete({ where: { id: item.sourceTaskId } });
+      }
+      return item;
+    });
   });
 
   fastify.get("/api/events/:eventId/expenses", async (request) => {
