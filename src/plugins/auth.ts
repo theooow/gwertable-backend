@@ -36,6 +36,8 @@ function getBearerToken(authorization: string | undefined): string | null {
 function isPublicRoute(url: string): boolean {
   return (
     url === "/health" ||
+    url.startsWith("/docs") ||
+    url.startsWith("/documentation") ||
     url.startsWith("/uploads/receipts/") ||
     url.startsWith("/uploads/event-banners/") ||
     url.startsWith("/uploads/profile-images/") ||

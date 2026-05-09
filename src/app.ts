@@ -3,6 +3,7 @@ import fastify from "fastify";
 import { env } from "./env.js";
 import { authPlugin } from "./plugins/auth.js";
 import { errorsPlugin } from "./plugins/errors.js";
+import { swaggerPlugin } from "./plugins/swagger.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
@@ -32,6 +33,7 @@ export async function buildApp() {
   });
   await app.register(errorsPlugin);
   await app.register(authPlugin);
+  await app.register(swaggerPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(eventRoutes);
