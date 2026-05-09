@@ -84,6 +84,13 @@ enum TicketSource {
   // TODO: API_SHOTGUN, API_HELLOASSO, etc. — ajouter les valeurs lors des intégrations billetterie
 }
 
+enum PersonType {
+  CONTACT
+  ARTIST
+  SUPPLIER
+  VENUE
+}
+
 // ============================================================
 // PERSISTENT ENTITIES (pas liées à un event spécifique)
 // ============================================================
@@ -228,6 +235,21 @@ model Person {
   discordUserId String?
   notes         String?
   tags          String[]
+  contactType          PersonType @default(CONTACT)
+  availability         String?
+  negotiatedPrices     String?
+  specialConditions    String?
+  technicalConstraints String?
+  averageFee           Int?
+  bookingContact       String?
+  musicalStyle         String?
+  riderNotes           String?
+  venueCapacity        Int?
+  soundConstraints     String?
+  openingHours         String?
+  electricalPower      String?
+  securityContact      String?
+  sensibleNeighborhood Boolean   @default(false)
   archivedAt    DateTime?
 
   user          User?
@@ -239,6 +261,8 @@ model Person {
   equipmentOwned EquipmentItem[]    @relation("EquipmentOwner")
   announcements  Announcement[]     @relation("AnnouncementAuthor")
   runOfShowResponsible RunOfShowItem[] @relation("RunOfShowResponsible")
+  documents            PersonDocument[]
+  historyNotes         PersonHistoryNote[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -247,6 +271,30 @@ model Person {
   @@index([workspaceId])
   @@unique([workspaceId, email])
   @@unique([workspaceId, discordUserId])
+}
+
+model PersonDocument {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  isUpload  Boolean  @default(false)
+  category  String
+  createdAt DateTime @default(now())
+
+  @@index([personId])
+}
+
+model PersonHistoryNote {
+  id        String    @id @default(cuid())
+  personId  String
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  body      String
+  eventDate DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([personId])
 }
 
 model Venue {

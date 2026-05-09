@@ -3,36 +3,20 @@ import type { PersonInput } from "../schemas/person.js";
 import { BaseDao } from "./base.dao.js";
 import { NotFoundError } from "../lib/errors.js";
 
-/**
- * Filtres applicables à la liste des personnes.
- */
 export type PersonFilters = {
-  /** Recherche textuelle sur le nom, l'email, le téléphone et les tags. */
   search?: string;
-  /** Filtre sur les tags (un ou plusieurs). */
   tags?: string[];
-  /** Inclure les personnes archivées (false par défaut). */
+  contactType?: string;
   includeArchived?: boolean;
 };
 
-/**
- * DAO pour le modèle {@link Person}.
- * Fournit les opérations CRUD et de recherche sur la table des personnes.
- */
 export class PersonDao extends BaseDao {
   constructor(prisma: PrismaClient) {
     super(prisma);
   }
 
-  /**
-   * Recherche des personnes dans un espace de travail avec filtres optionnels.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param filters - Filtres de recherche
-   * @returns Liste des personnes triées par nom complet
-   */
   async findMany(workspaceId: string, filters: PersonFilters = {}) {
-    const { search, tags, includeArchived } = filters;
+    const { search, tags, contactType, includeArchived } = filters;
 
     const where: Prisma.PersonWhereInput = {
       workspaceId,
@@ -48,41 +32,42 @@ export class PersonDao extends BaseDao {
           }
         : {}),
       ...(tags && tags.length > 0 ? { tags: { hasSome: tags } } : {}),
+      ...(contactType ? { contactType: contactType as Prisma.EnumPersonTypeFilter } : {}),
     };
 
     return this.prisma.person.findMany({ where, orderBy: { fullName: "asc" } });
   }
 
-  /**
-   * Recherche une personne par son identifiant dans un espace de travail donné.
-   *
-   * @param id - Identifiant de la personne
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @returns La personne ou `null` si absente
-   */
   async findById(id: string, workspaceId: string) {
     return this.prisma.person.findFirst({ where: { id, workspaceId } });
   }
 
-  /**
-   * Recherche une personne ou lève une erreur si absente.
-   *
-   * @param id - Identifiant de la personne
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @throws {NotFoundError} Si la personne est introuvable
-   */
   async findByIdOrThrow(id: string, workspaceId: string) {
     const person = await this.findById(id, workspaceId);
     if (!person) throw new NotFoundError("Personne introuvable");
     return person;
   }
 
-  /**
-   * Retourne l'ensemble des tags utilisés par les personnes actives d'un espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @returns Liste de tags uniques triés alphabétiquement
-   */
+  async findWithDetails(id: string, workspaceId: string) {
+    const person = await this.prisma.person.findFirst({
+      where: { id, workspaceId },
+      include: {
+        documents: { orderBy: { createdAt: "desc" } },
+        historyNotes: { orderBy: { createdAt: "desc" } },
+        participations: {
+          include: {
+            event: {
+              select: { id: true, name: true, startsAt: true, endsAt: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+    if (!person) throw new NotFoundError("Personne introuvable");
+    return person;
+  }
+
   async findTags(workspaceId: string): Promise<string[]> {
     const persons = await this.prisma.person.findMany({
       where: { workspaceId, archivedAt: null },
@@ -97,61 +82,67 @@ export class PersonDao extends BaseDao {
     return [...tagSet].sort();
   }
 
-  /**
-   * Crée une nouvelle personne dans l'espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param data - Données validées de la personne
-   * @returns La personne créée
-   */
+  private buildPersonData(data: PersonInput) {
+    return {
+      fullName: data.fullName,
+      email: data.email || null,
+      phone: data.phone || null,
+      discordUserId: data.discordUserId || null,
+      tags: data.tags,
+      notes: data.notes || null,
+      contactType: data.contactType,
+      availability: data.availability || null,
+      negotiatedPrices: data.negotiatedPrices || null,
+      specialConditions: data.specialConditions || null,
+      technicalConstraints: data.technicalConstraints || null,
+      averageFee: data.averageFee ?? null,
+      bookingContact: data.bookingContact || null,
+      musicalStyle: data.musicalStyle || null,
+      riderNotes: data.riderNotes || null,
+      venueCapacity: data.venueCapacity ?? null,
+      soundConstraints: data.soundConstraints || null,
+      openingHours: data.openingHours || null,
+      electricalPower: data.electricalPower || null,
+      securityContact: data.securityContact || null,
+      sensibleNeighborhood: data.sensibleNeighborhood,
+    };
+  }
+
   async create(workspaceId: string, data: PersonInput) {
     return this.prisma.person.create({
-      data: {
-        workspaceId,
-        fullName: data.fullName,
-        email: data.email || null,
-        phone: data.phone || null,
-        discordUserId: data.discordUserId || null,
-        tags: data.tags,
-        notes: data.notes || null,
-      },
+      data: { workspaceId, ...this.buildPersonData(data) },
     });
   }
 
-  /**
-   * Met à jour les données d'une personne.
-   *
-   * @param id - Identifiant de la personne
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param data - Données validées de mise à jour
-   * @returns La personne mise à jour
-   */
   async update(id: string, workspaceId: string, data: PersonInput) {
     return this.prisma.person.update({
       where: { id, workspaceId },
-      data: {
-        fullName: data.fullName,
-        email: data.email || null,
-        phone: data.phone || null,
-        discordUserId: data.discordUserId || null,
-        tags: data.tags,
-        notes: data.notes || null,
-      },
+      data: this.buildPersonData(data),
     });
   }
 
-  /**
-   * Définit la date d'archivage d'une personne.
-   *
-   * @param id - Identifiant de la personne
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param date - Date d'archivage, ou `null` pour restaurer
-   * @returns La personne mise à jour
-   */
   async setArchivedAt(id: string, workspaceId: string, date: Date | null) {
     return this.prisma.person.update({
       where: { id, workspaceId },
       data: { archivedAt: date },
     });
+  }
+
+  async createDocument(personId: string, data: { label: string; url: string; isUpload: boolean; category: string }) {
+    return this.prisma.personDocument.create({ data: { personId, ...data } });
+  }
+
+  async deleteDocument(documentId: string, personId: string) {
+    await this.prisma.personDocument.deleteMany({ where: { id: documentId, personId } });
+  }
+
+  async createHistoryNote(personId: string, data: { body: string; eventDate?: Date | null }) {
+    return this.prisma.personHistoryNote.create({
+      data: { personId, body: data.body, eventDate: data.eventDate ?? null },
+    });
+  }
+
+  async deleteHistoryNote(noteId: string, personId: string) {
+    await this.prisma.personHistoryNote.deleteMany({ where: { id: noteId, personId } });
   }
 }

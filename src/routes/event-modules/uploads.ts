@@ -9,6 +9,15 @@ import { NotFoundError, ValidationError } from "../../lib/errors.js";
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 const allowedReceiptTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 const allowedBannerTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const allowedPersonDocTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 
 const receiptUploadSchema = z.object({
   fileName: z.string().min(1),
@@ -23,6 +32,8 @@ function extensionForContentType(contentType: string) {
     case "image/png": return ".png";
     case "image/webp": return ".webp";
     case "image/gif": return ".gif";
+    case "application/msword": return ".doc";
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return ".docx";
     default: return "";
   }
 }
@@ -97,5 +108,31 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     await writeFile(path.join(directory, fileName), buffer);
 
     return reply.status(201).send({ url: `/uploads/event-banners/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
+  });
+
+  fastify.get("/uploads/person-documents/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
+    const data = await readFile(path.join(uploadRoot, "person-documents", fileName)).catch(() => null);
+    if (!data) return reply.status(404).send({ error: "File not found" });
+    const contentType = contentTypeForExtension(path.extname(fileName).toLowerCase());
+    reply.header("content-type", contentType);
+    reply.header("cache-control", "private, max-age=3600");
+    return reply.send(data);
+  });
+
+  fastify.post("/api/uploads/person-documents", async (request, reply) => {
+    requireCan(request.userRole, "person.write");
+    const parsed = receiptUploadSchema.parse(request.body);
+    if (!allowedPersonDocTypes.has(parsed.contentType)) throw new ValidationError("Format de document non supporte");
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 8 * 1024 * 1024) throw new ValidationError("Le document ne doit pas depasser 8 Mo");
+
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "person-documents");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    return reply.status(201).send({ url: `/uploads/person-documents/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
   });
 }
