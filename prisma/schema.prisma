@@ -10,6 +10,7 @@ generator erd {
   output                    = "../docs/erd.svg"
   theme                     = "default"
   includeRelationFromFields = true
+  disabled                  = env("DISABLE_ERD")
 }
 
 datasource db {
