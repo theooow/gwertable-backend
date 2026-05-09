@@ -8,6 +8,8 @@ import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
 import { eventModuleRoutes } from "./routes/event-modules.js";
 import { participantRoutes } from "./routes/event-modules/participants.js";
+import { taskRoutes } from "./routes/event-modules/tasks.js";
+import { runOfShowRoutes } from "./routes/event-modules/run-of-show.js";
 import { peopleRoutes } from "./routes/people.js";
 import { shotgunRoutes } from "./routes/shotgun.js";
 import { workspaceRoutes } from "./routes/workspace.js";
@@ -31,6 +33,8 @@ export async function buildApp() {
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);
   await app.register(participantRoutes);
+  await app.register(taskRoutes);
+  await app.register(runOfShowRoutes);
   await app.register(peopleRoutes);
   await app.register(shotgunRoutes);
   await app.register(workspaceRoutes);
