@@ -1,13 +1,26 @@
-import type { EquipmentItemInput } from "../schemas/equipment.js";
-import { NotFoundError } from "../lib/errors.js";
+import type { PrismaClient } from "@prisma/client";
+import type { EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
+import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
+import { BudgetRepository } from "./budget.repository.js";
+
+const itemSelect = {
+  id: true, name: true, category: true, ownership: true,
+  quantity: true, unitPriceCents: true, rentalCoef: true,
+} as const;
 
 /**
- * Repository pour le domaine équipement (catalogue de l'espace de travail).
- * Expose les opérations métier en s'appuyant sur {@link EquipmentItemDao}.
+ * Repository pour le domaine équipement.
+ * Couvre le catalogue (espace de travail) et les usages événement (usages + devis).
  */
 export class EquipmentRepository {
-  constructor(private readonly equipmentItemDao: EquipmentItemDao) {}
+  constructor(
+    private readonly equipmentItemDao: EquipmentItemDao,
+    private readonly budgetRepository: BudgetRepository,
+    private readonly prisma: PrismaClient,
+  ) {}
+
+  // ── Catalogue ────────────────────────────────────────────────────────────────
 
   /**
    * Retourne tous les équipements actifs d'un espace de travail.
@@ -64,5 +77,345 @@ export class EquipmentRepository {
   async archive(id: string, workspaceId: string) {
     await this.findOrThrow(id, workspaceId);
     return this.equipmentItemDao.archive(id);
+  }
+
+  // ── Usages événement ─────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les usages d'équipement d'un événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   */
+  async listUsages(eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    return this.prisma.equipmentUsage.findMany({
+      where: { eventId },
+      include: { item: { select: itemSelect } },
+      orderBy: { id: "asc" },
+    });
+  }
+
+  /**
+   * Crée un usage d'équipement sur un événement (catalogue ou one-off).
+   * Pour les articles du catalogue, vérifie les conflits de disponibilité.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param parsed - Données validées (discriminated union library | oneoff)
+   */
+  async createUsage(
+    eventId: string,
+    workspaceId: string,
+    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; rentalCoef?: number; notes?: string | null }
+           | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; rentalCoef: number; notes?: string | null },
+  ) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, workspaceId },
+      select: { id: true, startsAt: true, endsAt: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
+
+    if (parsed.kind === "library") {
+      const libItem = await this.prisma.equipmentItem.findUnique({
+        where: { id: parsed.itemId, workspaceId },
+        select: { id: true, quantity: true, unitPriceCents: true, rentalCoef: true },
+      });
+      if (!libItem) throw new NotFoundError("Équipement introuvable");
+
+      await this.assertNoQuantityConflict(
+        parsed.itemId, eventId, event.startsAt, event.endsAt, libItem.quantity, parsed.quantity,
+      );
+
+      const existing = await this.prisma.equipmentUsage.findUnique({
+        where: { eventId_itemId: { eventId, itemId: parsed.itemId } },
+        select: { id: true },
+      });
+      if (existing) throw new ConflictError("Cet équipement est déjà ajouté à cet événement");
+
+      const usage = await this.prisma.equipmentUsage.create({
+        data: {
+          eventId,
+          itemId: parsed.itemId,
+          quantity: parsed.quantity,
+          unitPriceCents: parsed.unitPriceCents ?? libItem.unitPriceCents,
+          rentalCoef: parsed.rentalCoef ?? libItem.rentalCoef,
+          notes: parsed.notes || null,
+        },
+        include: { item: { select: itemSelect } },
+      });
+      await this.budgetRepository.syncEquipmentExpenses(eventId);
+      return usage;
+    }
+
+    const usage = await this.prisma.equipmentUsage.create({
+      data: {
+        eventId,
+        itemId: null,
+        name: parsed.name,
+        category: parsed.category,
+        quantity: parsed.quantity,
+        unitPriceCents: parsed.unitPriceCents,
+        rentalCoef: parsed.rentalCoef,
+        notes: parsed.notes || null,
+      },
+    });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+    return usage;
+  }
+
+  /**
+   * Met à jour un usage d'équipement.
+   *
+   * @param usageId - Identifiant de l'usage
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param data - Données validées de mise à jour
+   * @throws {NotFoundError} Si l'usage est introuvable
+   * @throws {ConflictError} Si la quantité dépasse la disponibilité
+   */
+  async updateUsage(
+    usageId: string,
+    eventId: string,
+    workspaceId: string,
+    data: EquipmentUsageUpdateInput,
+  ) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+
+    const usage = await this.prisma.equipmentUsage.findUnique({
+      where: { id: usageId, eventId },
+      select: { id: true, itemId: true, item: { select: { quantity: true } } },
+    });
+    if (!usage) throw new NotFoundError("Utilisation introuvable");
+
+    if (usage.itemId && data.quantity !== undefined) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: eventId },
+        select: { startsAt: true, endsAt: true },
+      });
+      if (event) {
+        await this.assertNoQuantityConflict(
+          usage.itemId, eventId, event.startsAt, event.endsAt,
+          usage.item?.quantity ?? 1, data.quantity,
+        );
+      }
+    }
+
+    if (data.quoteId) {
+      const quote = await this.prisma.equipmentQuote.findUnique({
+        where: { id: data.quoteId },
+        select: { eventId: true },
+      });
+      if (!quote || quote.eventId !== eventId) throw new NotFoundError("Devis introuvable");
+    }
+
+    const updated = await this.prisma.equipmentUsage.update({
+      where: { id: usageId },
+      data: {
+        quantity: data.quantity,
+        unitPriceCents: data.unitPriceCents,
+        rentalCoef: data.rentalCoef,
+        quoteId: data.quoteId,
+        conditionBefore: data.conditionBefore,
+        conditionAfter: data.conditionAfter,
+        returned: data.returned,
+        notes: data.notes,
+      },
+      include: {
+        item: { select: itemSelect },
+        quote: { select: { id: true, label: true } },
+      },
+    });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+    return updated;
+  }
+
+  /**
+   * Supprime un usage d'équipement.
+   *
+   * @param usageId - Identifiant de l'usage
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @throws {NotFoundError} Si l'usage est introuvable
+   */
+  async deleteUsage(usageId: string, eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const usage = await this.prisma.equipmentUsage.findUnique({
+      where: { id: usageId, eventId },
+      select: { id: true },
+    });
+    if (!usage) throw new NotFoundError("Utilisation introuvable");
+
+    await this.prisma.equipmentUsage.delete({ where: { id: usageId } });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+  }
+
+  // ── Devis équipement ─────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les devis d'équipement d'un événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   */
+  async listQuotes(eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    return this.prisma.equipmentQuote.findMany({
+      where: { eventId },
+      include: {
+        usages: { include: { item: { select: itemSelect } } },
+      },
+      orderBy: { label: "asc" },
+    });
+  }
+
+  /**
+   * Crée un devis d'équipement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param data - Données validées
+   */
+  async createQuote(
+    eventId: string,
+    workspaceId: string,
+    data: { label: string; discountCents?: number | null; discountPct?: number | null },
+  ) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    return this.prisma.equipmentQuote.create({
+      data: {
+        eventId,
+        label: data.label,
+        discountCents: data.discountCents ?? null,
+        discountPct: data.discountPct ?? null,
+      },
+      include: { usages: true },
+    });
+  }
+
+  /**
+   * Met à jour un devis et resynchronise les dépenses équipement.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param data - Données validées
+   * @throws {NotFoundError} Si le devis est introuvable
+   */
+  async updateQuote(
+    quoteId: string,
+    eventId: string,
+    workspaceId: string,
+    data: { label: string; discountCents?: number | null; discountPct?: number | null },
+  ) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const existing = await this.prisma.equipmentQuote.findUnique({
+      where: { id: quoteId, eventId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundError("Devis introuvable");
+
+    const updated = await this.prisma.equipmentQuote.update({
+      where: { id: quoteId },
+      data: {
+        label: data.label,
+        discountCents: data.discountCents ?? null,
+        discountPct: data.discountPct ?? null,
+      },
+      include: {
+        usages: { include: { item: { select: itemSelect } } },
+      },
+    });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+    return updated;
+  }
+
+  /**
+   * Supprime un devis et resynchronise les dépenses équipement.
+   * Les usages liés voient leur `quoteId` mis à `null` via `onDelete: SetNull`.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @throws {NotFoundError} Si le devis est introuvable
+   */
+  async deleteQuote(quoteId: string, eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const existing = await this.prisma.equipmentQuote.findUnique({
+      where: { id: quoteId, eventId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundError("Devis introuvable");
+
+    await this.prisma.equipmentQuote.delete({ where: { id: quoteId } });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+  }
+
+  /**
+   * Attache un fichier à un devis et resynchronise les dépenses équipement.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param fileUrl - URL du fichier uploadé
+   * @throws {NotFoundError} Si le devis est introuvable
+   */
+  async attachQuoteFile(quoteId: string, eventId: string, workspaceId: string, fileUrl: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const existing = await this.prisma.equipmentQuote.findUnique({
+      where: { id: quoteId, eventId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundError("Devis introuvable");
+
+    await this.prisma.equipmentQuote.update({ where: { id: quoteId }, data: { fileUrl } });
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+  }
+
+  // ── Helpers privés ───────────────────────────────────────────────────────────
+
+  private async assertEventInWorkspace(eventId: string, workspaceId: string) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, workspaceId },
+      select: { id: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
+  }
+
+  /**
+   * Vérifie qu'il n'y a pas de conflit de quantité pour un article du catalogue.
+   * Lève une {@link ConflictError} si la quantité demandée dépasse la disponibilité.
+   */
+  private async assertNoQuantityConflict(
+    itemId: string,
+    eventId: string,
+    startsAt: Date,
+    endsAt: Date | null,
+    totalQuantity: number,
+    requestedQuantity: number,
+  ) {
+    const overlapping = await this.prisma.equipmentUsage.findMany({
+      where: {
+        itemId,
+        eventId: { not: eventId },
+        event: {
+          AND: [
+            { startsAt: { lte: endsAt ?? new Date("2099-01-01") } },
+            { OR: [{ endsAt: null }, { endsAt: { gte: startsAt } }] },
+          ],
+        },
+      },
+      select: { quantity: true, event: { select: { name: true } } },
+    });
+
+    const alreadyBooked = overlapping.reduce((s, u) => s + u.quantity, 0);
+    const available = totalQuantity - alreadyBooked;
+
+    if (requestedQuantity > available) {
+      const conflictNames = [...new Set(overlapping.map((u) => u.event.name))].join(", ");
+      throw new ConflictError(
+        `Conflit : seulement ${available} unité(s) disponible(s) (déjà sorti(s) sur : ${conflictNames})`,
+      );
+    }
   }
 }

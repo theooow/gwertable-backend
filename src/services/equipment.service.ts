@@ -1,14 +1,17 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
-import type { EquipmentItemInput } from "../schemas/equipment.js";
+import type { EquipmentItemInput, EquipmentUsageInput, EquipmentUsageUpdateInput, EquipmentQuoteInput } from "../schemas/equipment.js";
 import { EquipmentRepository } from "../repositories/equipment.repository.js";
 
 /**
- * Service métier pour le domaine équipement (catalogue de l'espace de travail).
+ * Service métier pour le domaine équipement.
+ * Couvre le catalogue (espace de travail) et les usages événement (usages + devis).
  * Applique les contrôles de permissions avant de déléguer au {@link EquipmentRepository}.
  */
 export class EquipmentService {
   constructor(private readonly equipmentRepository: EquipmentRepository) {}
+
+  // ── Catalogue ────────────────────────────────────────────────────────────────
 
   /**
    * Retourne la liste des équipements actifs d'un espace de travail.
@@ -62,5 +65,138 @@ export class EquipmentService {
   async archive(id: string, workspaceId: string, role: UserRole) {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.archive(id, workspaceId);
+  }
+
+  // ── Usages événement ─────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les usages d'équipement d'un événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @throws {ForbiddenError} Si le rôle ne permet pas la lecture
+   */
+  async listUsages(eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "equipment.read");
+    return this.equipmentRepository.listUsages(eventId, workspaceId);
+  }
+
+  /**
+   * Crée un usage d'équipement sur un événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @param data - Données validées (library ou oneoff)
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async createUsage(eventId: string, workspaceId: string, role: UserRole, data: EquipmentUsageInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.createUsage(eventId, workspaceId, data);
+  }
+
+  /**
+   * Met à jour un usage d'équipement.
+   *
+   * @param usageId - Identifiant de l'usage
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @param data - Données validées de mise à jour
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async updateUsage(usageId: string, eventId: string, workspaceId: string, role: UserRole, data: EquipmentUsageUpdateInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.updateUsage(usageId, eventId, workspaceId, data);
+  }
+
+  /**
+   * Supprime un usage d'équipement.
+   *
+   * @param usageId - Identifiant de l'usage
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async deleteUsage(usageId: string, eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "equipment.write");
+    await this.equipmentRepository.deleteUsage(usageId, eventId, workspaceId);
+    return { ok: true };
+  }
+
+  // ── Devis équipement ─────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les devis d'équipement d'un événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @throws {ForbiddenError} Si le rôle ne permet pas la lecture
+   */
+  async listQuotes(eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "equipment.read");
+    return this.equipmentRepository.listQuotes(eventId, workspaceId);
+  }
+
+  /**
+   * Crée un devis d'équipement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @param data - Données validées
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async createQuote(eventId: string, workspaceId: string, role: UserRole, data: EquipmentQuoteInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.createQuote(eventId, workspaceId, data);
+  }
+
+  /**
+   * Met à jour un devis d'équipement.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @param data - Données validées
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async updateQuote(quoteId: string, eventId: string, workspaceId: string, role: UserRole, data: EquipmentQuoteInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.updateQuote(quoteId, eventId, workspaceId, data);
+  }
+
+  /**
+   * Supprime un devis d'équipement.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async deleteQuote(quoteId: string, eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "equipment.write");
+    await this.equipmentRepository.deleteQuote(quoteId, eventId, workspaceId);
+    return { ok: true };
+  }
+
+  /**
+   * Attache un fichier à un devis d'équipement.
+   *
+   * @param quoteId - Identifiant du devis
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @param fileUrl - URL du fichier uploadé
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   */
+  async attachQuoteFile(quoteId: string, eventId: string, workspaceId: string, role: UserRole, fileUrl: string) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.attachQuoteFile(quoteId, eventId, workspaceId, fileUrl);
   }
 }

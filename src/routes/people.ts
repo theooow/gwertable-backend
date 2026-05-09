@@ -85,4 +85,14 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const person = await service.restore(id, request.workspaceId, request.userRole);
     return toPersonDTO(person);
   });
+
+  fastify.get("/api/people/search", async (request) => {
+    const { q } = z.object({ q: z.string().optional().default("") }).parse(request.query);
+    return service.list(request.workspaceId, request.userRole, {
+      search: q || undefined,
+      includeArchived: false,
+    }).then((people) =>
+      people.slice(0, 10).map((p) => ({ id: p.id, fullName: p.fullName, email: p.email })),
+    );
+  });
 }

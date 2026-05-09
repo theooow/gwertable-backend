@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { equipmentItemSchema } from "../schemas/equipment.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
+import { ExpenseDao } from "../dao/expense.dao.js";
+import { BudgetRepository } from "../repositories/budget.repository.js";
 import { EquipmentRepository } from "../repositories/equipment.repository.js";
 import { EquipmentService } from "../services/equipment.service.js";
 import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
@@ -10,7 +12,11 @@ import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
 const idParamsSchema = z.object({ id: z.string().min(1) });
 
 const service = new EquipmentService(
-  new EquipmentRepository(new EquipmentItemDao(prisma)),
+  new EquipmentRepository(
+    new EquipmentItemDao(prisma),
+    new BudgetRepository(new ExpenseDao(prisma), prisma),
+    prisma,
+  ),
 );
 
 export async function equipmentRoutes(fastify: FastifyInstance) {
