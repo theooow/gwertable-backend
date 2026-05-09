@@ -1,92 +1,39 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireCan } from "../lib/permissions.js";
 import { equipmentItemSchema } from "../schemas/equipment.js";
+import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
+import { EquipmentRepository } from "../repositories/equipment.repository.js";
+import { EquipmentService } from "../services/equipment.service.js";
+import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 
+const service = new EquipmentService(
+  new EquipmentRepository(new EquipmentItemDao(prisma)),
+);
+
 export async function equipmentRoutes(fastify: FastifyInstance) {
   fastify.get("/api/equipment", async (request) => {
-    requireCan(request.userRole, "equipment.read");
-
-    return prisma.equipmentItem.findMany({
-      where: { workspaceId: request.workspaceId, archivedAt: null },
-      include: { owner: { select: { id: true, fullName: true } } },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-    });
+    const items = await service.list(request.workspaceId, request.userRole);
+    return items.map(toEquipmentItemDTO);
   });
 
   fastify.post("/api/equipment", async (request, reply) => {
-    requireCan(request.userRole, "equipment.write");
-    const parsed = equipmentItemSchema.parse(request.body);
-
-    const item = await prisma.equipmentItem.create({
-      data: {
-        workspaceId: request.workspaceId,
-        name: parsed.name,
-        category: parsed.category,
-        ownership: parsed.ownership,
-        ownerId: parsed.ownerId ?? null,
-        unitPriceCents: parsed.unitPriceCents,
-        rentalCoef: parsed.rentalCoef,
-        quantity: parsed.quantity,
-        notes: parsed.notes || null,
-      },
-      include: { owner: { select: { id: true, fullName: true } } },
-    });
-
-    return reply.status(201).send(item);
+    const data = equipmentItemSchema.parse(request.body);
+    const item = await service.create(request.workspaceId, request.userRole, data);
+    return reply.status(201).send(toEquipmentItemDTO(item));
   });
 
   fastify.put("/api/equipment/:id", async (request) => {
-    requireCan(request.userRole, "equipment.write");
     const { id } = idParamsSchema.parse(request.params);
-    const parsed = equipmentItemSchema.parse(request.body);
-
-    const existing = await prisma.equipmentItem.findUnique({
-      where: { id, workspaceId: request.workspaceId },
-      select: { id: true },
-    });
-    if (!existing) {
-      const error = new Error("Équipement introuvable");
-      error.name = "NotFoundError";
-      throw error;
-    }
-
-    return prisma.equipmentItem.update({
-      where: { id },
-      data: {
-        name: parsed.name,
-        category: parsed.category,
-        ownership: parsed.ownership,
-        ownerId: parsed.ownerId ?? null,
-        unitPriceCents: parsed.unitPriceCents,
-        rentalCoef: parsed.rentalCoef,
-        quantity: parsed.quantity,
-        notes: parsed.notes || null,
-      },
-      include: { owner: { select: { id: true, fullName: true } } },
-    });
+    const data = equipmentItemSchema.parse(request.body);
+    const item = await service.update(id, request.workspaceId, request.userRole, data);
+    return toEquipmentItemDTO(item);
   });
 
   fastify.delete("/api/equipment/:id", async (request) => {
-    requireCan(request.userRole, "equipment.write");
     const { id } = idParamsSchema.parse(request.params);
-
-    const existing = await prisma.equipmentItem.findUnique({
-      where: { id, workspaceId: request.workspaceId },
-      select: { id: true },
-    });
-    if (!existing) {
-      const error = new Error("Équipement introuvable");
-      error.name = "NotFoundError";
-      throw error;
-    }
-
-    return prisma.equipmentItem.update({
-      where: { id },
-      data: { archivedAt: new Date() },
-    });
+    return service.archive(id, request.workspaceId, request.userRole);
   });
 }
