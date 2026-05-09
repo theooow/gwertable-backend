@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "../env.js";
+import { EmailDeliveryError } from "./errors.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -60,8 +61,6 @@ export async function sendMagicLinkEmail({ email, url }: { email: string; url: s
       html,
     });
   } catch (cause) {
-    const error = new Error("Impossible d'envoyer le lien de connexion par email");
-    error.name = "EmailDeliveryError";
-    throw Object.assign(error, { cause });
+    throw new EmailDeliveryError("Impossible d'envoyer le lien de connexion par email");
   }
 }

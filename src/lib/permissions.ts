@@ -1,4 +1,5 @@
 import type { UserRole } from "@prisma/client";
+import { ForbiddenError } from "./errors.js";
 
 export const actions = {
   "event.read": ["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"],
@@ -31,8 +32,6 @@ export function can(role: UserRole, action: Action): boolean {
 
 export function requireCan(role: UserRole, action: Action): void {
   if (!can(role, action)) {
-    const error = new Error("Acces refuse");
-    error.name = "ForbiddenError";
-    throw error;
+    throw new ForbiddenError("Acces refuse");
   }
 }

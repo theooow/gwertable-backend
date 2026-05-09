@@ -1,6 +1,7 @@
 import fp from "fastify-plugin";
 import type { User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import { UnauthorizedError, ForbiddenError } from "../lib/errors.js";
 
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
   workspaceId: string;
@@ -62,9 +63,7 @@ export const authPlugin = fp(async (fastify) => {
       getCookieValue(request.headers.cookie, "abregi_session");
 
     if (!token) {
-      const error = new Error("Non authentifie");
-      error.name = "UnauthorizedError";
-      throw error;
+      throw new UnauthorizedError("Non authentifie");
     }
 
     const session = await prisma.session.findUnique({
@@ -86,9 +85,7 @@ export const authPlugin = fp(async (fastify) => {
     });
 
     if (!session || session.expires <= new Date() || session.user.archivedAt) {
-      const error = new Error("Non authentifie");
-      error.name = "UnauthorizedError";
-      throw error;
+      throw new UnauthorizedError("Non authentifie");
     }
 
     let workspaceId = session.user.defaultWorkspaceId;
@@ -133,9 +130,7 @@ export const authPlugin = fp(async (fastify) => {
     }
 
     if (!workspaceId || !membership) {
-      const error = new Error("Aucun acces associe a ce compte");
-      error.name = "ForbiddenError";
-      throw error;
+      throw new ForbiddenError("Aucun acces associe a ce compte");
     }
 
     const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;

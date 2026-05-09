@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { ValidationError } from "./errors.js";
 
 const shotgunDealSchema = z.object({
   product_id: z.coerce.number().int(),
@@ -64,9 +65,7 @@ export async function getShotgunWorkspaceConfig(workspaceId: string): Promise<Sh
   });
 
   if (!workspace?.shotgunOrganizerId || !workspace.shotgunApiToken) {
-    const error = new Error("Shotgun n'est pas configure pour ce workspace");
-    error.name = "ValidationError";
-    throw error;
+    throw new ValidationError("Shotgun n'est pas configure pour ce workspace");
   }
 
   return {
