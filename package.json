@@ -11,6 +11,7 @@
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "test": "node --import tsx --import ./tests/setup-env.ts --test --test-concurrency=1 \"tests/**/*.test.ts\"",
     "db:generate": "prisma generate",
+    "db:erd": "prisma generate --generator erd",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio"
@@ -27,9 +28,11 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.14.0",
     "@types/node": "^22.19.17",
     "@types/nodemailer": "^8.0.0",
     "prisma": "^6.19.3",
+    "prisma-erd-generator": "^2.4.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

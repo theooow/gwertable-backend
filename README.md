@@ -344,6 +344,16 @@ Le modèle de données comprend **28 modèles Prisma**, organisés en plusieurs 
 - **Matériel** : `EquipmentItem`, `EquipmentUsage`, `EquipmentQuote`
 - **Divers** : `Document`, `Channel`, `Announcement`
 
+### Schéma ERD
+
+Un diagramme entité-relation est généré automatiquement depuis `schema.prisma` :
+
+```bash
+npm run db:erd          # génère docs/erd.svg
+```
+
+Le fichier `docs/erd.svg` est versionné — il est mis à jour à chaque modification du schéma.
+
 ### Conventions
 
 - Ne **jamais modifier** une migration déjà commitée — toujours créer une nouvelle migration.
