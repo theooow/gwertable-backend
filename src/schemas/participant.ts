@@ -15,3 +15,5 @@ export const participantSchema = z.object({
   contractSigned: z.boolean().default(false),
   internalNotes: optionalText("Les notes internes", LIMITS.longText),
 });
+
+export type ParticipantInput = z.infer<typeof participantSchema>;

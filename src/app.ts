@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
 import { eventModuleRoutes } from "./routes/event-modules.js";
+import { participantRoutes } from "./routes/event-modules/participants.js";
 import { peopleRoutes } from "./routes/people.js";
 import { shotgunRoutes } from "./routes/shotgun.js";
 import { workspaceRoutes } from "./routes/workspace.js";
@@ -29,6 +30,7 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);
+  await app.register(participantRoutes);
   await app.register(peopleRoutes);
   await app.register(shotgunRoutes);
   await app.register(workspaceRoutes);
