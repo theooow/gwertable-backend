@@ -6,7 +6,7 @@ FROM base AS deps
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 RUN npm ci
-RUN npm run db:generate
+RUN DISABLE_ERD=true npm run db:generate
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
