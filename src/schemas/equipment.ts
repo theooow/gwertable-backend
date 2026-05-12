@@ -20,6 +20,7 @@ export const equipmentUsageSchema = z.discriminatedUnion("kind", [
     unitPriceCents: z.number().int().min(0).optional(),
     rentalCoef: z.number().min(0).optional(),
     notes: optionalText("Les notes", LIMITS.longText),
+    quoteId: z.string().optional().nullable(),
   }),
   z.object({
     kind: z.literal("oneoff"),
@@ -29,11 +30,12 @@ export const equipmentUsageSchema = z.discriminatedUnion("kind", [
     unitPriceCents: z.number().int().min(0).default(0),
     rentalCoef: z.number().min(0).default(1),
     notes: optionalText("Les notes", LIMITS.longText),
+    quoteId: z.string().optional().nullable(),
   }),
 ]);
 
 export const equipmentUsageUpdateSchema = z.object({
-  quantity: z.number().int().min(1).default(1),
+  quantity: z.number().int().min(1).optional(),
   unitPriceCents: z.number().int().min(0).optional(),
   rentalCoef: z.number().min(0).optional(),
   quoteId: z.string().optional().nullable(),

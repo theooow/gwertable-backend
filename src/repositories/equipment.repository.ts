@@ -107,8 +107,8 @@ export class EquipmentRepository {
   async createUsage(
     eventId: string,
     workspaceId: string,
-    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; rentalCoef?: number; notes?: string | null }
-           | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; rentalCoef: number; notes?: string | null },
+    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; rentalCoef?: number; notes?: string | null; quoteId?: string | null }
+           | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; rentalCoef: number; notes?: string | null; quoteId?: string | null },
   ) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, workspaceId },
@@ -141,6 +141,7 @@ export class EquipmentRepository {
           unitPriceCents: parsed.unitPriceCents ?? libItem.unitPriceCents,
           rentalCoef: parsed.rentalCoef ?? libItem.rentalCoef,
           notes: parsed.notes || null,
+          quoteId: parsed.quoteId || null,
         },
         include: { item: { select: itemSelect } },
       });
@@ -158,6 +159,7 @@ export class EquipmentRepository {
         unitPriceCents: parsed.unitPriceCents,
         rentalCoef: parsed.rentalCoef,
         notes: parsed.notes || null,
+        quoteId: parsed.quoteId || null,
       },
     });
     await this.budgetRepository.syncEquipmentExpenses(eventId);
@@ -212,7 +214,7 @@ export class EquipmentRepository {
     const updated = await this.prisma.equipmentUsage.update({
       where: { id: usageId },
       data: {
-        quantity: data.quantity,
+        ...(data.quantity !== undefined && { quantity: data.quantity }),
         unitPriceCents: data.unitPriceCents,
         rentalCoef: data.rentalCoef,
         quoteId: data.quoteId,
