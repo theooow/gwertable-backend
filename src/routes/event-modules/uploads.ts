@@ -69,6 +69,17 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.type(contentTypeForExtension(path.extname(fileName))).send(data);
   });
 
+  fastify.get("/uploads/equipment-photos/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
+    const data = await readFile(path.join(uploadRoot, "equipment-photos", fileName)).catch(() => null);
+    if (!data) return reply.status(404).send({ error: "File not found" });
+    const contentType = contentTypeForExtension(path.extname(fileName).toLowerCase());
+    reply.header("content-type", contentType);
+    reply.header("cache-control", "public, max-age=31536000, immutable");
+    return reply.send(data);
+  });
+
   fastify.get("/uploads/equipment-quotes/:fileName", async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
