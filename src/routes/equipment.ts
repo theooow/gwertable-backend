@@ -43,11 +43,27 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return service.archive(id, request.workspaceId, request.userRole);
   });
 
+  fastify.get("/api/workspaces/:workspaceId/equipment", async (request) => {
+    const { workspaceId: sourceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
+    const membership = await prisma.workspaceMember.findFirst({
+      where: { workspaceId: sourceId, userId: request.user!.id },
+      select: { role: true },
+    });
+    if (!membership) throw new Error("Accès refusé");
+    const items = await service.list(sourceId, membership.role);
+    return items.map(toEquipmentItemDTO);
+  });
+
   fastify.post("/api/equipment/import", async (request, reply) => {
     const { sourceWorkspaceId, itemIds } = z.object({
       sourceWorkspaceId: z.string().min(1),
       itemIds: z.array(z.string().min(1)).min(1).max(200),
     }).parse(request.body);
+    const sourceMembership = await prisma.workspaceMember.findFirst({
+      where: { workspaceId: sourceWorkspaceId, userId: request.user!.id },
+      select: { role: true },
+    });
+    if (!sourceMembership) throw new Error("Accès refusé à ce workspace");
     const items = await service.importFromWorkspace(
       request.workspaceId, sourceWorkspaceId, itemIds, request.userRole,
     );
