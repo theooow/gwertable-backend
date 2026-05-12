@@ -19,5 +19,5 @@ export function requiredText(label: string, max: number = LIMITS.shortText) {
 }
 
 export function optionalText(label: string, max: number = LIMITS.mediumText) {
-  return z.string().trim().max(max, `${label} ne peut pas depasser ${max} caracteres`).optional().or(z.literal(""));
+  return z.string().trim().max(max, `${label} ne peut pas depasser ${max} caracteres`).nullish().or(z.literal(""));
 }
