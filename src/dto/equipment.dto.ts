@@ -1,6 +1,8 @@
 import type { Ownership } from "@prisma/client";
 import type { Decimal } from "@prisma/client/runtime/library";
 
+type PersonRef = { id: string; fullName: string };
+
 /**
  * Représentation publique d'un équipement du catalogue de l'espace de travail.
  * `rentalCoef` est sérialisé en nombre flottant (conversion depuis Prisma `Decimal`).
@@ -12,7 +14,11 @@ export type EquipmentItemDTO = {
   category: string;
   ownership: Ownership;
   ownerId: string | null;
-  owner: { id: string; fullName: string } | null;
+  owner: PersonRef | null;
+  supplierId: string | null;
+  supplier: PersonRef | null;
+  photoUrl: string | null;
+  color: string | null;
   unitPriceCents: number;
   rentalCoef: number;
   quantity: number;
@@ -20,14 +26,18 @@ export type EquipmentItemDTO = {
   archivedAt: Date | null;
 };
 
-type EquipmentItemWithOwner = {
+type EquipmentItemWithRelations = {
   id: string;
   workspaceId: string;
   name: string;
   category: string;
   ownership: Ownership;
   ownerId: string | null;
-  owner: { id: string; fullName: string } | null;
+  owner: PersonRef | null;
+  supplierId: string | null;
+  supplier: PersonRef | null;
+  photoUrl: string | null;
+  color: string | null;
   unitPriceCents: number;
   rentalCoef: Decimal;
   quantity: number;
@@ -37,11 +47,8 @@ type EquipmentItemWithOwner = {
 
 /**
  * Convertit un enregistrement Prisma EquipmentItem en DTO public.
- *
- * @param item - Enregistrement Prisma avec la relation `owner` incluse
- * @returns DTO de l'équipement
  */
-export function toEquipmentItemDTO(item: EquipmentItemWithOwner): EquipmentItemDTO {
+export function toEquipmentItemDTO(item: EquipmentItemWithRelations): EquipmentItemDTO {
   return {
     id: item.id,
     workspaceId: item.workspaceId,
@@ -50,6 +57,10 @@ export function toEquipmentItemDTO(item: EquipmentItemWithOwner): EquipmentItemD
     ownership: item.ownership,
     ownerId: item.ownerId,
     owner: item.owner,
+    supplierId: item.supplierId,
+    supplier: item.supplier,
+    photoUrl: item.photoUrl,
+    color: item.color,
     unitPriceCents: item.unitPriceCents,
     rentalCoef: item.rentalCoef.toNumber(),
     quantity: item.quantity,

@@ -7,6 +7,8 @@ import { BudgetRepository } from "./budget.repository.js";
 const itemSelect = {
   id: true, name: true, category: true, ownership: true,
   quantity: true, unitPriceCents: true, rentalCoef: true,
+  supplierId: true,
+  supplier: { select: { id: true, fullName: true } },
 } as const;
 
 /**
@@ -77,6 +79,37 @@ export class EquipmentRepository {
   async archive(id: string, workspaceId: string) {
     await this.findOrThrow(id, workspaceId);
     return this.equipmentItemDao.archive(id);
+  }
+
+  /**
+   * Importe des items d'un autre workspace dans le workspace courant.
+   * Copie uniquement les champs catalogue (pas les usages événement).
+   */
+  async importFromWorkspace(targetWorkspaceId: string, sourceWorkspaceId: string, itemIds: string[]) {
+    const sourceItems = await this.prisma.equipmentItem.findMany({
+      where: { workspaceId: sourceWorkspaceId, id: { in: itemIds }, archivedAt: null },
+    });
+
+    const created = await this.prisma.$transaction(
+      sourceItems.map((item) =>
+        this.prisma.equipmentItem.create({
+          data: {
+            workspaceId: targetWorkspaceId,
+            name: item.name,
+            category: item.category,
+            ownership: item.ownership,
+            unitPriceCents: item.unitPriceCents,
+            rentalCoef: item.rentalCoef,
+            quantity: item.quantity,
+            notes: item.notes,
+            photoUrl: item.photoUrl,
+            color: item.color,
+          },
+          include: { owner: { select: { id: true, fullName: true } }, supplier: { select: { id: true, fullName: true } } },
+        }),
+      ),
+    );
+    return created;
   }
 
   // ── Usages événement ─────────────────────────────────────────────────────────

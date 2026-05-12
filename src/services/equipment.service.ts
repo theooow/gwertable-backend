@@ -199,4 +199,14 @@ export class EquipmentService {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.attachQuoteFile(quoteId, eventId, workspaceId, fileUrl);
   }
+
+  async importFromWorkspace(
+    targetWorkspaceId: string,
+    sourceWorkspaceId: string,
+    itemIds: string[],
+    role: UserRole,
+  ) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.importFromWorkspace(targetWorkspaceId, sourceWorkspaceId, itemIds);
+  }
 }

@@ -259,7 +259,8 @@ model Person {
   tasksAssigned  Task[]             @relation("TaskAssignee")
   shifts         Shift[]
   shoppingItems  ShoppingItem[]     @relation("ShoppingBuyer")
-  equipmentOwned EquipmentItem[]    @relation("EquipmentOwner")
+  equipmentOwned     EquipmentItem[] @relation("EquipmentOwner")
+  equipmentSupplied  EquipmentItem[] @relation("EquipmentSupplier")
   announcements  Announcement[]     @relation("AnnouncementAuthor")
   runOfShowResponsible RunOfShowItem[] @relation("RunOfShowResponsible")
   documents            PersonDocument[]
@@ -335,6 +336,10 @@ model EquipmentItem {
   ownership      Ownership
   ownerId        String?
   owner          Person?   @relation("EquipmentOwner", fields: [ownerId], references: [id])
+  supplierId     String?
+  supplier       Person?   @relation("EquipmentSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  photoUrl       String?
+  color          String?
   unitPriceCents Int       @default(0)
   rentalCoef     Decimal   @default(1) @db.Decimal(5, 2)
   quantity       Int       @default(1)

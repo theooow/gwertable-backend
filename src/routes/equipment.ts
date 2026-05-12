@@ -42,4 +42,15 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     return service.archive(id, request.workspaceId, request.userRole);
   });
+
+  fastify.post("/api/equipment/import", async (request, reply) => {
+    const { sourceWorkspaceId, itemIds } = z.object({
+      sourceWorkspaceId: z.string().min(1),
+      itemIds: z.array(z.string().min(1)).min(1).max(200),
+    }).parse(request.body);
+    const items = await service.importFromWorkspace(
+      request.workspaceId, sourceWorkspaceId, itemIds, request.userRole,
+    );
+    return reply.status(201).send(items.map(toEquipmentItemDTO));
+  });
 }
