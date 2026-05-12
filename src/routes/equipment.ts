@@ -1,3 +1,6 @@
+import crypto from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -10,6 +13,22 @@ import { EquipmentService } from "../services/equipment.service.js";
 import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
+
+const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+
+const photoUploadSchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+  data: z.string().min(1),
+});
+
+function photoExtension(contentType: string) {
+  const map: Record<string, string> = {
+    "image/jpeg": ".jpg", "image/png": ".png",
+    "image/webp": ".webp", "image/gif": ".gif",
+  };
+  return map[contentType] ?? ".jpg";
+}
 
 const service = new EquipmentService(
   new EquipmentRepository(
@@ -41,6 +60,17 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/equipment/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.archive(id, request.workspaceId, request.userRole);
+  });
+
+  fastify.post("/api/equipment/photo", async (request, reply) => {
+    const parsed = photoUploadSchema.parse(request.body);
+    const buffer = Buffer.from(parsed.data, "base64");
+    const ext = photoExtension(parsed.contentType);
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${ext}`;
+    const directory = path.join(uploadRoot, "equipment-photos");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+    return reply.status(201).send({ url: `/api/uploads/equipment-photos/${fileName}` });
   });
 
   fastify.get("/api/workspaces/:workspaceId/equipment", async (request) => {
