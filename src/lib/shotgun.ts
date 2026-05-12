@@ -143,7 +143,7 @@ export async function fetchShotgunTickets(config: ShotgunWorkspaceConfig, eventI
 }
 
 export function groupShotgunSoldTickets(tickets: ShotgunTicket[]) {
-  const activeStatuses = new Set(["valid", "resold", "payment_plan_pending", "pending_approval"]);
+  const activeStatuses = new Set(["valid", "payment_plan_pending", "pending_approval"]);
   const counts = new Map<number, number>();
   for (const ticket of tickets) {
     if (!activeStatuses.has(ticket.ticket_status)) continue;

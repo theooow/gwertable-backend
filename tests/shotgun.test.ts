@@ -43,16 +43,10 @@ describe("shotgun integration", () => {
       if (url.includes("api.shotgun.live/tickets")) {
         return new Response(
           JSON.stringify([
-            {
-              ticket_id: 1,
-              ticket_status: "valid",
-              deal_id: 284482,
-            },
-            {
-              ticket_id: 2,
-              ticket_status: "refunded",
-              deal_id: 284482,
-            },
+            { ticket_id: 1, ticket_status: "valid", deal_id: 284482 },
+            { ticket_id: 2, ticket_status: "refunded", deal_id: 284482 },
+            { ticket_id: 3, ticket_status: "resold", deal_id: 284482 },
+            { ticket_id: 4, ticket_status: "valid", deal_id: 284482 },
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -99,7 +93,7 @@ describe("shotgun integration", () => {
       assert.equal(tiersPayload.length, 1);
       assert.equal(tiersPayload[0]!.shotgunDealId, 284482);
       assert.equal(tiersPayload[0]!.quantity, 50);
-      assert.equal(tiersPayload[0]!.sold, 1);
+      assert.equal(tiersPayload[0]!.sold, 2);
     } finally {
       globalThis.fetch = originalFetch;
     }

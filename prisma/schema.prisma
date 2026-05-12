@@ -541,6 +541,7 @@ model TicketTier {
   quantity              Int
   sold                  Int          @default(0)
   source                TicketSource @default(MANUAL)
+  archivedAt            DateTime?
 
   @@index([eventId])
 }

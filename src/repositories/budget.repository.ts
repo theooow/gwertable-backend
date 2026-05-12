@@ -404,6 +404,7 @@ export class BudgetRepository {
             quantity: deal.quantity,
             sold,
             source: "API_SHOTGUN" as TicketSource,
+            archivedAt: null,
           },
           update: {
             eventId,
@@ -413,16 +414,31 @@ export class BudgetRepository {
             quantity: deal.quantity,
             sold,
             source: "API_SHOTGUN" as TicketSource,
+            archivedAt: null,
           },
         });
       }
-      await tx.ticketTier.deleteMany({
+
+      const removed = await tx.ticketTier.findMany({
         where: {
           eventId,
           source: "API_SHOTGUN" as TicketSource,
           shotgunDealId: { notIn: [...remoteDealIds] },
+          archivedAt: null,
         },
+        select: { id: true, sold: true },
       });
+
+      for (const tier of removed) {
+        if (tier.sold === 0) {
+          await tx.ticketTier.delete({ where: { id: tier.id } });
+        } else {
+          await tx.ticketTier.update({
+            where: { id: tier.id },
+            data: { archivedAt: new Date() },
+          });
+        }
+      }
     });
   }
 
