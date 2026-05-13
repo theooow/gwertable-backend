@@ -89,6 +89,7 @@ enum PersonType {
   CONTACT
   ARTIST
   SUPPLIER
+  VENDOR
   VENUE
 }
 
