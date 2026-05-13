@@ -135,8 +135,9 @@ model Workspace {
   persons      Person[]
   venues       Venue[]
   suppliers    Supplier[]
-  equipmentItems EquipmentItem[]
-  events       Event[]
+  equipmentItems  EquipmentItem[]
+  equipmentGroups EquipmentGroup[]
+  events          Event[]
 }
 
 model EventCollaborator {
@@ -348,9 +349,34 @@ model EquipmentItem {
   archivedAt     DateTime?
 
   usages         EquipmentUsage[]
+  groupItems     EquipmentGroupItem[]
 
   @@index([workspaceId])
   @@index([category])
+}
+
+model EquipmentGroup {
+  id          String               @id @default(cuid())
+  workspaceId String
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  items       EquipmentGroupItem[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([workspaceId])
+}
+
+model EquipmentGroupItem {
+  id       String         @id @default(cuid())
+  groupId  String
+  group    EquipmentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  itemId   String
+  item     EquipmentItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity Int            @default(1)
+
+  @@unique([groupId, itemId])
+  @@index([groupId])
 }
 
 // ============================================================
