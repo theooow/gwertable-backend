@@ -11,8 +11,30 @@ import { BudgetRepository } from "../repositories/budget.repository.js";
 import { EquipmentRepository } from "../repositories/equipment.repository.js";
 import { EquipmentService } from "../services/equipment.service.js";
 import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
+import { requireCan } from "../lib/permissions.js";
+import { NotFoundError } from "../lib/errors.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const groupItemParamsSchema = z.object({ id: z.string().min(1), itemId: z.string().min(1) });
+const groupBodySchema = z.object({ name: z.string().min(1).max(120) });
+const groupItemBodySchema = z.object({
+  itemId: z.string().min(1),
+  quantity: z.number().int().min(1).default(1),
+});
+
+const groupSelect = {
+  id: true,
+  name: true,
+  items: {
+    select: {
+      id: true,
+      itemId: true,
+      quantity: true,
+      item: { select: { id: true, name: true, category: true, quantity: true, color: true, photoUrl: true } },
+    },
+    orderBy: { item: { name: "asc" as const } },
+  },
+} as const;
 
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
@@ -83,6 +105,80 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const items = await service.list(sourceId, membership.role);
     return items.map(toEquipmentItemDTO);
   });
+
+  // ── Equipment Groups ──────────────────────────────────────────────────────────
+
+  fastify.get("/api/equipment/groups", async (request) => {
+    requireCan(request.userRole, "equipment.read");
+    return prisma.equipmentGroup.findMany({
+      where: { workspaceId: request.workspaceId },
+      select: groupSelect,
+      orderBy: { name: "asc" },
+    });
+  });
+
+  fastify.post("/api/equipment/groups", async (request, reply) => {
+    requireCan(request.userRole, "equipment.write");
+    const { name } = groupBodySchema.parse(request.body);
+    const group = await prisma.equipmentGroup.create({
+      data: { workspaceId: request.workspaceId, name },
+      select: groupSelect,
+    });
+    return reply.status(201).send(group);
+  });
+
+  fastify.put("/api/equipment/groups/:id", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { id } = idParamsSchema.parse(request.params);
+    const { name } = groupBodySchema.parse(request.body);
+    const group = await prisma.equipmentGroup.findFirst({ where: { id, workspaceId: request.workspaceId } });
+    if (!group) throw new NotFoundError("Groupe introuvable");
+    return prisma.equipmentGroup.update({ where: { id }, data: { name }, select: groupSelect });
+  });
+
+  fastify.delete("/api/equipment/groups/:id", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { id } = idParamsSchema.parse(request.params);
+    await prisma.equipmentGroup.deleteMany({ where: { id, workspaceId: request.workspaceId } });
+    return { ok: true };
+  });
+
+  fastify.post("/api/equipment/groups/:id/items", async (request, reply) => {
+    requireCan(request.userRole, "equipment.write");
+    const { id: groupId } = idParamsSchema.parse(request.params);
+    const { itemId, quantity } = groupItemBodySchema.parse(request.body);
+    const group = await prisma.equipmentGroup.findFirst({ where: { id: groupId, workspaceId: request.workspaceId } });
+    if (!group) throw new NotFoundError("Groupe introuvable");
+    await prisma.equipmentGroupItem.upsert({
+      where: { groupId_itemId: { groupId, itemId } },
+      update: { quantity },
+      create: { groupId, itemId, quantity },
+    });
+    const updated = await prisma.equipmentGroup.findUniqueOrThrow({ where: { id: groupId }, select: groupSelect });
+    return reply.status(201).send(updated);
+  });
+
+  fastify.patch("/api/equipment/groups/:id/items/:itemId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { id: groupId, itemId } = groupItemParamsSchema.parse(request.params);
+    const { quantity } = z.object({ quantity: z.number().int().min(1) }).parse(request.body);
+    await prisma.equipmentGroupItem.updateMany({
+      where: { groupId, itemId, group: { workspaceId: request.workspaceId } },
+      data: { quantity },
+    });
+    return prisma.equipmentGroup.findUniqueOrThrow({ where: { id: groupId }, select: groupSelect });
+  });
+
+  fastify.delete("/api/equipment/groups/:id/items/:itemId", async (request) => {
+    requireCan(request.userRole, "equipment.write");
+    const { id: groupId, itemId } = groupItemParamsSchema.parse(request.params);
+    await prisma.equipmentGroupItem.deleteMany({
+      where: { groupId, itemId, group: { workspaceId: request.workspaceId } },
+    });
+    return { ok: true };
+  });
+
+  // ── Workspace import ──────────────────────────────────────────────────────────
 
   fastify.post("/api/equipment/import", async (request, reply) => {
     const { sourceWorkspaceId, itemIds } = z.object({

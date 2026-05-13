@@ -4,7 +4,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
-import { ValidationError } from "../../lib/errors.js";
+import { ValidationError, NotFoundError } from "../../lib/errors.js";
 import { equipmentUsageSchema, equipmentUsageUpdateSchema, equipmentQuoteSchema } from "../../schemas/equipment.js";
 import { EquipmentItemDao } from "../../dao/equipment-item.dao.js";
 import { ExpenseDao } from "../../dao/expense.dao.js";
@@ -112,5 +112,32 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     await service.attachQuoteFile(quoteId, eventId, request.workspaceId, request.userRole, fileUrl);
 
     return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
+  });
+
+  fastify.post("/api/events/:eventId/equipment/group-import", async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const { groupId, quoteId } = z.object({
+      groupId: z.string().min(1),
+      quoteId: z.string().optional().nullable(),
+    }).parse(request.body);
+
+    const group = await prisma.equipmentGroup.findFirst({
+      where: { id: groupId, workspaceId: request.workspaceId },
+      include: { items: true },
+    });
+    if (!group) throw new NotFoundError("Groupe introuvable");
+
+    const usages = await Promise.all(
+      group.items.map((gi) =>
+        service.createUsage(eventId, request.workspaceId, request.userRole, {
+          kind: "library",
+          itemId: gi.itemId,
+          quantity: gi.quantity,
+          quoteId: quoteId ?? null,
+        }),
+      ),
+    );
+
+    return reply.status(201).send(usages);
   });
 }
