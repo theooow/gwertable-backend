@@ -7,7 +7,7 @@ import { BudgetRepository } from "./budget.repository.js";
 const itemSelect = {
   id: true, name: true, category: true, ownership: true,
   quantity: true, unitPriceCents: true, rentalCoef: true,
-  supplierId: true,
+  supplierId: true, color: true, photoUrl: true,
   supplier: { select: { id: true, fullName: true } },
 } as const;
 
