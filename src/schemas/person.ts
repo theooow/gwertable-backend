@@ -8,7 +8,7 @@ export const personSchema = z.object({
   discordUserId: optionalText("L'identifiant Discord", LIMITS.discordId),
   tags: z.array(z.string().trim().min(1).max(LIMITS.tag)).max(LIMITS.tags).default([]),
   notes: optionalText("Les notes", LIMITS.longText),
-  contactType: z.enum(["CONTACT", "ARTIST", "SUPPLIER", "VENUE"]).default("CONTACT"),
+  contactType: z.enum(["CONTACT", "ARTIST", "SUPPLIER", "VENDOR", "VENUE"]).default("CONTACT"),
   availability: optionalText("La disponibilite", LIMITS.longText),
   negotiatedPrices: optionalText("Les tarifs negocies", LIMITS.longText),
   specialConditions: optionalText("Les conditions speciales", LIMITS.longText),
