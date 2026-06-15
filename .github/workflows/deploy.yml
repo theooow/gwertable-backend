@@ -90,7 +90,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
+          timeout: 120s
+          command_timeout: 15m
           script: |
             set -eu
             cd ~/gwertable
@@ -114,7 +115,7 @@ jobs:
             }
 
             upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/abregi-frontend:latest"
+            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:latest"
 
             cat > docker-compose.yml <<'COMPOSE'
             services:
