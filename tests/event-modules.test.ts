@@ -184,7 +184,32 @@ describe("event module routes", () => {
       200,
     );
 
+    const trackPayload = { name: "Regie son", color: "#2563eb" };
+    const createdTrack = await request(
+      "POST",
+      `/api/events/${event.id}/run-of-show/tracks`,
+      authorization,
+      trackPayload,
+    );
+    assert.equal(createdTrack.statusCode, 201);
+    const track = json<{ id: string; name: string; color: string | null; _count: { items: number } }>(createdTrack);
+    assert.equal(track.name, trackPayload.name);
+    assert.equal(track.color, trackPayload.color);
+    assert.equal(track._count.items, 0);
+
+    const trackList = await request("GET", `/api/events/${event.id}/run-of-show/tracks`, authorization);
+    assert.equal(trackList.statusCode, 200);
+    assert.equal(json<unknown[]>(trackList).length, 1);
+    assert.equal(
+      (await request("PUT", `/api/run-of-show/tracks/${track.id}`, authorization, {
+        name: "Regie plateau",
+        color: "#16a34a",
+      })).statusCode,
+      200,
+    );
+
     const runOfShowPayload = {
+      trackId: track.id,
       startsAt: "2026-06-01T20:00:00.000Z",
       durationMin: 45,
       title: "Ouverture des portes",
@@ -199,7 +224,9 @@ describe("event module routes", () => {
       runOfShowPayload,
     );
     assert.equal(createdRunOfShow.statusCode, 201);
-    const runOfShow = json<{ id: string }>(createdRunOfShow);
+    const runOfShow = json<{ id: string; trackId: string | null; track: { id: string; name: string } | null }>(createdRunOfShow);
+    assert.equal(runOfShow.trackId, track.id);
+    assert.equal(runOfShow.track?.name, "Regie plateau");
 
     const runOfShowList = await request("GET", `/api/events/${event.id}/run-of-show`, authorization);
     assert.equal(runOfShowList.statusCode, 200);
@@ -215,6 +242,11 @@ describe("event module routes", () => {
       (await request("PUT", `/api/run-of-show/${runOfShow.id}`, authorization, runOfShowPayload)).statusCode,
       200,
     );
+    assert.equal((await request("DELETE", `/api/run-of-show/tracks/${track.id}`, authorization)).statusCode, 200);
+    const runOfShowAfterTrackDelete = json<Array<{ id: string; trackId: string | null }>>(
+      await request("GET", `/api/events/${event.id}/run-of-show`, authorization),
+    );
+    assert.equal(runOfShowAfterTrackDelete.find((item) => item.id === runOfShow.id)?.trackId, null);
 
     const linkedTaskBeforeDelete = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
       ...taskPayload,

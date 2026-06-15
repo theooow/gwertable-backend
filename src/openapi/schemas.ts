@@ -101,12 +101,22 @@ const runOfShowBody = {
   type: "object",
   required: ["startsAt", "durationMin", "title"],
   properties: {
+    trackId: { type: "string", nullable: true },
     startsAt: { type: "string", format: "date-time" },
     durationMin: { type: "integer", minimum: 1, maximum: 1440 },
     title: { type: "string", maxLength: 120 },
     responsible: { type: "string" },
     responsiblePersonId: { type: "string" },
     notes: { type: "string" },
+  },
+};
+
+const runOfShowTrackBody = {
+  type: "object",
+  required: ["name"],
+  properties: {
+    name: { type: "string", maxLength: 120 },
+    color: { type: "string" },
   },
 };
 
@@ -774,6 +784,33 @@ export const routeDocs: Record<string, RouteDoc> = {
     summary: "Lister les éléments du conducteur",
     security: auth,
     params: pEventId,
+  },
+  "GET /api/events/:eventId/run-of-show/tracks": {
+    tags: ["Conducteur"],
+    summary: "Lister les metiers du conducteur",
+    security: auth,
+    params: pEventId,
+  },
+  "POST /api/events/:eventId/run-of-show/tracks": {
+    tags: ["Conducteur"],
+    summary: "Creer un metier du conducteur",
+    security: auth,
+    params: pEventId,
+    body: runOfShowTrackBody,
+  },
+  "PUT /api/run-of-show/tracks/:id": {
+    tags: ["Conducteur"],
+    summary: "Mettre a jour un metier du conducteur",
+    security: auth,
+    params: pId,
+    body: runOfShowTrackBody,
+  },
+  "DELETE /api/run-of-show/tracks/:id": {
+    tags: ["Conducteur"],
+    summary: "Supprimer un metier du conducteur",
+    description: "Les elements rattaches sont conserves et repassent sans metier.",
+    security: auth,
+    params: pId,
   },
   "POST /api/events/:eventId/run-of-show": {
     tags: ["Conducteur"],

@@ -3,12 +3,18 @@ import { NotFoundError } from "../lib/errors.js";
 import { RunOfShowDao } from "../dao/run-of-show.dao.js";
 
 type RunOfShowInput = {
+  trackId?: string | null;
   startsAt: string;
   durationMin: number;
   title: string;
   responsible?: string | null;
   responsiblePersonId?: string | null;
   notes?: string | null;
+};
+
+type RunOfShowTrackInput = {
+  name: string;
+  color?: string | null;
 };
 
 /**
@@ -86,6 +92,19 @@ export class RunOfShowRepository {
     if (!participant) throw new NotFoundError("Participant introuvable pour cet evenement");
   }
 
+  async assertTrackIfProvided(
+    trackId: string | undefined | null,
+    eventId: string,
+    workspaceId: string,
+  ) {
+    if (!trackId) return;
+    const track = await this.prisma.runOfShowTrack.findFirst({
+      where: { id: trackId, eventId, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!track) throw new NotFoundError("Metier de conducteur introuvable pour cet evenement");
+  }
+
   /**
    * Retourne les éléments du conducteur d'un événement.
    *
@@ -94,6 +113,55 @@ export class RunOfShowRepository {
    */
   async listItems(eventId: string, workspaceId: string) {
     return this.runOfShowDao.findMany(eventId, workspaceId);
+  }
+
+  async listTracks(eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    return this.prisma.runOfShowTrack.findMany({
+      where: { eventId, event: { workspaceId } },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async createTrack(eventId: string, workspaceId: string, data: RunOfShowTrackInput) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const lastTrack = await this.prisma.runOfShowTrack.findFirst({
+      where: { eventId, event: { workspaceId } },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
+    return this.prisma.runOfShowTrack.create({
+      data: {
+        eventId,
+        name: data.name,
+        color: data.color || null,
+        position: (lastTrack?.position ?? -1) + 1,
+      },
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async updateTrack(id: string, workspaceId: string, data: RunOfShowTrackInput) {
+    const track = await this.prisma.runOfShowTrack.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!track) throw new NotFoundError("Metier de conducteur introuvable");
+    return this.prisma.runOfShowTrack.update({
+      where: { id },
+      data: { name: data.name, color: data.color || null },
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async deleteTrack(id: string, workspaceId: string) {
+    const track = await this.prisma.runOfShowTrack.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!track) throw new NotFoundError("Metier de conducteur introuvable");
+    return this.prisma.runOfShowTrack.delete({ where: { id } });
   }
 
   /**
@@ -110,8 +178,10 @@ export class RunOfShowRepository {
       eventId,
       workspaceId,
     );
+    await this.assertTrackIfProvided(data.trackId, eventId, workspaceId);
 
     return this.runOfShowDao.create(eventId, {
+      trackId: data.trackId || null,
       startsAt: new Date(data.startsAt),
       durationMin: data.durationMin,
       title: data.title,
@@ -137,11 +207,13 @@ export class RunOfShowRepository {
       existing.eventId,
       workspaceId,
     );
+    await this.assertTrackIfProvided(data.trackId, existing.eventId, workspaceId);
 
     return this.prisma.$transaction(async (tx) => {
       const item = await tx.runOfShowItem.update({
         where: { id },
         data: {
+          trackId: data.trackId || null,
           startsAt: new Date(data.startsAt),
           durationMin: data.durationMin,
           title: data.title,
@@ -150,6 +222,7 @@ export class RunOfShowRepository {
           notes: data.notes || null,
         },
         include: {
+          track: { select: { id: true, name: true, color: true, position: true } },
           responsiblePerson: { select: { id: true, fullName: true } },
           sourceTask: { select: { id: true, title: true } },
         },

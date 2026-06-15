@@ -1,10 +1,11 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type { z } from "zod";
-import type { runOfShowSchema } from "../schemas/run-of-show.js";
+import type { runOfShowSchema, runOfShowTrackSchema } from "../schemas/run-of-show.js";
 import { RunOfShowRepository } from "../repositories/run-of-show.repository.js";
 
 type RunOfShowInput = z.infer<typeof runOfShowSchema>;
+type RunOfShowTrackInput = z.infer<typeof runOfShowTrackSchema>;
 
 /**
  * Service métier pour le domaine conducteur de show (run-of-show).
@@ -24,6 +25,36 @@ export class RunOfShowService {
   async list(eventId: string, workspaceId: string, role: UserRole) {
     requireCan(role, "runOfShow.read");
     return this.runOfShowRepository.listItems(eventId, workspaceId);
+  }
+
+  async listTracks(eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "runOfShow.read");
+    return this.runOfShowRepository.listTracks(eventId, workspaceId);
+  }
+
+  async createTrack(
+    eventId: string,
+    workspaceId: string,
+    role: UserRole,
+    data: RunOfShowTrackInput,
+  ) {
+    requireCan(role, "runOfShow.write");
+    return this.runOfShowRepository.createTrack(eventId, workspaceId, data);
+  }
+
+  async updateTrack(
+    id: string,
+    workspaceId: string,
+    role: UserRole,
+    data: RunOfShowTrackInput,
+  ) {
+    requireCan(role, "runOfShow.write");
+    return this.runOfShowRepository.updateTrack(id, workspaceId, data);
+  }
+
+  async deleteTrack(id: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "runOfShow.write");
+    return this.runOfShowRepository.deleteTrack(id, workspaceId);
   }
 
   /**

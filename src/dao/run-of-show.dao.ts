@@ -3,6 +3,7 @@ import { BaseDao } from "./base.dao.js";
 import { NotFoundError } from "../lib/errors.js";
 
 const defaultInclude = {
+  track: { select: { id: true, name: true, color: true, position: true } },
   responsiblePerson: { select: { id: true, fullName: true } },
   sourceTask: { select: { id: true, title: true } },
 } as const;
@@ -67,7 +68,8 @@ export class RunOfShowDao extends BaseDao {
    */
   async create(
     eventId: string,
-    data: {
+      data: {
+      trackId: string | null;
       startsAt: Date;
       durationMin: number;
       title: string;
@@ -92,6 +94,7 @@ export class RunOfShowDao extends BaseDao {
   async update(
     id: string,
     data: {
+      trackId: string | null;
       startsAt: Date;
       durationMin: number;
       title: string;

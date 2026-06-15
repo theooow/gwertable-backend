@@ -2,6 +2,7 @@ import { z } from "zod";
 import { LIMITS, optionalText, requiredText } from "./limits.js";
 
 export const runOfShowSchema = z.object({
+  trackId: z.string().optional().or(z.literal("")),
   startsAt: z.string().min(1, "L'heure de debut est requise"),
   durationMin: z.coerce
     .number()
@@ -12,4 +13,9 @@ export const runOfShowSchema = z.object({
   responsible: optionalText("Le responsable", LIMITS.shortText),
   responsiblePersonId: z.string().optional().or(z.literal("")),
   notes: optionalText("Les notes", LIMITS.longText),
+});
+
+export const runOfShowTrackSchema = z.object({
+  name: requiredText("Le metier", LIMITS.name),
+  color: optionalText("La couleur", LIMITS.shortText),
 });

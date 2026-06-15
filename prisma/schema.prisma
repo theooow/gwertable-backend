@@ -405,6 +405,7 @@ model Event {
   tasks           Task[]
   shifts          Shift[]
   runOfShow       RunOfShowItem[]
+  runOfShowTracks RunOfShowTrack[]
   expenses        Expense[]
   incomes         Income[]
   shopping        ShoppingItem[]
@@ -508,10 +509,29 @@ model Shift {
   @@index([assigneeId])
 }
 
+model RunOfShowTrack {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  color     String?
+  position  Int      @default(0)
+
+  items     RunOfShowItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, name])
+  @@index([eventId, position])
+}
+
 model RunOfShowItem {
   id          String   @id @default(cuid())
   eventId     String
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  trackId     String?
+  track       RunOfShowTrack? @relation(fields: [trackId], references: [id], onDelete: SetNull)
   startsAt    DateTime
   durationMin Int
   title       String
@@ -523,6 +543,7 @@ model RunOfShowItem {
   notes       String?
 
   @@index([eventId, startsAt])
+  @@index([trackId])
   @@index([responsiblePersonId])
 }
 
