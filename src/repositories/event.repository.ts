@@ -3,6 +3,52 @@ import { NotFoundError } from "../lib/errors.js";
 import { EventDao } from "../dao/event.dao.js";
 import { VenueDao } from "../dao/venue.dao.js";
 
+type EventListRow = Awaited<ReturnType<EventDao["findAll"]>>[number];
+
+function getBudgetSummary(event: EventListRow) {
+  const totalExpensesCents = event.expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+  const totalOtherIncomeCents = event.incomes.reduce((sum, income) => sum + income.amountCents, 0);
+  const ticketRevenueCents = event.ticketTiers.reduce(
+    (sum, tier) => sum + tier.sold * tier.organizerRevenueCents,
+    0,
+  );
+  const activeTiers = event.ticketTiers.filter((tier) => !tier.archivedAt);
+  const ticketsSold = event.ticketTiers.reduce((sum, tier) => sum + tier.sold, 0);
+  const ticketsCapacity = activeTiers.reduce((sum, tier) => sum + tier.quantity, 0);
+  const remainingIncludedPotentialCents = activeTiers.reduce((sum, tier) => {
+    if (tier.excludeFromBreakEven) return sum;
+    return sum + Math.max(0, tier.quantity - tier.sold) * tier.organizerRevenueCents;
+  }, 0);
+  const resultCents = totalOtherIncomeCents + ticketRevenueCents - totalExpensesCents;
+  const remainingToBreakEvenCents = Math.max(0, -resultCents);
+  const breakEvenStatus =
+    remainingToBreakEvenCents === 0
+      ? "BALANCED"
+      : remainingIncludedPotentialCents >= remainingToBreakEvenCents
+        ? "REACHABLE"
+        : "AT_RISK";
+
+  return {
+    totalExpensesCents,
+    totalOtherIncomeCents,
+    ticketRevenueCents,
+    totalRevenueCents: totalOtherIncomeCents + ticketRevenueCents,
+    resultCents,
+    ticketsSold,
+    ticketsCapacity,
+    remainingToBreakEvenCents,
+    breakEvenStatus,
+  };
+}
+
+function withBudgetSummary(event: EventListRow) {
+  const { expenses, incomes, ticketTiers, ...rest } = event;
+  return {
+    ...rest,
+    budgetSummary: getBudgetSummary(event),
+  };
+}
+
 /**
  * Contexte d'accès d'un utilisateur en mode collaborateur d'événement.
  */
@@ -35,9 +81,11 @@ export class EventRepository {
         collaborator.userId,
         collaborator.userEmail,
       );
-      return this.eventDao.findByIds(workspaceId, ids);
+      const events = await this.eventDao.findByIds(workspaceId, ids);
+      return events.map(withBudgetSummary);
     }
-    return this.eventDao.findAll(workspaceId);
+    const events = await this.eventDao.findAll(workspaceId);
+    return events.map(withBudgetSummary);
   }
 
   /**

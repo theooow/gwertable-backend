@@ -6,6 +6,17 @@ import { BaseDao } from "./base.dao.js";
 const listInclude = {
   venue: { select: { name: true } },
   _count: { select: { participants: true, tasks: true, expenses: true, runOfShow: true } },
+  expenses: { select: { amountCents: true } },
+  incomes: { select: { amountCents: true } },
+  ticketTiers: {
+    select: {
+      organizerRevenueCents: true,
+      quantity: true,
+      sold: true,
+      excludeFromBreakEven: true,
+      archivedAt: true,
+    },
+  },
 } as const;
 
 const detailInclude = {

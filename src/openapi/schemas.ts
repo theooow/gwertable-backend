@@ -171,6 +171,7 @@ const ticketTierBody = {
     publicPriceCents: { type: "integer", minimum: 0 },
     quantity: { type: "integer", minimum: 0 },
     sold: { type: "integer", minimum: 0 },
+    excludeFromBreakEven: { type: "boolean" },
   },
 };
 

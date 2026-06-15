@@ -7,6 +7,7 @@ export const ticketTierSchema = z.object({
   publicPriceCents: z.number().int().min(0),
   quantity: z.number().int().min(0),
   sold: z.number().int().min(0).optional(),
+  excludeFromBreakEven: z.boolean().optional(),
 });
 
 export type TicketTierInput = z.infer<typeof ticketTierSchema>;
