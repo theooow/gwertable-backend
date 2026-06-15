@@ -208,14 +208,45 @@ describe("event module routes", () => {
       200,
     );
 
+    const sectionPayload = { name: "Montage", color: "#f97316" };
+    const createdSection = await request(
+      "POST",
+      `/api/events/${event.id}/run-of-show/sections`,
+      authorization,
+      sectionPayload,
+    );
+    assert.equal(createdSection.statusCode, 201);
+    const section = json<{ id: string; name: string; color: string | null; _count: { items: number } }>(createdSection);
+    assert.equal(section.name, sectionPayload.name);
+    assert.equal(section.color, sectionPayload.color);
+    assert.equal(section._count.items, 0);
+
+    const sectionList = await request("GET", `/api/events/${event.id}/run-of-show/sections`, authorization);
+    assert.equal(sectionList.statusCode, 200);
+    assert.equal(json<unknown[]>(sectionList).length, 1);
+    assert.equal(
+      (await request("PUT", `/api/run-of-show/sections/${section.id}`, authorization, {
+        name: "Ouverture",
+        color: "#f59e0b",
+      })).statusCode,
+      200,
+    );
+
     const runOfShowPayload = {
       trackId: track.id,
+      sectionId: section.id,
+      status: "DELAYED",
       startsAt: "2026-06-01T20:00:00.000Z",
       durationMin: 45,
       title: "Ouverture des portes",
       responsible: "Regie",
       responsiblePersonId: person.id,
       notes: "Verifier l'accueil et la billetterie",
+      stakeholderNote: "Ouverture retardee de 10 minutes",
+      delayReason: "Controle securite en cours",
+      actualStartedAt: "2026-06-01T20:10:00.000Z",
+      completedAt: "",
+      dependsOnIds: [linkedRunOfShowId],
     };
     const createdRunOfShow = await request(
       "POST",
@@ -224,9 +255,25 @@ describe("event module routes", () => {
       runOfShowPayload,
     );
     assert.equal(createdRunOfShow.statusCode, 201);
-    const runOfShow = json<{ id: string; trackId: string | null; track: { id: string; name: string } | null }>(createdRunOfShow);
+    const runOfShow = json<{
+      id: string;
+      trackId: string | null;
+      sectionId: string | null;
+      status: string;
+      stakeholderNote: string | null;
+      delayReason: string | null;
+      track: { id: string; name: string } | null;
+      section: { id: string; name: string } | null;
+      dependsOn: Array<{ dependsOn: { id: string } }>;
+    }>(createdRunOfShow);
     assert.equal(runOfShow.trackId, track.id);
+    assert.equal(runOfShow.sectionId, section.id);
+    assert.equal(runOfShow.status, "DELAYED");
+    assert.equal(runOfShow.stakeholderNote, "Ouverture retardee de 10 minutes");
+    assert.equal(runOfShow.delayReason, "Controle securite en cours");
     assert.equal(runOfShow.track?.name, "Regie plateau");
+    assert.equal(runOfShow.section?.name, "Ouverture");
+    assert.equal(runOfShow.dependsOn[0]?.dependsOn.id, linkedRunOfShowId);
 
     const runOfShowList = await request("GET", `/api/events/${event.id}/run-of-show`, authorization);
     assert.equal(runOfShowList.statusCode, 200);
@@ -247,6 +294,11 @@ describe("event module routes", () => {
       await request("GET", `/api/events/${event.id}/run-of-show`, authorization),
     );
     assert.equal(runOfShowAfterTrackDelete.find((item) => item.id === runOfShow.id)?.trackId, null);
+    assert.equal((await request("DELETE", `/api/run-of-show/sections/${section.id}`, authorization)).statusCode, 200);
+    const runOfShowAfterSectionDelete = json<Array<{ id: string; sectionId: string | null }>>(
+      await request("GET", `/api/events/${event.id}/run-of-show`, authorization),
+    );
+    assert.equal(runOfShowAfterSectionDelete.find((item) => item.id === runOfShow.id)?.sectionId, null);
 
     const linkedTaskBeforeDelete = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
       ...taskPayload,
@@ -407,6 +459,8 @@ describe("event module routes", () => {
     const secondRunOfShow = await request("POST", `/api/events/${event.id}/run-of-show`, authorization, {
       ...runOfShowPayload,
       trackId: "",
+      sectionId: "",
+      dependsOnIds: [],
       title: "Debrief",
     });
     assert.equal(secondRunOfShow.statusCode, 201);

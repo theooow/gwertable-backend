@@ -1,21 +1,73 @@
-import type { PrismaClient, Prisma } from "@prisma/client";
+import type { PrismaClient, Prisma, RunOfShowStatus } from "@prisma/client";
 import { NotFoundError } from "../lib/errors.js";
 import { RunOfShowDao } from "../dao/run-of-show.dao.js";
 
 type RunOfShowInput = {
   trackId?: string | null;
+  sectionId?: string | null;
+  status?: RunOfShowStatus;
   startsAt: string;
   durationMin: number;
   title: string;
   responsible?: string | null;
   responsiblePersonId?: string | null;
   notes?: string | null;
+  stakeholderNote?: string | null;
+  delayReason?: string | null;
+  actualStartedAt?: string | null;
+  completedAt?: string | null;
+  dependsOnIds?: string[];
 };
 
 type RunOfShowTrackInput = {
   name: string;
   color?: string | null;
 };
+
+type RunOfShowSectionInput = {
+  name: string;
+  color?: string | null;
+};
+
+const defaultRunOfShowInclude = {
+  track: { select: { id: true, name: true, color: true, position: true } },
+  section: { select: { id: true, name: true, color: true, position: true } },
+  responsiblePerson: { select: { id: true, fullName: true } },
+  sourceTask: { select: { id: true, title: true } },
+  dependsOn: {
+    select: {
+      dependsOn: { select: { id: true, title: true, startsAt: true, status: true } },
+    },
+  },
+  dependents: {
+    select: {
+      item: { select: { id: true, title: true, startsAt: true, status: true } },
+    },
+  },
+} as const;
+
+function optionalDate(value: string | undefined | null) {
+  return value ? new Date(value) : null;
+}
+
+function getItemData(data: RunOfShowInput) {
+  const status = data.status ?? "PLANNED";
+  return {
+    trackId: data.trackId || null,
+    sectionId: data.sectionId || null,
+    status,
+    startsAt: new Date(data.startsAt),
+    durationMin: data.durationMin,
+    title: data.title,
+    responsible: data.responsible || null,
+    responsiblePersonId: data.responsiblePersonId || null,
+    notes: data.notes || null,
+    stakeholderNote: data.stakeholderNote || null,
+    delayReason: status === "DELAYED" ? data.delayReason || null : null,
+    actualStartedAt: optionalDate(data.actualStartedAt) ?? (status === "IN_PROGRESS" ? new Date() : null),
+    completedAt: optionalDate(data.completedAt) ?? (status === "DONE" ? new Date() : null),
+  };
+}
 
 /**
  * Synchronise la tâche source liée à un élément du conducteur dans une transaction.
@@ -105,6 +157,36 @@ export class RunOfShowRepository {
     if (!track) throw new NotFoundError("Metier de conducteur introuvable pour cet evenement");
   }
 
+  async assertSectionIfProvided(
+    sectionId: string | undefined | null,
+    eventId: string,
+    workspaceId: string,
+  ) {
+    if (!sectionId) return;
+    const section = await this.prisma.runOfShowSection.findFirst({
+      where: { id: sectionId, eventId, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!section) throw new NotFoundError("Section de conducteur introuvable pour cet evenement");
+  }
+
+  async assertDependenciesIfProvided(
+    dependsOnIds: string[] | undefined,
+    eventId: string,
+    workspaceId: string,
+    itemId?: string,
+  ) {
+    const ids = [...new Set(dependsOnIds ?? [])].filter(Boolean);
+    if (ids.length === 0) return [];
+    if (itemId && ids.includes(itemId)) throw new NotFoundError("Un element ne peut pas dependre de lui-meme");
+    const dependencies = await this.prisma.runOfShowItem.findMany({
+      where: { id: { in: ids }, eventId, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (dependencies.length !== ids.length) throw new NotFoundError("Dependance de conducteur introuvable");
+    return ids;
+  }
+
   /**
    * Retourne les éléments du conducteur d'un événement.
    *
@@ -164,6 +246,55 @@ export class RunOfShowRepository {
     return this.prisma.runOfShowTrack.delete({ where: { id } });
   }
 
+  async listSections(eventId: string, workspaceId: string) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    return this.prisma.runOfShowSection.findMany({
+      where: { eventId, event: { workspaceId } },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async createSection(eventId: string, workspaceId: string, data: RunOfShowSectionInput) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const lastSection = await this.prisma.runOfShowSection.findFirst({
+      where: { eventId, event: { workspaceId } },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
+    return this.prisma.runOfShowSection.create({
+      data: {
+        eventId,
+        name: data.name,
+        color: data.color || null,
+        position: (lastSection?.position ?? -1) + 1,
+      },
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async updateSection(id: string, workspaceId: string, data: RunOfShowSectionInput) {
+    const section = await this.prisma.runOfShowSection.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!section) throw new NotFoundError("Section de conducteur introuvable");
+    return this.prisma.runOfShowSection.update({
+      where: { id },
+      data: { name: data.name, color: data.color || null },
+      include: { _count: { select: { items: true } } },
+    });
+  }
+
+  async deleteSection(id: string, workspaceId: string) {
+    const section = await this.prisma.runOfShowSection.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true },
+    });
+    if (!section) throw new NotFoundError("Section de conducteur introuvable");
+    return this.prisma.runOfShowSection.delete({ where: { id } });
+  }
+
   /**
    * Crée un élément du conducteur.
    *
@@ -179,15 +310,21 @@ export class RunOfShowRepository {
       workspaceId,
     );
     await this.assertTrackIfProvided(data.trackId, eventId, workspaceId);
+    await this.assertSectionIfProvided(data.sectionId, eventId, workspaceId);
+    const dependsOnIds = await this.assertDependenciesIfProvided(data.dependsOnIds, eventId, workspaceId);
 
-    return this.runOfShowDao.create(eventId, {
-      trackId: data.trackId || null,
-      startsAt: new Date(data.startsAt),
-      durationMin: data.durationMin,
-      title: data.title,
-      responsible: data.responsible || null,
-      responsiblePersonId: data.responsiblePersonId || null,
-      notes: data.notes || null,
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.runOfShowItem.create({
+        data: {
+          eventId,
+          ...getItemData(data),
+          dependsOn: {
+            create: dependsOnIds.map((dependsOnId) => ({ dependsOnId })),
+          },
+        },
+        include: defaultRunOfShowInclude,
+      });
+      return item;
     });
   }
 
@@ -208,24 +345,25 @@ export class RunOfShowRepository {
       workspaceId,
     );
     await this.assertTrackIfProvided(data.trackId, existing.eventId, workspaceId);
+    await this.assertSectionIfProvided(data.sectionId, existing.eventId, workspaceId);
+    const dependsOnIds = await this.assertDependenciesIfProvided(
+      data.dependsOnIds,
+      existing.eventId,
+      workspaceId,
+      id,
+    );
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.runOfShowDependency.deleteMany({ where: { itemId: id } });
       const item = await tx.runOfShowItem.update({
         where: { id },
         data: {
-          trackId: data.trackId || null,
-          startsAt: new Date(data.startsAt),
-          durationMin: data.durationMin,
-          title: data.title,
-          responsible: data.responsible || null,
-          responsiblePersonId: data.responsiblePersonId || null,
-          notes: data.notes || null,
+          ...getItemData(data),
+          dependsOn: {
+            create: dependsOnIds.map((dependsOnId) => ({ dependsOnId })),
+          },
         },
-        include: {
-          track: { select: { id: true, name: true, color: true, position: true } },
-          responsiblePerson: { select: { id: true, fullName: true } },
-          sourceTask: { select: { id: true, title: true } },
-        },
+        include: defaultRunOfShowInclude,
       });
       await syncTaskForRunOfShowItem(tx, item);
       return item;

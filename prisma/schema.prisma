@@ -66,6 +66,14 @@ enum ReimbStatus {
   NOT_OWED
 }
 
+enum RunOfShowStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  DELAYED
+  CANCELLED
+}
+
 enum Ownership {
   OWNED
   BORROWED
@@ -406,6 +414,7 @@ model Event {
   shifts          Shift[]
   runOfShow       RunOfShowItem[]
   runOfShowTracks RunOfShowTrack[]
+  runOfShowSections RunOfShowSection[]
   expenses        Expense[]
   incomes         Income[]
   shopping        ShoppingItem[]
@@ -526,12 +535,32 @@ model RunOfShowTrack {
   @@index([eventId, position])
 }
 
+model RunOfShowSection {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  color     String?
+  position  Int      @default(0)
+
+  items     RunOfShowItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, name])
+  @@index([eventId, position])
+}
+
 model RunOfShowItem {
   id          String   @id @default(cuid())
   eventId     String
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   trackId     String?
   track       RunOfShowTrack? @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  sectionId   String?
+  section     RunOfShowSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  status      RunOfShowStatus @default(PLANNED)
   startsAt    DateTime
   durationMin Int
   title       String
@@ -541,10 +570,29 @@ model RunOfShowItem {
   sourceTaskId String? @unique
   sourceTask   Task?   @relation(fields: [sourceTaskId], references: [id], onDelete: SetNull)
   notes       String?
+  stakeholderNote String?
+  delayReason String?
+  actualStartedAt DateTime?
+  completedAt DateTime?
+  dependsOn   RunOfShowDependency[] @relation("RunOfShowDependencyItem")
+  dependents  RunOfShowDependency[] @relation("RunOfShowDependencyDependsOn")
 
   @@index([eventId, startsAt])
   @@index([trackId])
+  @@index([sectionId])
+  @@index([status])
   @@index([responsiblePersonId])
+}
+
+model RunOfShowDependency {
+  id          String @id @default(cuid())
+  itemId      String
+  item        RunOfShowItem @relation("RunOfShowDependencyItem", fields: [itemId], references: [id], onDelete: Cascade)
+  dependsOnId String
+  dependsOn   RunOfShowItem @relation("RunOfShowDependencyDependsOn", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, dependsOnId])
+  @@index([dependsOnId])
 }
 
 model Expense {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
-import { runOfShowSchema, runOfShowTrackSchema } from "../../schemas/run-of-show.js";
+import { runOfShowSchema, runOfShowSectionSchema, runOfShowTrackSchema } from "../../schemas/run-of-show.js";
 import { RunOfShowDao } from "../../dao/run-of-show.dao.js";
 import { RunOfShowRepository } from "../../repositories/run-of-show.repository.js";
 import { RunOfShowService } from "../../services/run-of-show.service.js";
@@ -41,6 +41,29 @@ export async function runOfShowRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/run-of-show/tracks/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteTrack(id, request.workspaceId, request.userRole);
+  });
+
+  fastify.get("/api/events/:eventId/run-of-show/sections", async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    return service.listSections(eventId, request.workspaceId, request.userRole);
+  });
+
+  fastify.post("/api/events/:eventId/run-of-show/sections", async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = runOfShowSectionSchema.parse(request.body);
+    const section = await service.createSection(eventId, request.workspaceId, request.userRole, data);
+    return reply.status(201).send(section);
+  });
+
+  fastify.put("/api/run-of-show/sections/:id", async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = runOfShowSectionSchema.parse(request.body);
+    return service.updateSection(id, request.workspaceId, request.userRole, data);
+  });
+
+  fastify.delete("/api/run-of-show/sections/:id", async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    return service.deleteSection(id, request.workspaceId, request.userRole);
   });
 
   fastify.post("/api/events/:eventId/run-of-show", async (request, reply) => {

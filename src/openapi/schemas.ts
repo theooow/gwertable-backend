@@ -102,16 +102,32 @@ const runOfShowBody = {
   required: ["startsAt", "durationMin", "title"],
   properties: {
     trackId: { type: "string", nullable: true },
+    sectionId: { type: "string", nullable: true },
+    status: { type: "string", enum: ["PLANNED", "IN_PROGRESS", "DONE", "DELAYED", "CANCELLED"] },
     startsAt: { type: "string", format: "date-time" },
     durationMin: { type: "integer", minimum: 1, maximum: 1440 },
     title: { type: "string", maxLength: 120 },
     responsible: { type: "string" },
     responsiblePersonId: { type: "string" },
     notes: { type: "string" },
+    stakeholderNote: { type: "string" },
+    delayReason: { type: "string" },
+    actualStartedAt: { type: "string", format: "date-time", nullable: true },
+    completedAt: { type: "string", format: "date-time", nullable: true },
+    dependsOnIds: { type: "array", items: { type: "string" } },
   },
 };
 
 const runOfShowTrackBody = {
+  type: "object",
+  required: ["name"],
+  properties: {
+    name: { type: "string", maxLength: 120 },
+    color: { type: "string" },
+  },
+};
+
+const runOfShowSectionBody = {
   type: "object",
   required: ["name"],
   properties: {
@@ -809,6 +825,33 @@ export const routeDocs: Record<string, RouteDoc> = {
     tags: ["Conducteur"],
     summary: "Supprimer un metier du conducteur",
     description: "Les elements rattaches sont conserves et repassent sans metier.",
+    security: auth,
+    params: pId,
+  },
+  "GET /api/events/:eventId/run-of-show/sections": {
+    tags: ["Conducteur"],
+    summary: "Lister les sections du conducteur",
+    security: auth,
+    params: pEventId,
+  },
+  "POST /api/events/:eventId/run-of-show/sections": {
+    tags: ["Conducteur"],
+    summary: "Creer une section du conducteur",
+    security: auth,
+    params: pEventId,
+    body: runOfShowSectionBody,
+  },
+  "PUT /api/run-of-show/sections/:id": {
+    tags: ["Conducteur"],
+    summary: "Mettre a jour une section du conducteur",
+    security: auth,
+    params: pId,
+    body: runOfShowSectionBody,
+  },
+  "DELETE /api/run-of-show/sections/:id": {
+    tags: ["Conducteur"],
+    summary: "Supprimer une section du conducteur",
+    description: "Les elements rattaches sont conserves et repassent sans section.",
     security: auth,
     params: pId,
   },

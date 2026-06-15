@@ -4,8 +4,19 @@ import { NotFoundError } from "../lib/errors.js";
 
 const defaultInclude = {
   track: { select: { id: true, name: true, color: true, position: true } },
+  section: { select: { id: true, name: true, color: true, position: true } },
   responsiblePerson: { select: { id: true, fullName: true } },
   sourceTask: { select: { id: true, title: true } },
+  dependsOn: {
+    select: {
+      dependsOn: { select: { id: true, title: true, startsAt: true, status: true } },
+    },
+  },
+  dependents: {
+    select: {
+      item: { select: { id: true, title: true, startsAt: true, status: true } },
+    },
+  },
 } as const;
 
 /**
@@ -70,12 +81,18 @@ export class RunOfShowDao extends BaseDao {
     eventId: string,
       data: {
       trackId: string | null;
+      sectionId: string | null;
+      status?: "PLANNED" | "IN_PROGRESS" | "DONE" | "DELAYED" | "CANCELLED";
       startsAt: Date;
       durationMin: number;
       title: string;
       responsible: string | null;
       responsiblePersonId: string | null;
       notes: string | null;
+      stakeholderNote: string | null;
+      delayReason: string | null;
+      actualStartedAt: Date | null;
+      completedAt: Date | null;
       sourceTaskId?: string;
     },
   ) {
@@ -95,12 +112,18 @@ export class RunOfShowDao extends BaseDao {
     id: string,
     data: {
       trackId: string | null;
+      sectionId: string | null;
+      status: "PLANNED" | "IN_PROGRESS" | "DONE" | "DELAYED" | "CANCELLED";
       startsAt: Date;
       durationMin: number;
       title: string;
       responsible: string | null;
       responsiblePersonId: string | null;
       notes: string | null;
+      stakeholderNote: string | null;
+      delayReason: string | null;
+      actualStartedAt: Date | null;
+      completedAt: Date | null;
     },
   ) {
     return this.prisma.runOfShowItem.update({
