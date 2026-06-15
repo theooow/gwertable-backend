@@ -406,6 +406,7 @@ describe("event module routes", () => {
     );
     const secondRunOfShow = await request("POST", `/api/events/${event.id}/run-of-show`, authorization, {
       ...runOfShowPayload,
+      trackId: "",
       title: "Debrief",
     });
     assert.equal(secondRunOfShow.statusCode, 201);
