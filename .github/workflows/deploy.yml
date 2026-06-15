@@ -185,8 +185,19 @@ jobs:
               uploads:
             COMPOSE
 
+            retry() {
+              for attempt in 1 2 3 4 5; do
+                "$@" && return 0
+                status=$?
+                if [ "$attempt" = "5" ]; then
+                  return "$status"
+                fi
+                sleep $((attempt * 10))
+              done
+            }
+
             docker compose up -d db mailhog
-            docker compose pull backend frontend
+            retry docker compose pull backend frontend
             docker compose run --rm backend npx prisma migrate deploy
             for attempt in 1 2 3; do
               if docker compose up -d --force-recreate --remove-orphans backend frontend; then
