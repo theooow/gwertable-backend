@@ -141,6 +141,8 @@ export class ShoppingRepository {
         eventId: eventId ?? item.eventId,
         label: item.name,
         amountCents: data.amountCents,
+        amountHtCents: data.amountCents,
+        amountTtcCents: data.amountCents,
         category: "courses",
         paidById: data.paidById,
         paidAt: new Date(),

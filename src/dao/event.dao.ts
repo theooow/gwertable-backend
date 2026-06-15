@@ -168,6 +168,13 @@ export class EventDao extends BaseDao {
         description: data.description || null,
         bannerUrl: data.bannerUrl || null,
         venueId: data.venueId || null,
+        nbCollectifs: data.nbCollectifs,
+        kegUnitPriceCents: data.kegUnitPriceCents,
+        avgBasketCents: data.avgBasketCents,
+        vatMode: data.vatMode,
+        defaultVatRateBasisPoints: data.defaultVatRateBasisPoints,
+        sacemRateBasisPoints: data.sacemRateBasisPoints,
+        sacemBase: data.sacemBase,
       },
     });
   }
@@ -195,6 +202,10 @@ export class EventDao extends BaseDao {
         nbCollectifs: data.nbCollectifs,
         kegUnitPriceCents: data.kegUnitPriceCents,
         avgBasketCents: data.avgBasketCents,
+        vatMode: data.vatMode,
+        defaultVatRateBasisPoints: data.defaultVatRateBasisPoints,
+        sacemRateBasisPoints: data.sacemRateBasisPoints,
+        sacemBase: data.sacemBase,
       },
     });
   }

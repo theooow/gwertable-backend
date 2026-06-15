@@ -35,7 +35,7 @@ export class ExpenseDao extends BaseDao {
   async findByIdInWorkspace(id: string, workspaceId: string) {
     return this.prisma.expense.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true, sourceParticipantId: true },
+      select: { id: true, eventId: true, sourceParticipantId: true },
     });
   }
 

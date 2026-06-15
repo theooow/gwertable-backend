@@ -1,4 +1,12 @@
-import type { PrismaClient, Prisma, TicketSource, ReimbStatus } from "@prisma/client";
+import type {
+  PrismaClient,
+  Prisma,
+  TicketSource,
+  ReimbStatus,
+  BudgetPhase,
+  AmountInputMode,
+  VatMode,
+} from "@prisma/client";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { parseEuros } from "../lib/money.js";
 import {
@@ -13,6 +21,9 @@ import { ExpenseDao } from "../dao/expense.dao.js";
 type ExpenseInput = {
   label: string;
   amount: string;
+  phase: BudgetPhase;
+  amountInputMode: AmountInputMode;
+  vatRateBasisPoints: number;
   category: string;
   paidById?: string | null;
   paidAt?: string | null;
@@ -23,7 +34,10 @@ type ExpenseInput = {
 
 type IncomeInput = {
   label: string;
-  amountCents: number;
+  amount: string;
+  phase: BudgetPhase;
+  amountInputMode: AmountInputMode;
+  vatRateBasisPoints: number;
   category: string;
   receivedAt?: string | null;
 };
@@ -41,6 +55,51 @@ type ConsumableInput = {
   unitPriceCents: number;
   estimatedQty: number;
 };
+
+type EventTaxSettings = {
+  vatMode: VatMode;
+};
+
+type ComputedAmounts = {
+  amountCents: number;
+  amountHtCents: number;
+  amountVatCents: number;
+  amountTtcCents: number;
+};
+
+function computeBudgetAmounts(
+  rawAmount: string,
+  amountInputMode: AmountInputMode,
+  vatRateBasisPoints: number,
+  vatMode: VatMode,
+): ComputedAmounts {
+  const inputCents = parseEuros(rawAmount);
+  const effectiveVatRateBasisPoints = vatMode === "ASSUJETTI" ? vatRateBasisPoints : 0;
+
+  if (amountInputMode === "HT") {
+    const amountHtCents = inputCents;
+    const amountVatCents = Math.round((amountHtCents * effectiveVatRateBasisPoints) / 10000);
+    const amountTtcCents = amountHtCents + amountVatCents;
+    return {
+      amountCents: amountTtcCents,
+      amountHtCents,
+      amountVatCents,
+      amountTtcCents,
+    };
+  }
+
+  const amountTtcCents = inputCents;
+  const divisor = 10000 + effectiveVatRateBasisPoints;
+  const amountHtCents =
+    divisor > 0 ? Math.round((amountTtcCents * 10000) / divisor) : amountTtcCents;
+  const amountVatCents = amountTtcCents - amountHtCents;
+  return {
+    amountCents: amountTtcCents,
+    amountHtCents,
+    amountVatCents,
+    amountTtcCents,
+  };
+}
 
 function shotgunRevenueCents(deal: ShotgunEvent["deals"][number]) {
   return Math.max(0, Math.round(deal.price * 100));
@@ -104,6 +163,15 @@ export class BudgetRepository {
     if (!event) throw new NotFoundError("Evenement introuvable");
   }
 
+  private async getEventTaxSettings(eventId: string, workspaceId: string): Promise<EventTaxSettings> {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, workspaceId },
+      select: { vatMode: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
+    return event;
+  }
+
   private async assertPersonIfProvided(personId: string | undefined | null, workspaceId: string) {
     if (!personId) return;
     const person = await this.prisma.person.findFirst({
@@ -134,14 +202,26 @@ export class BudgetRepository {
    * @param data - Données validées
    */
   async createExpense(eventId: string, workspaceId: string, data: ExpenseInput) {
-    await this.assertEventInWorkspace(eventId, workspaceId);
+    const eventSettings = await this.getEventTaxSettings(eventId, workspaceId);
     await this.assertPersonIfProvided(data.paidById, workspaceId);
+    const amounts = computeBudgetAmounts(
+      data.amount,
+      data.amountInputMode,
+      data.vatRateBasisPoints,
+      eventSettings.vatMode,
+    );
 
     return this.prisma.expense.create({
       data: {
         eventId,
         label: data.label,
-        amountCents: parseEuros(data.amount),
+        amountCents: amounts.amountCents,
+        phase: data.phase,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        amountHtCents: amounts.amountHtCents,
+        amountVatCents: amounts.amountVatCents,
+        amountTtcCents: amounts.amountTtcCents,
         category: data.category,
         paidById: data.paidById || null,
         paidAt: data.paidAt ? new Date(data.paidAt) : null,
@@ -161,15 +241,28 @@ export class BudgetRepository {
    * @throws {NotFoundError} Si la dépense est introuvable
    */
   async updateExpense(id: string, workspaceId: string, data: ExpenseInput) {
-    await this.expenseDao.findByIdOrThrow(id, workspaceId);
+    const existingExpense = await this.expenseDao.findByIdOrThrow(id, workspaceId);
     await this.assertPersonIfProvided(data.paidById, workspaceId);
+    const eventSettings = await this.getEventTaxSettings(existingExpense.eventId, workspaceId);
+    const amounts = computeBudgetAmounts(
+      data.amount,
+      data.amountInputMode,
+      data.vatRateBasisPoints,
+      eventSettings.vatMode,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const expense = await tx.expense.update({
         where: { id },
         data: {
           label: data.label,
-          amountCents: parseEuros(data.amount),
+          amountCents: amounts.amountCents,
+          phase: data.phase,
+          amountInputMode: data.amountInputMode,
+          vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+          amountHtCents: amounts.amountHtCents,
+          amountVatCents: amounts.amountVatCents,
+          amountTtcCents: amounts.amountTtcCents,
           category: data.category,
           paidById: data.paidById || null,
           paidAt: data.paidAt ? new Date(data.paidAt) : null,
@@ -238,12 +331,24 @@ export class BudgetRepository {
    * @param data - Données validées
    */
   async createIncome(eventId: string, workspaceId: string, data: IncomeInput) {
-    await this.assertEventInWorkspace(eventId, workspaceId);
+    const eventSettings = await this.getEventTaxSettings(eventId, workspaceId);
+    const amounts = computeBudgetAmounts(
+      data.amount,
+      data.amountInputMode,
+      data.vatRateBasisPoints,
+      eventSettings.vatMode,
+    );
     return this.prisma.income.create({
       data: {
         eventId,
         label: data.label,
-        amountCents: data.amountCents,
+        amountCents: amounts.amountCents,
+        phase: data.phase,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        amountHtCents: amounts.amountHtCents,
+        amountVatCents: amounts.amountVatCents,
+        amountTtcCents: amounts.amountTtcCents,
         category: data.category,
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
       },
@@ -261,15 +366,28 @@ export class BudgetRepository {
   async updateIncome(id: string, workspaceId: string, data: IncomeInput) {
     const existing = await this.prisma.income.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!existing) throw new NotFoundError("Revenu introuvable");
+    const eventSettings = await this.getEventTaxSettings(existing.eventId, workspaceId);
+    const amounts = computeBudgetAmounts(
+      data.amount,
+      data.amountInputMode,
+      data.vatRateBasisPoints,
+      eventSettings.vatMode,
+    );
 
     return this.prisma.income.update({
       where: { id },
       data: {
         label: data.label,
-        amountCents: data.amountCents,
+        amountCents: amounts.amountCents,
+        phase: data.phase,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        amountHtCents: amounts.amountHtCents,
+        amountVatCents: amounts.amountVatCents,
+        amountTtcCents: amounts.amountTtcCents,
         category: data.category,
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
       },
@@ -550,6 +668,8 @@ export class BudgetRepository {
           eventId,
           label: quote.label,
           amountCents: net,
+          amountHtCents: net,
+          amountTtcCents: net,
           category: "matériel",
           reimbursement: "NOT_OWED",
           isEquipmentSync: true,
@@ -575,6 +695,8 @@ export class BudgetRepository {
           eventId,
           label,
           amountCents: amount,
+          amountHtCents: amount,
+          amountTtcCents: amount,
           category: "matériel",
           reimbursement: "NOT_OWED",
           isEquipmentSync: true,

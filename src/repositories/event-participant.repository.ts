@@ -58,6 +58,8 @@ async function syncArtistExpense(
       sourceParticipantId: participant.id,
       label,
       amountCents: Math.round(amountCents * 100),
+      amountHtCents: Math.round(amountCents * 100),
+      amountTtcCents: Math.round(amountCents * 100),
       category: "artistes",
       reimbursement: "PENDING",
     },
@@ -65,6 +67,8 @@ async function syncArtistExpense(
       eventId: participant.eventId,
       label,
       amountCents: Math.round(amountCents * 100),
+      amountHtCents: Math.round(amountCents * 100),
+      amountTtcCents: Math.round(amountCents * 100),
       category: "artistes",
     },
   });

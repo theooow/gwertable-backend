@@ -101,6 +101,26 @@ enum PersonType {
   VENUE
 }
 
+enum BudgetPhase {
+  FORECAST
+  ACTUAL
+}
+
+enum AmountInputMode {
+  HT
+  TTC
+}
+
+enum VatMode {
+  NON_ASSUJETTI
+  ASSUJETTI
+}
+
+enum SacemBase {
+  TICKETING
+  TOTAL_REVENUE
+}
+
 // ============================================================
 // PERSISTENT ENTITIES (pas liées à un event spécifique)
 // ============================================================
@@ -408,6 +428,10 @@ model Event {
   nbCollectifs       Int     @default(1)
   kegUnitPriceCents  Int     @default(0)
   avgBasketCents     Int     @default(0)
+  vatMode            VatMode @default(NON_ASSUJETTI)
+  defaultVatRateBasisPoints Int @default(2000)
+  sacemRateBasisPoints Int @default(1150)
+  sacemBase          SacemBase @default(TICKETING)
 
   participants    EventParticipant[]
   tasks           Task[]
@@ -603,6 +627,12 @@ model Expense {
   sourceParticipant    EventParticipant? @relation(fields: [sourceParticipantId], references: [id], onDelete: Cascade)
   label         String
   amountCents   Int
+  phase         BudgetPhase @default(ACTUAL)
+  amountInputMode AmountInputMode @default(TTC)
+  vatRateBasisPoints Int @default(0)
+  amountHtCents Int @default(0)
+  amountVatCents Int @default(0)
+  amountTtcCents Int @default(0)
   category      String
   paidById      String?
   paidBy        Person?     @relation("PaidBy", fields: [paidById], references: [id])
@@ -614,6 +644,7 @@ model Expense {
   equipmentQuoteId  String?
 
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([eventId, category])
   @@index([paidById])
@@ -625,8 +656,16 @@ model Income {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   label       String
   amountCents Int
+  phase       BudgetPhase @default(ACTUAL)
+  amountInputMode AmountInputMode @default(TTC)
+  vatRateBasisPoints Int @default(0)
+  amountHtCents Int @default(0)
+  amountVatCents Int @default(0)
+  amountTtcCents Int @default(0)
   category    String   // bar, merch, caisse, sponsor, autre
   receivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([eventId])
 }
