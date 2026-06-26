@@ -31,20 +31,75 @@ describe("auth and health routes", () => {
     });
     assert.equal(verified.statusCode, 200);
     const verifiedPayload = json<{
+      requiresPasswordSetup: true;
+      setupToken: string;
+      email: string;
+    }>(verified);
+    assert.equal(verifiedPayload.email, "admin@abregi.test");
+    assert.ok(verifiedPayload.setupToken);
+
+    const passwordSetup = await request("POST", "/api/auth/password/setup", undefined, {
+      email: "admin@abregi.test",
+      token: verifiedPayload.setupToken,
+      password: "correct-password",
+    });
+    assert.equal(passwordSetup.statusCode, 200);
+    const passwordSetupPayload = json<{
       sessionToken: string;
       user: { email: string; role: string; workspaceId: string };
-    }>(verified);
-    assert.equal(verifiedPayload.user.email, "admin@abregi.test");
-    assert.equal(verifiedPayload.user.role, "ADMIN");
-    assert.ok(verifiedPayload.user.workspaceId);
+    }>(passwordSetup);
+    assert.equal(passwordSetupPayload.user.email, "admin@abregi.test");
+    assert.equal(passwordSetupPayload.user.role, "ADMIN");
+    assert.ok(passwordSetupPayload.user.workspaceId);
 
-    const me = await request("GET", "/api/auth/me", `Bearer ${verifiedPayload.sessionToken}`);
+    const me = await request("GET", "/api/auth/me", `Bearer ${passwordSetupPayload.sessionToken}`);
     assert.equal(me.statusCode, 200);
     assert.equal(json<{ user: { email: string } }>(me).user.email, "admin@abregi.test");
 
-    const logout = await request("POST", "/api/auth/logout", `Bearer ${verifiedPayload.sessionToken}`);
+    const passwordLogin = await request("POST", "/api/auth/password/login", undefined, {
+      email: "admin@abregi.test",
+      password: "correct-password",
+    });
+    assert.equal(passwordLogin.statusCode, 200);
+
+    const logout = await request("POST", "/api/auth/logout", `Bearer ${passwordSetupPayload.sessionToken}`);
     assert.equal(logout.statusCode, 200);
     assert.deepEqual(json(logout), { ok: true });
+  });
+
+  it("accepts a six-digit login code for users with a password", async () => {
+    await request("POST", "/api/auth/login-link", undefined, {
+      email: "code@abregi.test",
+    });
+
+    const token = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "code@abregi.test" },
+    });
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "code@abregi.test",
+      token: token.token,
+    });
+    const setup = json<{ setupToken: string }>(verified);
+    await request("POST", "/api/auth/password/setup", undefined, {
+      email: "code@abregi.test",
+      token: setup.setupToken,
+      password: "correct-password",
+    });
+
+    await request("POST", "/api/auth/login-link", undefined, {
+      email: "code@abregi.test",
+    });
+    const codeToken = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "code:code@abregi.test" },
+    });
+    assert.match(codeToken.token, /^\d{6}$/);
+
+    const codeLogin = await request("POST", "/api/auth/verify-code", undefined, {
+      email: "code@abregi.test",
+      code: codeToken.token,
+    });
+    assert.equal(codeLogin.statusCode, 200);
+    assert.ok(json<{ sessionToken: string }>(codeLogin).sessionToken);
   });
 
   it("requires authentication on protected routes", async () => {
@@ -133,9 +188,17 @@ describe("auth and health routes", () => {
       inviteToken,
     });
     assert.equal(verified.statusCode, 200);
-    const verifiedPayload = json<{ user: { role: string; workspaceId: string } }>(verified);
-    assert.equal(verifiedPayload.user.role, "ORGANIZER");
-    assert.equal(verifiedPayload.user.workspaceId, workspace.id);
+    const verifiedPayload = json<{ setupToken: string }>(verified);
+
+    const passwordSetup = await request("POST", "/api/auth/password/setup", undefined, {
+      email: "collab@abregi.test",
+      token: verifiedPayload.setupToken,
+      password: "correct-password",
+    });
+    assert.equal(passwordSetup.statusCode, 200);
+    const passwordSetupPayload = json<{ user: { role: string; workspaceId: string } }>(passwordSetup);
+    assert.equal(passwordSetupPayload.user.role, "ORGANIZER");
+    assert.equal(passwordSetupPayload.user.workspaceId, workspace.id);
 
     const member = await prisma.workspaceMember.findFirstOrThrow({
       where: { workspaceId: workspace.id, user: { email: "collab@abregi.test" } },

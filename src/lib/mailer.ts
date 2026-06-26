@@ -26,29 +26,43 @@ function createTransport() {
   });
 }
 
-export async function sendMagicLinkEmail({ email, url }: { email: string; url: string }) {
+export async function sendMagicLinkEmail({
+  email,
+  url,
+  code,
+}: {
+  email: string;
+  url: string;
+  code: string;
+}) {
   if (env.MAIL_TRANSPORT === "log") {
-    console.info({ email, url }, "Magic login link email skipped");
+    console.info({ email, url, code }, "Login email skipped");
     return;
   }
 
   const escapedUrl = escapeHtml(url);
-  const subject = "Ton lien de connexion Abregi";
+  const escapedCode = escapeHtml(code);
+  const subject = "Ton code de connexion Abregi";
   const text = [
     "Bonjour,",
     "",
-    "Voici ton lien de connexion Abregi :",
+    "Voici ton code de connexion Abregi :",
+    code,
+    "",
+    "Tu peux aussi utiliser ce lien :",
     url,
     "",
-    `Ce lien expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.`,
+    `Ce code expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.`,
     "",
     "Si tu n'es pas a l'origine de cette demande, ignore cet email.",
   ].join("\n");
   const html = `
     <p>Bonjour,</p>
-    <p>Voici ton lien de connexion Abregi :</p>
+    <p>Voici ton code de connexion Abregi :</p>
+    <p style="font-size:24px;font-weight:700;letter-spacing:4px">${escapedCode}</p>
+    <p>Tu peux aussi utiliser ce lien :</p>
     <p><a href="${escapedUrl}">Se connecter a Abregi</a></p>
-    <p>Ce lien expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.</p>
+    <p>Ce code expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.</p>
     <p>Si tu n'es pas a l'origine de cette demande, ignore cet email.</p>
   `;
 

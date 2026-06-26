@@ -218,6 +218,28 @@ export class AuthRepository {
     });
   }
 
+  async findUserByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async findUserById(id: string) {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+  }
+
+  async markEmailVerified(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: new Date() },
+    });
+  }
+
   /**
    * Accepte une invitation après connexion réussie.
    *
