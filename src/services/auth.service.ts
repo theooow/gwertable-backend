@@ -23,6 +23,40 @@ type VerifyResult =
 export class AuthService {
   constructor(private readonly authRepository: AuthRepository) {}
 
+  async getLoginOptions(
+    email: string,
+    inviteToken: string | undefined,
+    baseUrl: string,
+  ): Promise<
+    | {
+        ok: true;
+        email: string;
+        hasPassword: true;
+        accountName: string;
+      }
+    | {
+        ok: true;
+        email: string;
+        hasPassword: false;
+        codeSent: true;
+      }
+  > {
+    await this.authRepository.getValidInvitation(email, inviteToken);
+
+    const user = await this.authRepository.findUserByEmail(email);
+    if (user?.passwordHash) {
+      return {
+        ok: true,
+        email,
+        hasPassword: true,
+        accountName: user.name ?? user.email,
+      };
+    }
+
+    await this.requestLoginLink(email, inviteToken, baseUrl);
+    return { ok: true, email, hasPassword: false, codeSent: true };
+  }
+
   /**
    * Déclenche l'envoi d'un lien de connexion par email.
    * Valide l'invitation si un token est fourni avant d'envoyer.
@@ -82,13 +116,23 @@ export class AuthService {
     return this.verifyEmailToken(email, code, inviteToken, `code:${email}`);
   }
 
-  async loginWithPassword(email: string, password: string): Promise<AuthSessionDTO> {
+  async loginWithPassword(
+    email: string,
+    password: string,
+    inviteToken: string | undefined,
+  ): Promise<AuthSessionDTO> {
     const user = await this.authRepository.findUserByEmail(email);
     if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedError("Email ou mot de passe invalide");
     }
 
-    return this.createSessionForUser(user.id);
+    const invitation = await this.authRepository.getValidInvitation(email, inviteToken);
+    const resolvedUser = invitation
+      ? await this.authRepository.findOrCreateUser(email, invitation)
+      : user;
+    await this.authRepository.acceptInvitation(invitation, resolvedUser.id);
+
+    return this.createSessionForUser(resolvedUser.id);
   }
 
   async setupPassword(email: string, token: string, password: string): Promise<AuthSessionDTO> {

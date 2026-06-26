@@ -15,6 +15,8 @@ const loginLinkSchema = z.object({
   inviteToken: z.string().optional(),
 });
 
+const loginOptionsSchema = loginLinkSchema;
+
 const verifySchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
   token: z.string().min(1),
@@ -30,6 +32,7 @@ const verifyCodeSchema = z.object({
 const passwordLoginSchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
   password: z.string().min(1),
+  inviteToken: z.string().optional(),
 });
 
 const setupPasswordSchema = z.object({
@@ -50,6 +53,11 @@ const service = new AuthService(
 );
 
 export async function authRoutes(fastify: FastifyInstance) {
+  fastify.post("/api/auth/login-options", async (request) => {
+    const { email, inviteToken } = loginOptionsSchema.parse(request.body);
+    return service.getLoginOptions(email, inviteToken, env.FRONTEND_URL);
+  });
+
   fastify.post("/api/auth/login-link", async (request) => {
     const { email, inviteToken } = loginLinkSchema.parse(request.body);
     const result = await service.requestLoginLink(email, inviteToken, env.FRONTEND_URL);
@@ -70,8 +78,8 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/auth/password/login", async (_request, reply) => {
-    const { email, password } = passwordLoginSchema.parse(_request.body);
-    const session = await service.loginWithPassword(email, password);
+    const { email, password, inviteToken } = passwordLoginSchema.parse(_request.body);
+    const session = await service.loginWithPassword(email, password, inviteToken);
     return reply.send(session);
   });
 
