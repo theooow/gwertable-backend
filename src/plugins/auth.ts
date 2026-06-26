@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import type { User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { UnauthorizedError, ForbiddenError } from "../lib/errors.js";
+import { isAdminEmail } from "../lib/admin.js";
 
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
   workspaceId: string;
@@ -51,6 +52,10 @@ function isPublicRoute(url: string): boolean {
   );
 }
 
+function isAdminRoute(url: string): boolean {
+  return url.startsWith("/api/admin");
+}
+
 export const authPlugin = fp(async (fastify) => {
   fastify.decorateRequest("userRole", "VIEWER");
   fastify.decorateRequest("workspaceId", "");
@@ -91,6 +96,20 @@ export const authPlugin = fp(async (fastify) => {
 
     if (!session || session.expires <= new Date() || session.user.archivedAt) {
       throw new UnauthorizedError("Non authentifie");
+    }
+
+    if (isAdminRoute(request.url) && isAdminEmail(session.user.email)) {
+      const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
+      request.workspaceId = defaultWorkspaceId ?? "";
+      request.eventScoped = false;
+      request.user = {
+        ...user,
+        role: session.user.role,
+        workspaceId: defaultWorkspaceId ?? "",
+        workspaceName: "Administration",
+      };
+      request.userRole = session.user.role;
+      return;
     }
 
     let workspaceId = session.user.defaultWorkspaceId;

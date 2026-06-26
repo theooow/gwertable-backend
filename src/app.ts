@@ -5,6 +5,7 @@ import { authPlugin } from "./plugins/auth.js";
 import { errorsPlugin } from "./plugins/errors.js";
 import { swaggerPlugin } from "./plugins/swagger.js";
 import { authRoutes } from "./routes/auth.js";
+import { adminRoutes } from "./routes/admin.js";
 import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
 import { eventModuleRoutes } from "./routes/event-modules.js";
@@ -36,6 +37,7 @@ export async function buildApp() {
   await app.register(swaggerPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(adminRoutes);
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);
   await app.register(participantRoutes);
