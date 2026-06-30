@@ -104,6 +104,86 @@ describe("workspace routes", () => {
     assert.equal(json<{ workspace: { name: string } }>(workspace).workspace.name, "Abregi Prod");
   });
 
+  it("updates complete account profile, preferences and theme settings", async () => {
+    const { authorization } = await seedAdminSession();
+
+    const update = await request("PUT", "/api/account", authorization, {
+      name: "Theo Selim",
+      firstName: "Theo",
+      lastName: "Selim",
+      phone: "+33 6 12 34 56 78",
+      addressLine1: "12 rue des Lilas",
+      addressLine2: "Batiment B",
+      postalCode: "75011",
+      city: "Paris",
+      country: "France",
+      companyName: "Abregi Prod",
+      companyAddressLine1: "4 avenue de la Scene",
+      companyAddressLine2: "Etage 2",
+      companyPostalCode: "69001",
+      companyCity: "Lyon",
+      companyCountry: "France",
+      companySiret: "12345678900012",
+      companyVatNumber: "FR12123456789",
+      billingEmail: "billing@abregi.test",
+      locale: "fr-FR",
+      currency: "EUR",
+      timezone: "Europe/Paris",
+      emailNotificationsEnabled: false,
+      taskReminderNotificationsEnabled: false,
+      eventReminderNotificationsEnabled: true,
+      marketingNotificationsEnabled: true,
+      themeMode: "dark",
+      themePreset: "custom",
+      themePrimaryColor: "#22AA88",
+    });
+    assert.equal(update.statusCode, 200);
+
+    const updatedUser = json<{
+      user: {
+        firstName: string;
+        billingEmail: string;
+        emailNotificationsEnabled: boolean;
+        taskReminderNotificationsEnabled: boolean;
+        marketingNotificationsEnabled: boolean;
+        themeMode: string;
+        themePreset: string;
+        themePrimaryColor: string;
+      };
+    }>(update).user;
+    assert.equal(updatedUser.firstName, "Theo");
+    assert.equal(updatedUser.billingEmail, "billing@abregi.test");
+    assert.equal(updatedUser.emailNotificationsEnabled, false);
+    assert.equal(updatedUser.taskReminderNotificationsEnabled, false);
+    assert.equal(updatedUser.marketingNotificationsEnabled, true);
+    assert.equal(updatedUser.themeMode, "dark");
+    assert.equal(updatedUser.themePreset, "custom");
+    assert.equal(updatedUser.themePrimaryColor, "#22AA88");
+
+    const account = await request("GET", "/api/account", authorization);
+    assert.equal(account.statusCode, 200);
+    assert.equal(json<{ user: { companySiret: string } }>(account).user.companySiret, "12345678900012");
+
+    const me = await request("GET", "/api/auth/me", authorization);
+    assert.equal(me.statusCode, 200);
+    assert.equal(json<{ user: { themePrimaryColor: string } }>(me).user.themePrimaryColor, "#22AA88");
+  });
+
+  it("rejects invalid billing email and custom theme color", async () => {
+    const { authorization } = await seedAdminSession();
+
+    const invalidEmail = await request("PUT", "/api/account", authorization, {
+      billingEmail: "not-an-email",
+    });
+    assert.equal(invalidEmail.statusCode, 400);
+
+    const invalidColor = await request("PUT", "/api/account", authorization, {
+      themePreset: "custom",
+      themePrimaryColor: "22AA88",
+    });
+    assert.equal(invalidColor.statusCode, 400);
+  });
+
   it("lists, creates and switches user workspaces", async () => {
     const { authorization, workspace, user } = await seedAdminSession();
 
