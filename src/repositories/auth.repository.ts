@@ -246,7 +246,7 @@ export class AuthRepository {
 
   async registerUser(input: RegisterUserInput, invitation: InvitationRecord | null) {
     const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
-    if (existing) throw new ConflictError("Un compte existe deja avec cet email");
+    if (existing?.passwordHash) throw new ConflictError("Un compte existe deja avec cet email");
 
     const workspaceName =
       input.companyName ||
@@ -254,36 +254,67 @@ export class AuthRepository {
       input.email;
     const workspace = invitation
       ? null
-      : await this.prisma.workspace.create({ data: { name: workspaceName } });
+      : existing?.defaultWorkspaceId
+        ? null
+        : await this.prisma.workspace.create({ data: { name: workspaceName } });
+
+    const userData = {
+      passwordHash: input.passwordHash,
+      name: input.name,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      addressLine1: input.addressLine1,
+      addressLine2: input.addressLine2,
+      postalCode: input.postalCode,
+      city: input.city,
+      country: input.country,
+      companyName: input.companyName,
+      companyAddressLine1: input.companyAddressLine1,
+      companyAddressLine2: input.companyAddressLine2,
+      companyPostalCode: input.companyPostalCode,
+      companyCity: input.companyCity,
+      companyCountry: input.companyCountry,
+      companySiret: input.companySiret,
+      companyVatNumber: input.companyVatNumber,
+      billingEmail: input.billingEmail,
+      locale: input.locale,
+      currency: input.currency,
+      timezone: input.timezone,
+      emailVerified: new Date(),
+      role: invitation?.role ?? existing?.role ?? "ADMIN",
+      defaultWorkspaceId: invitation?.workspaceId ?? existing?.defaultWorkspaceId ?? workspace?.id,
+    };
+
+    if (existing) {
+      return this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          ...userData,
+          ...(invitation?.kind === "workspace"
+            ? {
+                workspaceMemberships: {
+                  upsert: {
+                    where: {
+                      workspaceId_userId: {
+                        workspaceId: invitation.workspaceId,
+                        userId: existing.id,
+                      },
+                    },
+                    create: { workspaceId: invitation.workspaceId, role: invitation.role },
+                    update: { role: invitation.role },
+                  },
+                },
+              }
+            : {}),
+        },
+      });
+    }
 
     return this.prisma.user.create({
       data: {
         email: input.email,
-        passwordHash: input.passwordHash,
-        name: input.name,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: input.phone,
-        addressLine1: input.addressLine1,
-        addressLine2: input.addressLine2,
-        postalCode: input.postalCode,
-        city: input.city,
-        country: input.country,
-        companyName: input.companyName,
-        companyAddressLine1: input.companyAddressLine1,
-        companyAddressLine2: input.companyAddressLine2,
-        companyPostalCode: input.companyPostalCode,
-        companyCity: input.companyCity,
-        companyCountry: input.companyCountry,
-        companySiret: input.companySiret,
-        companyVatNumber: input.companyVatNumber,
-        billingEmail: input.billingEmail,
-        locale: input.locale,
-        currency: input.currency,
-        timezone: input.timezone,
-        emailVerified: new Date(),
-        role: invitation?.role ?? "ADMIN",
-        defaultWorkspaceId: invitation?.workspaceId ?? workspace?.id,
+        ...userData,
         ...(invitation?.kind === "workspace"
           ? {
               workspaceMemberships: {

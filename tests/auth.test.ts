@@ -157,6 +157,51 @@ describe("auth and health routes", () => {
     assert.equal(json<{ user: { email: string } }>(me).user.email, "new-user@abregi.test");
   });
 
+  it("shows registration for incomplete magic-link accounts", async () => {
+    await request("POST", "/api/auth/login-link", undefined, {
+      email: "partial@abregi.test",
+    });
+    const token = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "partial@abregi.test" },
+    });
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "partial@abregi.test",
+      token: token.token,
+    });
+    assert.equal(verified.statusCode, 200);
+    assert.ok(json<{ setupToken: string }>(verified).setupToken);
+
+    const options = await request("POST", "/api/auth/login-options", undefined, {
+      email: "partial@abregi.test",
+    });
+    assert.equal(options.statusCode, 200);
+    assert.deepEqual(json(options), {
+      ok: true,
+      email: "partial@abregi.test",
+      needsRegistration: true,
+    });
+    assert.equal(await prisma.verificationToken.count({ where: { identifier: "partial@abregi.test" } }), 0);
+
+    const registered = await request("POST", "/api/auth/register", undefined, {
+      email: "partial@abregi.test",
+      password: "correct-password",
+      firstName: "Paul",
+      lastName: "Durand",
+      companyName: "Partial Events",
+      billingEmail: "partial-billing@abregi.test",
+    });
+    assert.equal(registered.statusCode, 201);
+    const payload = json<{
+      sessionToken: string;
+      user: { email: string; firstName: string; companyName: string; billingEmail: string };
+    }>(registered);
+    assert.ok(payload.sessionToken);
+    assert.equal(payload.user.email, "partial@abregi.test");
+    assert.equal(payload.user.firstName, "Paul");
+    assert.equal(payload.user.companyName, "Partial Events");
+    assert.equal(payload.user.billingEmail, "partial-billing@abregi.test");
+  });
+
   it("requires authentication on protected routes", async () => {
     const response = await request("GET", "/api/events");
     assert.equal(response.statusCode, 401);

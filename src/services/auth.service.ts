@@ -53,17 +53,16 @@ export class AuthService {
       return { ok: true, email, needsRegistration: true };
     }
 
-    if (user?.passwordHash) {
-      return {
-        ok: true,
-        email,
-        hasPassword: true,
-        accountName: user.name ?? user.email,
-      };
+    if (!user?.passwordHash) {
+      return { ok: true, email, needsRegistration: true };
     }
 
-    await this.requestLoginLink(email, inviteToken, baseUrl);
-    return { ok: true, email, hasPassword: false, codeSent: true };
+    return {
+      ok: true,
+      email,
+      hasPassword: true,
+      accountName: user.name ?? user.email,
+    };
   }
 
   async register(
