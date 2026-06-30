@@ -20,6 +20,14 @@ function resolveErrorName(error: unknown): string {
   return "";
 }
 
+function isMissingMigrationError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return /column .* does not exist|type .* does not exist|relation .* does not exist/i.test(error.message);
+}
+
 export const errorsPlugin = fp(async (fastify) => {
   fastify.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {
@@ -74,6 +82,14 @@ export const errorsPlugin = fp(async (fastify) => {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return reply.status(404).send({ error: "NotFound", message: "Ressource introuvable" });
+    }
+
+    if (isMissingMigrationError(error)) {
+      fastify.log.error(error);
+      return reply.status(503).send({
+        error: "DatabaseMigrationRequired",
+        message: "La base de donnees n'est pas a jour. Lance les migrations Prisma en production.",
+      });
     }
 
     fastify.log.error(error);
