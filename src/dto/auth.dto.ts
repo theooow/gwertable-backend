@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 
 /**
  * Informations utilisateur renvoyées lors d'une authentification réussie.
@@ -9,6 +9,7 @@ export type UserSessionDTO = {
   name: string | null;
   image: string | null;
   role: UserRole;
+  usagePlan: UsagePlan;
   personId: string | null;
   workspaceId: string | null | undefined;
   workspaceName: string;

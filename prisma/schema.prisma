@@ -31,6 +31,11 @@ enum UserRole {
   VIEWER
 }
 
+enum UsagePlan {
+  BETA_TEST
+  PLATINIUM
+}
+
 enum EventStatus {
   DRAFT
   PLANNING
@@ -133,6 +138,7 @@ model User {
   image         String?
   emailVerified DateTime?
   role          UserRole  @default(VIEWER)
+  usagePlan     UsagePlan @default(BETA_TEST)
   discordUserId String?   @unique
   defaultWorkspaceId String?
   defaultWorkspace   Workspace? @relation("DefaultWorkspace", fields: [defaultWorkspaceId], references: [id])

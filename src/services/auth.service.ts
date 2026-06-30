@@ -240,6 +240,7 @@ export class AuthService {
         name: user.name,
         image: user.image,
         role,
+        usagePlan: user.usagePlan,
         personId: user.personId,
         workspaceId,
         workspaceName,

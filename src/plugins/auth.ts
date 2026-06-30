@@ -5,6 +5,7 @@ import { UnauthorizedError, ForbiddenError } from "../lib/errors.js";
 import { isAdminEmail } from "../lib/admin.js";
 
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
+  usagePlan: User["usagePlan"];
   workspaceId: string;
   workspaceName: string;
 };
@@ -87,6 +88,7 @@ export const authPlugin = fp(async (fastify) => {
             name: true,
             image: true,
             role: true,
+            usagePlan: true,
             personId: true,
             defaultWorkspaceId: true,
             archivedAt: true,

@@ -1,7 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { isAdminEmail } from "../lib/admin.js";
-import { ForbiddenError } from "../lib/errors.js";
+import { ForbiddenError, NotFoundError } from "../lib/errors.js";
+
+const userParamsSchema = z.object({ userId: z.string().min(1) });
+const updatePlanSchema = z.object({
+  usagePlan: z.enum(["BETA_TEST", "PLATINIUM"]),
+});
 
 function assertAdmin(request: FastifyRequest) {
   if (!request.user || !isAdminEmail(request.user.email)) {
@@ -37,6 +43,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       ticketTiers,
       workspaces,
       nextEvents,
+      users,
     ] = await Promise.all([
       prisma.user.count({ where: { archivedAt: null } }),
       prisma.user.count({ where: { archivedAt: null, emailVerified: { not: null } } }),
@@ -101,6 +108,25 @@ export async function adminRoutes(fastify: FastifyInstance) {
           ticketTiers: {
             where: { archivedAt: null },
             select: { sold: true, quantity: true, organizerRevenueCents: true },
+          },
+        },
+      }),
+      prisma.user.findMany({
+        where: { archivedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          usagePlan: true,
+          emailVerified: true,
+          createdAt: true,
+          defaultWorkspace: { select: { id: true, name: true } },
+          workspaceMemberships: {
+            select: { role: true, workspace: { select: { id: true, name: true } } },
+            orderBy: { createdAt: "asc" },
           },
         },
       }),
@@ -185,6 +211,74 @@ export async function adminRoutes(fastify: FastifyInstance) {
           ticketingRevenueCents: revenueCents,
         };
       }),
+      users: users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        usagePlan: user.usagePlan,
+        emailVerified: user.emailVerified?.toISOString() ?? null,
+        createdAt: user.createdAt.toISOString(),
+        defaultWorkspace: user.defaultWorkspace
+          ? { id: user.defaultWorkspace.id, name: user.defaultWorkspace.name }
+          : null,
+        workspaces: user.workspaceMemberships.map((membership) => ({
+          id: membership.workspace.id,
+          name: membership.workspace.name,
+          role: membership.role,
+        })),
+      })),
+    };
+  });
+
+  fastify.patch("/api/admin/users/:userId/plan", async (request) => {
+    assertAdmin(request);
+    const { userId } = userParamsSchema.parse(request.params);
+    const { usagePlan } = updatePlanSchema.parse(request.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundError("Utilisateur introuvable");
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { usagePlan },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        usagePlan: true,
+        emailVerified: true,
+        createdAt: true,
+        defaultWorkspace: { select: { id: true, name: true } },
+        workspaceMemberships: {
+          select: { role: true, workspace: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    return {
+      user: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        role: updated.role,
+        usagePlan: updated.usagePlan,
+        emailVerified: updated.emailVerified?.toISOString() ?? null,
+        createdAt: updated.createdAt.toISOString(),
+        defaultWorkspace: updated.defaultWorkspace
+          ? { id: updated.defaultWorkspace.id, name: updated.defaultWorkspace.name }
+          : null,
+        workspaces: updated.workspaceMemberships.map((membership) => ({
+          id: membership.workspace.id,
+          name: membership.workspace.name,
+          role: membership.role,
+        })),
+      },
     };
   });
 }

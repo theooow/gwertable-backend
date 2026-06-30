@@ -149,7 +149,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     const parsed = equipmentImportPreviewSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");
     validateQuoteFile(parsed.contentType, buffer, true);
-    return service.previewDocumentImport(request.workspaceId, request.userRole, parsed);
+    return service.previewDocumentImport(request.workspaceId, request.userRole, request.user!.usagePlan, parsed);
   });
 
   fastify.post("/api/events/:eventId/equipment/import-confirm", async (request, reply) => {

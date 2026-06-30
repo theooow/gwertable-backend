@@ -46,7 +46,8 @@ describe("equipment document import", () => {
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }) as typeof fetch;
 
-    const { authorization } = await seedAdminSession();
+    const { authorization, user } = await seedAdminSession();
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
     const { event } = await seedEventContext(authorization);
     const imageData = base64("fake image bytes");
 
@@ -92,7 +93,8 @@ describe("equipment document import", () => {
     delete process.env.OPENAI_API_KEY;
     process.env.DOCUMENT_AI_PROVIDER = "openai";
 
-    const { authorization } = await seedAdminSession();
+    const { authorization, user } = await seedAdminSession();
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
     const { event } = await seedEventContext(authorization);
 
     const response = await request("POST", `/api/events/${event.id}/equipment/import-preview`, authorization, {
@@ -133,6 +135,20 @@ describe("equipment document import", () => {
     });
 
     assert.equal(response.statusCode, 403);
+  });
+
+  it("blocks AI preview on the beta test plan", async () => {
+    const { authorization } = await seedAdminSession();
+    const { event } = await seedEventContext(authorization);
+
+    const response = await request("POST", `/api/events/${event.id}/equipment/import-preview`, authorization, {
+      fileName: "scan.png",
+      contentType: "image/png",
+      data: base64("fake image bytes"),
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.match(response.body, /plan Platinium/);
   });
 
   it("confirms an import as one quote with one-off usages and synced budget expense", async () => {

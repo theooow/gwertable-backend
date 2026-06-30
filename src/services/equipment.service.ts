@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type {
   EquipmentImportConfirmInput,
@@ -10,6 +10,7 @@ import type {
 } from "../schemas/equipment.js";
 import { EquipmentRepository } from "../repositories/equipment.repository.js";
 import { previewEquipmentDocument } from "./document-extraction.service.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 
 /**
  * Service métier pour le domaine équipement.
@@ -208,8 +209,9 @@ export class EquipmentService {
     return this.equipmentRepository.attachQuoteFile(quoteId, eventId, workspaceId, fileUrl);
   }
 
-  async previewDocumentImport(workspaceId: string, role: UserRole, data: EquipmentImportPreviewInput) {
+  async previewDocumentImport(workspaceId: string, role: UserRole, usagePlan: UsagePlan, data: EquipmentImportPreviewInput) {
     requireCan(role, "equipment.write");
+    requirePlanFeature(usagePlan, "ai.documentImport");
     void workspaceId;
     return previewEquipmentDocument({
       fileName: data.fileName,
