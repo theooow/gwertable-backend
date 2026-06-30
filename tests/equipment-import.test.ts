@@ -10,33 +10,68 @@ function base64(value: string) {
 }
 
 describe("equipment document import", () => {
-  it("previews text PDFs locally without requiring an AI provider", async () => {
-    const previousKey = process.env.OPENAI_API_KEY;
-    delete process.env.OPENAI_API_KEY;
-    process.env.DOCUMENT_AI_PROVIDER = "openai";
+  it("uses Ollama by default for previews", async () => {
+    const previousProvider = process.env.DOCUMENT_AI_PROVIDER;
+    const previousModel = process.env.OLLAMA_MODEL;
+    const previousFetch = globalThis.fetch;
+    delete process.env.DOCUMENT_AI_PROVIDER;
+    process.env.OLLAMA_MODEL = "llava-test";
+
+    let requestBody: { model: string; prompt: string; images?: string[] } | null = null;
+    globalThis.fetch = (async (_url, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({
+        response: JSON.stringify({
+          label: "Devis SoundCo",
+          documentType: "quote",
+          discountCents: null,
+          discountPct: 5,
+          lines: [{
+            name: "Projecteur LED",
+            category: "son",
+            quantity: 2,
+            unitPriceCents: 1000,
+            rentalCoef: 1,
+            notes: null,
+            confidence: 0.9,
+          }],
+          warnings: [],
+        }),
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
 
     const { authorization } = await seedAdminSession();
     const { event } = await seedEventContext(authorization);
+    const imageData = base64("fake image bytes");
 
     const response = await request("POST", `/api/events/${event.id}/equipment/import-preview`, authorization, {
-      fileName: "devis-soundco.pdf",
-      contentType: "application/pdf",
-      data: base64("Devis SoundCo\nProjecteur LED 2 10,00\nPied micro 1 5.50\nRemise 5%"),
+      fileName: "devis-soundco.png",
+      contentType: "image/png",
+      data: imageData,
     });
 
-    if (previousKey) process.env.OPENAI_API_KEY = previousKey;
+    globalThis.fetch = previousFetch;
+    if (previousProvider === undefined) delete process.env.DOCUMENT_AI_PROVIDER;
+    else process.env.DOCUMENT_AI_PROVIDER = previousProvider;
+    if (previousModel === undefined) delete process.env.OLLAMA_MODEL;
+    else process.env.OLLAMA_MODEL = previousModel;
 
     assert.equal(response.statusCode, 200);
+    assert.ok(requestBody);
+    const ollamaRequest = requestBody as { model: string; prompt: string; images?: string[] };
+    assert.equal(ollamaRequest.model, "llava-test");
+    assert.deepEqual(ollamaRequest.images, [imageData]);
+    assert.match(ollamaRequest.prompt, /Extract equipment rental quote/);
     const preview = json<{
       label: string;
       documentType: string;
       discountPct: number | null;
       lines: Array<{ name: string; quantity: number; unitPriceCents: number }>;
     }>(response);
-    assert.equal(preview.label, "devis-soundco");
+    assert.equal(preview.label, "Devis SoundCo");
     assert.equal(preview.documentType, "quote");
     assert.equal(preview.discountPct, 5);
-    assert.equal(preview.lines.length, 2);
+    assert.equal(preview.lines.length, 1);
     assert.equal(preview.lines[0]?.name, "Projecteur LED");
     assert.equal(preview.lines[0]?.quantity, 2);
     assert.equal(preview.lines[0]?.unitPriceCents, 1000);
