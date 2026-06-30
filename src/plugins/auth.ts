@@ -6,6 +6,33 @@ import { isAdminEmail } from "../lib/admin.js";
 
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
   usagePlan: User["usagePlan"];
+  firstName: User["firstName"];
+  lastName: User["lastName"];
+  phone: User["phone"];
+  addressLine1: User["addressLine1"];
+  addressLine2: User["addressLine2"];
+  postalCode: User["postalCode"];
+  city: User["city"];
+  country: User["country"];
+  companyName: User["companyName"];
+  companyAddressLine1: User["companyAddressLine1"];
+  companyAddressLine2: User["companyAddressLine2"];
+  companyPostalCode: User["companyPostalCode"];
+  companyCity: User["companyCity"];
+  companyCountry: User["companyCountry"];
+  companySiret: User["companySiret"];
+  companyVatNumber: User["companyVatNumber"];
+  billingEmail: User["billingEmail"];
+  locale: User["locale"];
+  currency: User["currency"];
+  timezone: User["timezone"];
+  emailNotificationsEnabled: User["emailNotificationsEnabled"];
+  taskReminderNotificationsEnabled: User["taskReminderNotificationsEnabled"];
+  eventReminderNotificationsEnabled: User["eventReminderNotificationsEnabled"];
+  marketingNotificationsEnabled: User["marketingNotificationsEnabled"];
+  themeMode: User["themeMode"];
+  themePreset: User["themePreset"];
+  themePrimaryColor: User["themePrimaryColor"];
   workspaceId: string;
   workspaceName: string;
 };
@@ -87,6 +114,33 @@ export const authPlugin = fp(async (fastify) => {
             email: true,
             name: true,
             image: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            addressLine1: true,
+            addressLine2: true,
+            postalCode: true,
+            city: true,
+            country: true,
+            companyName: true,
+            companyAddressLine1: true,
+            companyAddressLine2: true,
+            companyPostalCode: true,
+            companyCity: true,
+            companyCountry: true,
+            companySiret: true,
+            companyVatNumber: true,
+            billingEmail: true,
+            locale: true,
+            currency: true,
+            timezone: true,
+            emailNotificationsEnabled: true,
+            taskReminderNotificationsEnabled: true,
+            eventReminderNotificationsEnabled: true,
+            marketingNotificationsEnabled: true,
+            themeMode: true,
+            themePreset: true,
+            themePrimaryColor: true,
             role: true,
             usagePlan: true,
             personId: true,

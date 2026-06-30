@@ -1,6 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
-import { WorkspaceRepository } from "../repositories/workspace.repository.js";
+import { WorkspaceRepository, type AccountUpdateInput } from "../repositories/workspace.repository.js";
 
 /**
  * Service métier pour le domaine workspace.
@@ -177,11 +177,10 @@ export class WorkspaceService {
    * Met à jour le profil utilisateur.
    *
    * @param userId - Identifiant de l'utilisateur
-   * @param name - Nouveau nom
-   * @param image - Nouvelle URL d'image
+   * @param data - Champs compte a mettre a jour
    */
-  async updateAccount(userId: string, name: string | null, image: string | null) {
-    return this.workspaceRepository.updateAccount(userId, name, image);
+  async updateAccount(userId: string, data: AccountUpdateInput) {
+    return this.workspaceRepository.updateAccount(userId, data);
   }
 
   /**

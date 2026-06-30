@@ -290,6 +290,41 @@ const workspaceSettingsBody = {
 
 // ── Type ─────────────────────────────────────────────────────────────────────
 
+const accountSettingsBody = {
+  type: "object",
+  properties: {
+    name: { type: "string", maxLength: 120 },
+    image: { type: "string", maxLength: 2000, description: "URL de l'image de profil" },
+    firstName: { type: "string", maxLength: 120 },
+    lastName: { type: "string", maxLength: 120 },
+    phone: { type: "string", maxLength: 120 },
+    addressLine1: { type: "string", maxLength: 240 },
+    addressLine2: { type: "string", maxLength: 240 },
+    postalCode: { type: "string", maxLength: 120 },
+    city: { type: "string", maxLength: 120 },
+    country: { type: "string", maxLength: 120 },
+    companyName: { type: "string", maxLength: 120 },
+    companyAddressLine1: { type: "string", maxLength: 240 },
+    companyAddressLine2: { type: "string", maxLength: 240 },
+    companyPostalCode: { type: "string", maxLength: 120 },
+    companyCity: { type: "string", maxLength: 120 },
+    companyCountry: { type: "string", maxLength: 120 },
+    companySiret: { type: "string", maxLength: 120 },
+    companyVatNumber: { type: "string", maxLength: 120 },
+    billingEmail: { type: "string", format: "email" },
+    locale: { type: "string", default: "fr-FR", maxLength: 120 },
+    currency: { type: "string", default: "EUR", maxLength: 120 },
+    timezone: { type: "string", default: "Europe/Paris", maxLength: 120 },
+    emailNotificationsEnabled: { type: "boolean", default: true },
+    taskReminderNotificationsEnabled: { type: "boolean", default: true },
+    eventReminderNotificationsEnabled: { type: "boolean", default: true },
+    marketingNotificationsEnabled: { type: "boolean", default: false },
+    themeMode: { type: "string", enum: ["system", "light", "dark"], default: "system" },
+    themePreset: { type: "string", enum: ["default", "ruby", "violet", "crimson", "custom"], default: "default" },
+    themePrimaryColor: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$", nullable: true },
+  },
+};
+
 type RouteDoc = {
   tags?: string[];
   summary?: string;
@@ -364,13 +399,7 @@ export const routeDocs: Record<string, RouteDoc> = {
     tags: ["Compte"],
     summary: "Mettre à jour le profil utilisateur",
     security: auth,
-    body: {
-      type: "object",
-      properties: {
-        name: { type: "string", maxLength: 120 },
-        image: { type: "string", maxLength: 2000, description: "URL de l'image de profil" },
-      },
-    },
+    body: accountSettingsBody,
   },
   "DELETE /api/account": {
     tags: ["Compte"],

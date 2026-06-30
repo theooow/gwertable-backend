@@ -1,9 +1,79 @@
-import type { PrismaClient, UserRole } from "@prisma/client";
+import type { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { NotFoundError, ValidationError, ConflictError, UnauthorizedError } from "../lib/errors.js";
 import { WorkspaceDao } from "../dao/workspace.dao.js";
 import { WorkspaceMemberDao } from "../dao/workspace-member.dao.js";
 import { WorkspaceInvitationDao } from "../dao/workspace-invitation.dao.js";
 import { EventCollaboratorDao } from "../dao/event-collaborator.dao.js";
+
+export type AccountUpdateInput = Pick<
+  Prisma.UserUpdateInput,
+  | "name"
+  | "image"
+  | "firstName"
+  | "lastName"
+  | "phone"
+  | "addressLine1"
+  | "addressLine2"
+  | "postalCode"
+  | "city"
+  | "country"
+  | "companyName"
+  | "companyAddressLine1"
+  | "companyAddressLine2"
+  | "companyPostalCode"
+  | "companyCity"
+  | "companyCountry"
+  | "companySiret"
+  | "companyVatNumber"
+  | "billingEmail"
+  | "locale"
+  | "currency"
+  | "timezone"
+  | "emailNotificationsEnabled"
+  | "taskReminderNotificationsEnabled"
+  | "eventReminderNotificationsEnabled"
+  | "marketingNotificationsEnabled"
+  | "themeMode"
+  | "themePreset"
+  | "themePrimaryColor"
+>;
+
+const accountUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  image: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  addressLine1: true,
+  addressLine2: true,
+  postalCode: true,
+  city: true,
+  country: true,
+  companyName: true,
+  companyAddressLine1: true,
+  companyAddressLine2: true,
+  companyPostalCode: true,
+  companyCity: true,
+  companyCountry: true,
+  companySiret: true,
+  companyVatNumber: true,
+  billingEmail: true,
+  locale: true,
+  currency: true,
+  timezone: true,
+  emailNotificationsEnabled: true,
+  taskReminderNotificationsEnabled: true,
+  eventReminderNotificationsEnabled: true,
+  marketingNotificationsEnabled: true,
+  themeMode: true,
+  themePreset: true,
+  themePrimaryColor: true,
+  role: true,
+  usagePlan: true,
+  personId: true,
+} satisfies Prisma.UserSelect;
 
 /**
  * Repository pour le domaine workspace.
@@ -445,11 +515,11 @@ export class WorkspaceRepository {
    * @param name - Nouveau nom (ou `null` pour effacer)
    * @param image - Nouvelle URL d'image (ou `null` pour effacer)
    */
-  async updateAccount(userId: string, name: string | null, image: string | null) {
+  async updateAccount(userId: string, data: AccountUpdateInput) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { name, image },
-      select: { id: true, email: true, name: true, image: true, role: true, personId: true },
+      data,
+      select: accountUserSelect,
     });
   }
 
@@ -498,7 +568,7 @@ export class WorkspaceRepository {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { defaultWorkspaceId: workspaceId },
-      select: { id: true, email: true, name: true, image: true, role: true, personId: true },
+      select: accountUserSelect,
     });
 
     return { user, membership };

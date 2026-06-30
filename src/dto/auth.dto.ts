@@ -1,4 +1,4 @@
-import type { UsagePlan, UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole, UserThemeMode, UserThemePreset } from "@prisma/client";
 
 /**
  * Informations utilisateur renvoyées lors d'une authentification réussie.
@@ -8,6 +8,33 @@ export type UserSessionDTO = {
   email: string;
   name: string | null;
   image: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+  companyName: string | null;
+  companyAddressLine1: string | null;
+  companyAddressLine2: string | null;
+  companyPostalCode: string | null;
+  companyCity: string | null;
+  companyCountry: string | null;
+  companySiret: string | null;
+  companyVatNumber: string | null;
+  billingEmail: string | null;
+  locale: string;
+  currency: string;
+  timezone: string;
+  emailNotificationsEnabled: boolean;
+  taskReminderNotificationsEnabled: boolean;
+  eventReminderNotificationsEnabled: boolean;
+  marketingNotificationsEnabled: boolean;
+  themeMode: UserThemeMode;
+  themePreset: UserThemePreset;
+  themePrimaryColor: string | null;
   role: UserRole;
   usagePlan: UsagePlan;
   personId: string | null;

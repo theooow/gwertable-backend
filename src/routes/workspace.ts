@@ -21,9 +21,41 @@ const workspaceMemberParamsSchema = z.object({ memberId: z.string().min(1) });
 const updateWorkspaceMemberSchema = z.object({
   role: z.enum(["ADMIN", "ORGANIZER", "TREASURER", "VOLUNTEER", "ARTIST", "VIEWER"]),
 });
+const shortText = z.string().trim().max(120).optional().or(z.literal(""));
+const addressText = z.string().trim().max(240).optional().or(z.literal(""));
+const optionalEmail = z.string().trim().email().optional().or(z.literal(""));
+const hexColor = z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).optional().or(z.literal(""));
+
 const updateAccountSchema = z.object({
-  name: z.string().trim().max(120).optional().or(z.literal("")),
+  name: shortText,
   image: z.string().trim().max(2000).optional().or(z.literal("")),
+  firstName: shortText,
+  lastName: shortText,
+  phone: shortText,
+  addressLine1: addressText,
+  addressLine2: addressText,
+  postalCode: shortText,
+  city: shortText,
+  country: shortText,
+  companyName: shortText,
+  companyAddressLine1: addressText,
+  companyAddressLine2: addressText,
+  companyPostalCode: shortText,
+  companyCity: shortText,
+  companyCountry: shortText,
+  companySiret: shortText,
+  companyVatNumber: shortText,
+  billingEmail: optionalEmail,
+  locale: shortText,
+  currency: shortText,
+  timezone: shortText,
+  emailNotificationsEnabled: z.boolean().optional(),
+  taskReminderNotificationsEnabled: z.boolean().optional(),
+  eventReminderNotificationsEnabled: z.boolean().optional(),
+  marketingNotificationsEnabled: z.boolean().optional(),
+  themeMode: z.enum(["system", "light", "dark"]).optional(),
+  themePreset: z.enum(["default", "ruby", "violet", "crimson", "custom"]).optional(),
+  themePrimaryColor: hexColor,
 });
 const profileImageUploadSchema = z.object({
   fileName: z.string().min(1),
@@ -42,6 +74,11 @@ const contactTransferSchema = z.object({
 });
 const deleteConfirmationSchema = z.object({ confirm: z.string() });
 const acceptInvitationSchema = z.object({ inviteToken: z.string().min(1) });
+
+function nullableString(value: string | undefined) {
+  if (value === undefined) return undefined;
+  return value || null;
+}
 
 const allowedProfileImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
@@ -113,11 +150,37 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.put("/api/account", async (request) => {
     const parsed = updateAccountSchema.parse(request.body);
-    const user = await service.updateAccount(
-      request.user!.id,
-      parsed.name || null,
-      parsed.image || null,
-    );
+    const user = await service.updateAccount(request.user!.id, {
+      name: nullableString(parsed.name),
+      image: nullableString(parsed.image),
+      firstName: nullableString(parsed.firstName),
+      lastName: nullableString(parsed.lastName),
+      phone: nullableString(parsed.phone),
+      addressLine1: nullableString(parsed.addressLine1),
+      addressLine2: nullableString(parsed.addressLine2),
+      postalCode: nullableString(parsed.postalCode),
+      city: nullableString(parsed.city),
+      country: nullableString(parsed.country),
+      companyName: nullableString(parsed.companyName),
+      companyAddressLine1: nullableString(parsed.companyAddressLine1),
+      companyAddressLine2: nullableString(parsed.companyAddressLine2),
+      companyPostalCode: nullableString(parsed.companyPostalCode),
+      companyCity: nullableString(parsed.companyCity),
+      companyCountry: nullableString(parsed.companyCountry),
+      companySiret: nullableString(parsed.companySiret),
+      companyVatNumber: nullableString(parsed.companyVatNumber),
+      billingEmail: nullableString(parsed.billingEmail),
+      locale: parsed.locale || undefined,
+      currency: parsed.currency || undefined,
+      timezone: parsed.timezone || undefined,
+      emailNotificationsEnabled: parsed.emailNotificationsEnabled,
+      taskReminderNotificationsEnabled: parsed.taskReminderNotificationsEnabled,
+      eventReminderNotificationsEnabled: parsed.eventReminderNotificationsEnabled,
+      marketingNotificationsEnabled: parsed.marketingNotificationsEnabled,
+      themeMode: parsed.themeMode,
+      themePreset: parsed.themePreset,
+      themePrimaryColor: nullableString(parsed.themePrimaryColor),
+    });
     return {
       user: {
         ...user,

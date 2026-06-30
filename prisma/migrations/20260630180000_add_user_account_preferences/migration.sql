@@ -1,0 +1,31 @@
+CREATE TYPE "UserThemeMode" AS ENUM ('system', 'light', 'dark');
+CREATE TYPE "UserThemePreset" AS ENUM ('default', 'ruby', 'violet', 'crimson', 'custom');
+
+ALTER TABLE "User"
+  ADD COLUMN "firstName" TEXT,
+  ADD COLUMN "lastName" TEXT,
+  ADD COLUMN "phone" TEXT,
+  ADD COLUMN "addressLine1" TEXT,
+  ADD COLUMN "addressLine2" TEXT,
+  ADD COLUMN "postalCode" TEXT,
+  ADD COLUMN "city" TEXT,
+  ADD COLUMN "country" TEXT,
+  ADD COLUMN "companyName" TEXT,
+  ADD COLUMN "companyAddressLine1" TEXT,
+  ADD COLUMN "companyAddressLine2" TEXT,
+  ADD COLUMN "companyPostalCode" TEXT,
+  ADD COLUMN "companyCity" TEXT,
+  ADD COLUMN "companyCountry" TEXT,
+  ADD COLUMN "companySiret" TEXT,
+  ADD COLUMN "companyVatNumber" TEXT,
+  ADD COLUMN "billingEmail" TEXT,
+  ADD COLUMN "locale" TEXT NOT NULL DEFAULT 'fr-FR',
+  ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'EUR',
+  ADD COLUMN "timezone" TEXT NOT NULL DEFAULT 'Europe/Paris',
+  ADD COLUMN "emailNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "taskReminderNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "eventReminderNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "marketingNotificationsEnabled" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "themeMode" "UserThemeMode" NOT NULL DEFAULT 'system',
+  ADD COLUMN "themePreset" "UserThemePreset" NOT NULL DEFAULT 'default',
+  ADD COLUMN "themePrimaryColor" TEXT;

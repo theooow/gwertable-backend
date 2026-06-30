@@ -36,6 +36,20 @@ enum UsagePlan {
   PLATINIUM
 }
 
+enum UserThemeMode {
+  system
+  light
+  dark
+}
+
+enum UserThemePreset {
+  default
+  ruby
+  violet
+  crimson
+  custom
+}
+
 enum EventStatus {
   DRAFT
   PLANNING
@@ -136,6 +150,33 @@ model User {
   passwordHash  String?
   name          String?
   image         String?
+  firstName     String?
+  lastName      String?
+  phone         String?
+  addressLine1  String?
+  addressLine2  String?
+  postalCode    String?
+  city          String?
+  country       String?
+  companyName         String?
+  companyAddressLine1 String?
+  companyAddressLine2 String?
+  companyPostalCode   String?
+  companyCity         String?
+  companyCountry      String?
+  companySiret        String?
+  companyVatNumber    String?
+  billingEmail        String?
+  locale       String @default("fr-FR")
+  currency     String @default("EUR")
+  timezone     String @default("Europe/Paris")
+  emailNotificationsEnabled         Boolean @default(true)
+  taskReminderNotificationsEnabled  Boolean @default(true)
+  eventReminderNotificationsEnabled Boolean @default(true)
+  marketingNotificationsEnabled     Boolean @default(false)
+  themeMode         UserThemeMode   @default(system)
+  themePreset       UserThemePreset @default(default)
+  themePrimaryColor String?
   emailVerified DateTime?
   role          UserRole  @default(VIEWER)
   usagePlan     UsagePlan @default(BETA_TEST)
