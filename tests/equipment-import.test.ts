@@ -10,18 +10,24 @@ function base64(value: string) {
 }
 
 describe("equipment document import", () => {
-  it("uses Ollama by default for previews", async () => {
+  it("uses OpenAI by default for previews", async () => {
     const previousProvider = process.env.DOCUMENT_AI_PROVIDER;
-    const previousModel = process.env.OLLAMA_MODEL;
+    const previousKey = process.env.OPENAI_API_KEY;
+    const previousModel = process.env.OPENAI_MODEL;
     const previousFetch = globalThis.fetch;
-    delete process.env.DOCUMENT_AI_PROVIDER;
-    process.env.OLLAMA_MODEL = "llava-test";
+    process.env.DOCUMENT_AI_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.OPENAI_MODEL = "gpt-test";
 
-    let requestBody: { model: string; prompt: string; images?: string[] } | null = null;
-    globalThis.fetch = (async (_url, init) => {
+    let requestUrl = "";
+    let authHeader = "";
+    let requestBody: { model: string; input: Array<{ content: Array<{ type: string; text?: string; file_data?: string }> }> } | null = null;
+    globalThis.fetch = (async (url, init) => {
+      requestUrl = String(url);
+      authHeader = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
       requestBody = JSON.parse(String(init?.body));
       return new Response(JSON.stringify({
-        response: JSON.stringify({
+        output_text: JSON.stringify({
           label: "Devis SoundCo",
           documentType: "quote",
           discountCents: null,
@@ -53,15 +59,19 @@ describe("equipment document import", () => {
     globalThis.fetch = previousFetch;
     if (previousProvider === undefined) delete process.env.DOCUMENT_AI_PROVIDER;
     else process.env.DOCUMENT_AI_PROVIDER = previousProvider;
-    if (previousModel === undefined) delete process.env.OLLAMA_MODEL;
-    else process.env.OLLAMA_MODEL = previousModel;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+    if (previousModel === undefined) delete process.env.OPENAI_MODEL;
+    else process.env.OPENAI_MODEL = previousModel;
 
     assert.equal(response.statusCode, 200);
     assert.ok(requestBody);
-    const ollamaRequest = requestBody as { model: string; prompt: string; images?: string[] };
-    assert.equal(ollamaRequest.model, "llava-test");
-    assert.deepEqual(ollamaRequest.images, [imageData]);
-    assert.match(ollamaRequest.prompt, /Extract equipment rental quote/);
+    assert.equal(requestUrl, "https://api.openai.com/v1/responses");
+    assert.equal(authHeader, "Bearer test-openai-key");
+    const openAiRequest = requestBody as { model: string; input: Array<{ content: Array<{ type: string; text?: string; file_data?: string }> }> };
+    assert.equal(openAiRequest.model, "gpt-test");
+    assert.match(openAiRequest.input[0]?.content[0]?.text ?? "", /Extract equipment rental quote/);
+    assert.equal(openAiRequest.input[0]?.content[1]?.file_data, `data:image/png;base64,${imageData}`);
     const preview = json<{
       label: string;
       documentType: string;
