@@ -25,6 +25,11 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
+  DOCUMENT_AI_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
+  OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
+  OLLAMA_MODEL: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -328,6 +328,62 @@ export class EquipmentRepository {
     });
   }
 
+  async createQuoteWithOneOffUsages(
+    eventId: string,
+    workspaceId: string,
+    data: {
+      label: string;
+      discountCents?: number | null;
+      discountPct?: number | null;
+      fileUrl?: string | null;
+      lines: Array<{
+        name: string;
+        category: string;
+        quantity: number;
+        unitPriceCents: number;
+        rentalCoef: number;
+        notes?: string | null;
+      }>;
+    },
+  ) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const quote = await this.prisma.$transaction(async (tx) => {
+      const createdQuote = await tx.equipmentQuote.create({
+        data: {
+          eventId,
+          label: data.label,
+          discountCents: data.discountCents ?? null,
+          discountPct: data.discountPct ?? null,
+          fileUrl: data.fileUrl ?? null,
+        },
+      });
+
+      await tx.equipmentUsage.createMany({
+        data: data.lines.map((line) => ({
+          eventId,
+          itemId: null,
+          name: line.name,
+          category: line.category,
+          quantity: line.quantity,
+          unitPriceCents: line.unitPriceCents,
+          rentalCoef: line.rentalCoef,
+          notes: line.notes || null,
+          quoteId: createdQuote.id,
+        })),
+      });
+
+      return tx.equipmentQuote.findUniqueOrThrow({
+        where: { id: createdQuote.id },
+        include: {
+          usages: { include: { item: { select: itemSelect } } },
+        },
+      });
+    });
+
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+    return quote;
+  }
+
   /**
    * Met à jour un devis et resynchronise les dépenses équipement.
    *

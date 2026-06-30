@@ -54,7 +54,37 @@ export const equipmentQuoteSchema = z.object({
   discountPct: z.number().min(0).max(100).optional().nullable(),
 });
 
+export const equipmentImportLineSchema = z.object({
+  name: requiredText("Le nom", LIMITS.name),
+  category: requiredText("La catÃ©gorie", LIMITS.shortText).default("location"),
+  quantity: z.number().int().min(1).default(1),
+  unitPriceCents: z.number().int().min(0).default(0),
+  rentalCoef: z.number().min(0).default(1),
+  notes: optionalText("Les notes", LIMITS.longText),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+export const equipmentImportPreviewSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  data: z.string().min(1),
+});
+
+export const equipmentImportConfirmSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  data: z.string().min(1),
+  label: requiredText("Le libellÃ©", LIMITS.name),
+  documentType: z.enum(["quote", "invoice", "unknown"]).default("unknown"),
+  discountCents: z.number().int().min(0).optional().nullable(),
+  discountPct: z.number().min(0).max(100).optional().nullable(),
+  lines: z.array(equipmentImportLineSchema).min(1),
+});
+
 export type EquipmentItemInput = z.infer<typeof equipmentItemSchema>;
 export type EquipmentUsageInput = z.infer<typeof equipmentUsageSchema>;
 export type EquipmentUsageUpdateInput = z.infer<typeof equipmentUsageUpdateSchema>;
 export type EquipmentQuoteInput = z.infer<typeof equipmentQuoteSchema>;
+export type EquipmentImportPreviewInput = z.infer<typeof equipmentImportPreviewSchema>;
+export type EquipmentImportConfirmInput = z.infer<typeof equipmentImportConfirmSchema>;
+export type EquipmentImportLineInput = z.infer<typeof equipmentImportLineSchema>;

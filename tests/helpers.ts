@@ -14,6 +14,7 @@ export async function resetDatabase() {
       "Channel",
       "Document",
       "EquipmentItem",
+      "EquipmentQuote",
       "EquipmentUsage",
       "EventCollaborator",
       "Event",

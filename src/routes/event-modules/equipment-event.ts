@@ -5,7 +5,13 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { ValidationError, NotFoundError } from "../../lib/errors.js";
-import { equipmentUsageSchema, equipmentUsageUpdateSchema, equipmentQuoteSchema } from "../../schemas/equipment.js";
+import {
+  equipmentImportConfirmSchema,
+  equipmentImportPreviewSchema,
+  equipmentQuoteSchema,
+  equipmentUsageSchema,
+  equipmentUsageUpdateSchema,
+} from "../../schemas/equipment.js";
 import { EquipmentItemDao } from "../../dao/equipment-item.dao.js";
 import { ExpenseDao } from "../../dao/expense.dao.js";
 import { BudgetRepository } from "../../repositories/budget.repository.js";
@@ -27,6 +33,7 @@ const allowedQuoteFileTypes = new Set([
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
+const analyzableQuoteFileTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 function extensionForQuoteFile(contentType: string) {
   if (contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return ".docx";
@@ -36,6 +43,29 @@ function extensionForQuoteFile(contentType: string) {
     "image/webp": ".webp", "image/gif": ".gif",
   };
   return map[contentType] ?? "";
+}
+
+function validateQuoteFile(contentType: string, buffer: Buffer, analyzableOnly = false) {
+  const allowed = analyzableOnly ? analyzableQuoteFileTypes : allowedQuoteFileTypes;
+  if (!allowed.has(contentType)) {
+    throw new ValidationError(analyzableOnly
+      ? "Format non supporte pour l'analyse automatique (PDF ou image)"
+      : "Format non supporte (PDF, image, Word)");
+  }
+  if (buffer.byteLength > 20 * 1024 * 1024) {
+    throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
+  }
+}
+
+async function storeQuoteFile(workspaceId: string, contentType: string, data: string) {
+  const buffer = Buffer.from(data, "base64");
+  validateQuoteFile(contentType, buffer);
+  const ext = extensionForQuoteFile(contentType);
+  const fileName = `${workspaceId}-${crypto.randomUUID()}${ext}`;
+  const directory = path.join(uploadRoot, "equipment-quotes");
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, fileName), buffer);
+  return `/api/uploads/equipment-quotes/${fileName}`;
 }
 
 const budgetRepository = new BudgetRepository(new ExpenseDao(prisma), prisma);
@@ -112,6 +142,24 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     await service.attachQuoteFile(quoteId, eventId, request.workspaceId, request.userRole, fileUrl);
 
     return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
+  });
+
+  fastify.post("/api/events/:eventId/equipment/import-preview", async (request) => {
+    eventParamsSchema.parse(request.params);
+    const parsed = equipmentImportPreviewSchema.parse(request.body);
+    const buffer = Buffer.from(parsed.data, "base64");
+    validateQuoteFile(parsed.contentType, buffer, true);
+    return service.previewDocumentImport(request.workspaceId, request.userRole, parsed);
+  });
+
+  fastify.post("/api/events/:eventId/equipment/import-confirm", async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const parsed = equipmentImportConfirmSchema.parse(request.body);
+    const buffer = Buffer.from(parsed.data, "base64");
+    validateQuoteFile(parsed.contentType, buffer, true);
+    const fileUrl = await storeQuoteFile(request.workspaceId, parsed.contentType, parsed.data);
+    const quote = await service.confirmDocumentImport(eventId, request.workspaceId, request.userRole, parsed, fileUrl);
+    return reply.status(201).send(quote);
   });
 
   fastify.post("/api/events/:eventId/equipment/group-import", async (request, reply) => {

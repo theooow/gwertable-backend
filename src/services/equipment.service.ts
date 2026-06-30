@@ -1,7 +1,15 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
-import type { EquipmentItemInput, EquipmentUsageInput, EquipmentUsageUpdateInput, EquipmentQuoteInput } from "../schemas/equipment.js";
+import type {
+  EquipmentImportConfirmInput,
+  EquipmentImportPreviewInput,
+  EquipmentItemInput,
+  EquipmentQuoteInput,
+  EquipmentUsageInput,
+  EquipmentUsageUpdateInput,
+} from "../schemas/equipment.js";
 import { EquipmentRepository } from "../repositories/equipment.repository.js";
+import { previewEquipmentDocument } from "./document-extraction.service.js";
 
 /**
  * Service métier pour le domaine équipement.
@@ -198,6 +206,40 @@ export class EquipmentService {
   async attachQuoteFile(quoteId: string, eventId: string, workspaceId: string, role: UserRole, fileUrl: string) {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.attachQuoteFile(quoteId, eventId, workspaceId, fileUrl);
+  }
+
+  async previewDocumentImport(workspaceId: string, role: UserRole, data: EquipmentImportPreviewInput) {
+    requireCan(role, "equipment.write");
+    void workspaceId;
+    return previewEquipmentDocument({
+      fileName: data.fileName,
+      contentType: data.contentType,
+      dataBase64: data.data,
+    });
+  }
+
+  async confirmDocumentImport(
+    eventId: string,
+    workspaceId: string,
+    role: UserRole,
+    data: EquipmentImportConfirmInput,
+    fileUrl: string,
+  ) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.createQuoteWithOneOffUsages(eventId, workspaceId, {
+      label: data.label,
+      discountCents: data.discountCents ?? null,
+      discountPct: data.discountPct ?? null,
+      fileUrl,
+      lines: data.lines.map((line) => ({
+        name: line.name,
+        category: line.category,
+        quantity: line.quantity,
+        unitPriceCents: line.unitPriceCents,
+        rentalCoef: line.rentalCoef,
+        notes: line.notes ?? null,
+      })),
+    });
   }
 
   async importFromWorkspace(
