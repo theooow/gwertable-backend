@@ -7,6 +7,8 @@ export type ExtractedEquipmentLine = {
   category: string;
   quantity: number;
   unitPriceCents: number;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
   rentalCoef: number;
   notes?: string | null;
   confidence?: number;
@@ -15,6 +17,8 @@ export type ExtractedEquipmentLine = {
 export type EquipmentImportPreview = {
   label: string;
   documentType: DocumentType;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
   discountCents: number | null;
   discountPct: number | null;
   lines: ExtractedEquipmentLine[];
@@ -34,9 +38,14 @@ const ANALYZABLE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", 
 function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImportPreview {
   const parsed = value as Partial<EquipmentImportPreview>;
   const lines = Array.isArray(parsed.lines) ? parsed.lines : [];
+  const parsedAmountInputMode: "HT" | "TTC" = parsed.amountInputMode === "HT" ? "HT" : "TTC";
   return {
     label: typeof parsed.label === "string" && parsed.label.trim() ? parsed.label.trim() : fallbackLabel,
     documentType: parsed.documentType === "quote" || parsed.documentType === "invoice" ? parsed.documentType : "unknown",
+    amountInputMode: parsedAmountInputMode,
+    vatRateBasisPoints: typeof parsed.vatRateBasisPoints === "number"
+      ? Math.min(10000, Math.max(0, Math.round(parsed.vatRateBasisPoints)))
+      : 2000,
     discountCents: typeof parsed.discountCents === "number" ? Math.max(0, Math.round(parsed.discountCents)) : null,
     discountPct: typeof parsed.discountPct === "number" ? Math.min(100, Math.max(0, parsed.discountPct)) : null,
     lines: lines.map((line) => {
@@ -46,6 +55,12 @@ function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImpo
         category: String(item.category ?? "location").trim() || "location",
         quantity: Math.max(1, Math.round(Number(item.quantity ?? 1))),
         unitPriceCents: Math.max(0, Math.round(Number(item.unitPriceCents ?? 0))),
+        amountInputMode: item.amountInputMode === "HT" ? "HT" : parsedAmountInputMode,
+        vatRateBasisPoints: typeof item.vatRateBasisPoints === "number"
+          ? Math.min(10000, Math.max(0, Math.round(item.vatRateBasisPoints)))
+          : (typeof parsed.vatRateBasisPoints === "number"
+              ? Math.min(10000, Math.max(0, Math.round(parsed.vatRateBasisPoints)))
+              : 2000),
         rentalCoef: Math.max(0, Number(item.rentalCoef ?? 1)),
         notes: item.notes ? String(item.notes) : null,
         confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : undefined,
@@ -75,8 +90,8 @@ function extractionPrompt(input?: { contentType: string; dataBase64: string }) {
     : "";
   return [
     "Extract equipment rental quote/invoice lines as strict JSON.",
-    "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
-    "Use cents for money. Do not create catalog matches. Invoices are treated as equipment quotes.",
+    "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
+    "Use cents for money. Detect whether document line prices are HT or TTC; most French supplier quotes/invoices list TTC totals, so choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Do not create catalog matches. Invoices are treated as equipment quotes.",
     pdfPayload,
   ].filter(Boolean).join("\n\n");
 }

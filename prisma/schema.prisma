@@ -740,6 +740,8 @@ model EquipmentQuote {
   eventId       String
   event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
   label         String
+  amountInputMode AmountInputMode @default(TTC)
+  vatRateBasisPoints Int @default(2000)
   discountCents Int?
   discountPct   Decimal?         @db.Decimal(5, 2)
   fileUrl       String?
@@ -785,6 +787,8 @@ model EquipmentUsage {
   name            String?        // nom one-off ou override
   category        String?        // catégorie one-off
   unitPriceCents  Int            @default(0)
+  amountInputMode AmountInputMode @default(TTC)
+  vatRateBasisPoints Int @default(2000)
   rentalCoef      Decimal        @default(1) @db.Decimal(5, 2)
   quantity        Int            @default(1)
   conditionBefore String?

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { AmountInputMode, PrismaClient } from "@prisma/client";
 import type { EquipmentBulkImportInput, EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
@@ -140,8 +140,8 @@ export class EquipmentRepository {
   async createUsage(
     eventId: string,
     workspaceId: string,
-    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; rentalCoef?: number; notes?: string | null; quoteId?: string | null }
-           | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; rentalCoef: number; notes?: string | null; quoteId?: string | null },
+    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; amountInputMode: AmountInputMode; vatRateBasisPoints: number; rentalCoef?: number; notes?: string | null; quoteId?: string | null }
+           | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; amountInputMode: AmountInputMode; vatRateBasisPoints: number; rentalCoef: number; notes?: string | null; quoteId?: string | null },
   ) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, workspaceId },
@@ -172,6 +172,8 @@ export class EquipmentRepository {
           itemId: parsed.itemId,
           quantity: parsed.quantity,
           unitPriceCents: parsed.unitPriceCents ?? libItem.unitPriceCents,
+          amountInputMode: parsed.amountInputMode,
+          vatRateBasisPoints: parsed.vatRateBasisPoints,
           rentalCoef: parsed.rentalCoef ?? libItem.rentalCoef,
           notes: parsed.notes || null,
           quoteId: parsed.quoteId || null,
@@ -190,6 +192,8 @@ export class EquipmentRepository {
         category: parsed.category,
         quantity: parsed.quantity,
         unitPriceCents: parsed.unitPriceCents,
+        amountInputMode: parsed.amountInputMode,
+        vatRateBasisPoints: parsed.vatRateBasisPoints,
         rentalCoef: parsed.rentalCoef,
         notes: parsed.notes || null,
         quoteId: parsed.quoteId || null,
@@ -286,6 +290,8 @@ export class EquipmentRepository {
             itemId: line.itemId,
             quantity: line.quantity,
             unitPriceCents: line.unitPriceCents ?? item.unitPriceCents,
+            amountInputMode: line.amountInputMode,
+            vatRateBasisPoints: line.vatRateBasisPoints,
             rentalCoef: line.rentalCoef ?? item.rentalCoef,
             notes: line.notes || null,
             quoteId: line.quoteId || generatedQuoteId || null,
@@ -354,6 +360,8 @@ export class EquipmentRepository {
       data: {
         ...(data.quantity !== undefined && { quantity: data.quantity }),
         unitPriceCents: data.unitPriceCents,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         rentalCoef: data.rentalCoef,
         quoteId: data.quoteId,
         conditionBefore: data.conditionBefore,
@@ -419,13 +427,15 @@ export class EquipmentRepository {
   async createQuote(
     eventId: string,
     workspaceId: string,
-    data: { label: string; discountCents?: number | null; discountPct?: number | null },
+    data: { label: string; amountInputMode: AmountInputMode; vatRateBasisPoints: number; discountCents?: number | null; discountPct?: number | null },
   ) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     return this.prisma.equipmentQuote.create({
       data: {
         eventId,
         label: data.label,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         discountCents: data.discountCents ?? null,
         discountPct: data.discountPct ?? null,
       },
@@ -438,6 +448,8 @@ export class EquipmentRepository {
     workspaceId: string,
     data: {
       label: string;
+      amountInputMode: AmountInputMode;
+      vatRateBasisPoints: number;
       discountCents?: number | null;
       discountPct?: number | null;
       fileUrl?: string | null;
@@ -446,6 +458,8 @@ export class EquipmentRepository {
         category: string;
         quantity: number;
         unitPriceCents: number;
+        amountInputMode: AmountInputMode;
+        vatRateBasisPoints: number;
         rentalCoef: number;
         notes?: string | null;
       }>;
@@ -457,6 +471,8 @@ export class EquipmentRepository {
         data: {
           eventId,
           label: data.label,
+          amountInputMode: data.amountInputMode,
+          vatRateBasisPoints: data.vatRateBasisPoints,
           discountCents: data.discountCents ?? null,
           discountPct: data.discountPct ?? null,
           fileUrl: data.fileUrl ?? null,
@@ -471,6 +487,8 @@ export class EquipmentRepository {
           category: line.category,
           quantity: line.quantity,
           unitPriceCents: line.unitPriceCents,
+          amountInputMode: line.amountInputMode,
+          vatRateBasisPoints: line.vatRateBasisPoints,
           rentalCoef: line.rentalCoef,
           notes: line.notes || null,
           quoteId: createdQuote.id,
@@ -502,7 +520,7 @@ export class EquipmentRepository {
     quoteId: string,
     eventId: string,
     workspaceId: string,
-    data: { label: string; discountCents?: number | null; discountPct?: number | null },
+    data: { label: string; amountInputMode: AmountInputMode; vatRateBasisPoints: number; discountCents?: number | null; discountPct?: number | null },
   ) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const existing = await this.prisma.equipmentQuote.findUnique({
@@ -515,6 +533,8 @@ export class EquipmentRepository {
       where: { id: quoteId },
       data: {
         label: data.label,
+        amountInputMode: data.amountInputMode,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         discountCents: data.discountCents ?? null,
         discountPct: data.discountPct ?? null,
       },

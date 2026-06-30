@@ -236,6 +236,8 @@ export class EquipmentService {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.createQuoteWithOneOffUsages(eventId, workspaceId, {
       label: data.label,
+      amountInputMode: data.amountInputMode,
+      vatRateBasisPoints: data.vatRateBasisPoints,
       discountCents: data.discountCents ?? null,
       discountPct: data.discountPct ?? null,
       fileUrl,
@@ -244,6 +246,8 @@ export class EquipmentService {
         category: line.category,
         quantity: line.quantity,
         unitPriceCents: line.unitPriceCents,
+        amountInputMode: line.amountInputMode,
+        vatRateBasisPoints: line.vatRateBasisPoints,
         rentalCoef: line.rentalCoef,
         notes: line.notes ?? null,
       })),

@@ -67,25 +67,19 @@ type ComputedAmounts = {
   amountTtcCents: number;
 };
 
-function computeBudgetAmounts(
-  rawAmount: string,
+function computeBudgetAmountsFromCents(
+  inputCents: number,
   amountInputMode: AmountInputMode,
   vatRateBasisPoints: number,
   vatMode: VatMode,
 ): ComputedAmounts {
-  const inputCents = parseEuros(rawAmount);
   const effectiveVatRateBasisPoints = vatMode === "ASSUJETTI" ? vatRateBasisPoints : 0;
 
   if (amountInputMode === "HT") {
     const amountHtCents = inputCents;
     const amountVatCents = Math.round((amountHtCents * effectiveVatRateBasisPoints) / 10000);
     const amountTtcCents = amountHtCents + amountVatCents;
-    return {
-      amountCents: amountTtcCents,
-      amountHtCents,
-      amountVatCents,
-      amountTtcCents,
-    };
+    return { amountCents: amountTtcCents, amountHtCents, amountVatCents, amountTtcCents };
   }
 
   const amountTtcCents = inputCents;
@@ -93,12 +87,16 @@ function computeBudgetAmounts(
   const amountHtCents =
     divisor > 0 ? Math.round((amountTtcCents * 10000) / divisor) : amountTtcCents;
   const amountVatCents = amountTtcCents - amountHtCents;
-  return {
-    amountCents: amountTtcCents,
-    amountHtCents,
-    amountVatCents,
-    amountTtcCents,
-  };
+  return { amountCents: amountTtcCents, amountHtCents, amountVatCents, amountTtcCents };
+}
+
+function computeBudgetAmounts(
+  rawAmount: string,
+  amountInputMode: AmountInputMode,
+  vatRateBasisPoints: number,
+  vatMode: VatMode,
+): ComputedAmounts {
+  return computeBudgetAmountsFromCents(parseEuros(rawAmount), amountInputMode, vatRateBasisPoints, vatMode);
 }
 
 function shotgunRevenueCents(deal: ShotgunEvent["deals"][number]) {
@@ -641,6 +639,11 @@ export class BudgetRepository {
    */
   async syncEquipmentExpenses(eventId: string) {
     await this.prisma.expense.deleteMany({ where: { eventId, isEquipmentSync: true } });
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { vatMode: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
 
     const quotes = await this.prisma.equipmentQuote.findMany({
       where: { eventId },
@@ -662,14 +665,23 @@ export class BudgetRepository {
             : 0;
       const net = Math.max(0, subtotal - discountAmt);
       if (net === 0) continue;
+      const amounts = computeBudgetAmountsFromCents(
+        net,
+        quote.amountInputMode,
+        quote.vatRateBasisPoints,
+        event.vatMode,
+      );
 
       await this.prisma.expense.create({
         data: {
           eventId,
           label: quote.label,
-          amountCents: net,
-          amountHtCents: net,
-          amountTtcCents: net,
+          amountCents: amounts.amountCents,
+          amountInputMode: quote.amountInputMode,
+          vatRateBasisPoints: event.vatMode === "ASSUJETTI" ? quote.vatRateBasisPoints : 0,
+          amountHtCents: amounts.amountHtCents,
+          amountVatCents: amounts.amountVatCents,
+          amountTtcCents: amounts.amountTtcCents,
           category: "matériel",
           reimbursement: "NOT_OWED",
           isEquipmentSync: true,
@@ -688,15 +700,24 @@ export class BudgetRepository {
       const amount =
         Math.round(usage.unitPriceCents * Number(usage.rentalCoef)) * usage.quantity;
       if (amount === 0) continue;
+      const amounts = computeBudgetAmountsFromCents(
+        amount,
+        usage.amountInputMode,
+        usage.vatRateBasisPoints,
+        event.vatMode,
+      );
 
       const label = usage.name ?? usage.item?.name ?? "Matériel";
       await this.prisma.expense.create({
         data: {
           eventId,
           label,
-          amountCents: amount,
-          amountHtCents: amount,
-          amountTtcCents: amount,
+          amountCents: amounts.amountCents,
+          amountInputMode: usage.amountInputMode,
+          vatRateBasisPoints: event.vatMode === "ASSUJETTI" ? usage.vatRateBasisPoints : 0,
+          amountHtCents: amounts.amountHtCents,
+          amountVatCents: amounts.amountVatCents,
+          amountTtcCents: amounts.amountTtcCents,
           category: "matériel",
           reimbursement: "NOT_OWED",
           isEquipmentSync: true,
