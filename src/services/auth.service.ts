@@ -4,7 +4,7 @@ import { sendMagicLinkEmail } from "../lib/mailer.js";
 import { randomToken } from "../lib/token.js";
 import { UnauthorizedError } from "../lib/errors.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
-import { AuthRepository } from "../repositories/auth.repository.js";
+import { AuthRepository, type RegisterUserInput } from "../repositories/auth.repository.js";
 import type { AuthSessionDTO } from "../dto/auth.dto.js";
 
 type VerifyResult =
@@ -37,6 +37,11 @@ export class AuthService {
     | {
         ok: true;
         email: string;
+        needsRegistration: true;
+      }
+    | {
+        ok: true;
+        email: string;
         hasPassword: false;
         codeSent: true;
       }
@@ -44,6 +49,10 @@ export class AuthService {
     await this.authRepository.getValidInvitation(email, inviteToken);
 
     const user = await this.authRepository.findUserByEmail(email);
+    if (!user) {
+      return { ok: true, email, needsRegistration: true };
+    }
+
     if (user?.passwordHash) {
       return {
         ok: true,
@@ -55,6 +64,23 @@ export class AuthService {
 
     await this.requestLoginLink(email, inviteToken, baseUrl);
     return { ok: true, email, hasPassword: false, codeSent: true };
+  }
+
+  async register(
+    input: Omit<RegisterUserInput, "passwordHash"> & { password: string },
+    inviteToken: string | undefined,
+  ): Promise<AuthSessionDTO> {
+    const invitation = await this.authRepository.getValidInvitation(input.email, inviteToken);
+    const { password, ...userInput } = input;
+    const user = await this.authRepository.registerUser(
+      {
+        ...userInput,
+        passwordHash: await hashPassword(password),
+      },
+      invitation,
+    );
+    await this.authRepository.acceptInvitation(invitation, user.id);
+    return this.createSessionForUser(user.id);
   }
 
   /**

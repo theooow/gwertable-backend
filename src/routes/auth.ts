@@ -16,6 +16,9 @@ const loginLinkSchema = z.object({
 });
 
 const loginOptionsSchema = loginLinkSchema;
+const shortText = z.string().trim().max(120).optional().or(z.literal(""));
+const addressText = z.string().trim().max(240).optional().or(z.literal(""));
+const optionalEmail = z.string().trim().email().optional().or(z.literal(""));
 
 const verifySchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
@@ -41,6 +44,38 @@ const setupPasswordSchema = z.object({
   password: z.string().min(8),
 });
 
+const registerSchema = z.object({
+  email: z.string().email().transform((email) => email.toLowerCase()),
+  password: z.string().min(8),
+  inviteToken: z.string().optional(),
+  name: shortText,
+  firstName: shortText,
+  lastName: shortText,
+  phone: shortText,
+  addressLine1: addressText,
+  addressLine2: addressText,
+  postalCode: shortText,
+  city: shortText,
+  country: shortText,
+  companyName: shortText,
+  companyAddressLine1: addressText,
+  companyAddressLine2: addressText,
+  companyPostalCode: shortText,
+  companyCity: shortText,
+  companyCountry: shortText,
+  companySiret: shortText,
+  companyVatNumber: shortText,
+  billingEmail: optionalEmail,
+  locale: shortText,
+  currency: shortText,
+  timezone: shortText,
+});
+
+function nullableString(value: string | undefined) {
+  if (value === undefined) return null;
+  return value || null;
+}
+
 const service = new AuthService(
   new AuthRepository(
     new SessionDao(prisma),
@@ -56,6 +91,39 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.post("/api/auth/login-options", async (request) => {
     const { email, inviteToken } = loginOptionsSchema.parse(request.body);
     return service.getLoginOptions(email, inviteToken, env.FRONTEND_URL);
+  });
+
+  fastify.post("/api/auth/register", async (request, reply) => {
+    const parsed = registerSchema.parse(request.body);
+    const session = await service.register(
+      {
+        email: parsed.email,
+        password: parsed.password,
+        name: nullableString(parsed.name),
+        firstName: nullableString(parsed.firstName),
+        lastName: nullableString(parsed.lastName),
+        phone: nullableString(parsed.phone),
+        addressLine1: nullableString(parsed.addressLine1),
+        addressLine2: nullableString(parsed.addressLine2),
+        postalCode: nullableString(parsed.postalCode),
+        city: nullableString(parsed.city),
+        country: nullableString(parsed.country),
+        companyName: nullableString(parsed.companyName),
+        companyAddressLine1: nullableString(parsed.companyAddressLine1),
+        companyAddressLine2: nullableString(parsed.companyAddressLine2),
+        companyPostalCode: nullableString(parsed.companyPostalCode),
+        companyCity: nullableString(parsed.companyCity),
+        companyCountry: nullableString(parsed.companyCountry),
+        companySiret: nullableString(parsed.companySiret),
+        companyVatNumber: nullableString(parsed.companyVatNumber),
+        billingEmail: nullableString(parsed.billingEmail),
+        locale: parsed.locale || "fr-FR",
+        currency: parsed.currency || "EUR",
+        timezone: parsed.timezone || "Europe/Paris",
+      },
+      parsed.inviteToken,
+    );
+    return reply.status(201).send(session);
   });
 
   fastify.post("/api/auth/login-link", async (request) => {

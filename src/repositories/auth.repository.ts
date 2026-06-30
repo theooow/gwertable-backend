@@ -1,5 +1,5 @@
 import type { PrismaClient, UserRole } from "@prisma/client";
-import { UnauthorizedError } from "../lib/errors.js";
+import { ConflictError, UnauthorizedError } from "../lib/errors.js";
 import { SessionDao } from "../dao/session.dao.js";
 import { VerificationTokenDao } from "../dao/verification-token.dao.js";
 import { WorkspaceInvitationDao } from "../dao/workspace-invitation.dao.js";
@@ -31,6 +31,32 @@ type EventInvitationRecord = {
 
 /** Union des deux types d'invitation. */
 export type InvitationRecord = WorkspaceInvitationRecord | EventInvitationRecord;
+
+export type RegisterUserInput = {
+  email: string;
+  passwordHash: string;
+  name: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+  companyName: string | null;
+  companyAddressLine1: string | null;
+  companyAddressLine2: string | null;
+  companyPostalCode: string | null;
+  companyCity: string | null;
+  companyCountry: string | null;
+  companySiret: string | null;
+  companyVatNumber: string | null;
+  billingEmail: string | null;
+  locale: string;
+  currency: string;
+  timezone: string;
+};
 
 /**
  * Repository pour le domaine authentification.
@@ -201,6 +227,61 @@ export class AuthRepository {
     return this.prisma.user.create({
       data: {
         email,
+        role: invitation?.role ?? "ADMIN",
+        defaultWorkspaceId: invitation?.workspaceId ?? workspace?.id,
+        ...(invitation?.kind === "workspace"
+          ? {
+              workspaceMemberships: {
+                create: { workspaceId: invitation.workspaceId, role: invitation.role },
+              },
+            }
+          : {
+              workspaceMemberships: workspace
+                ? { create: { workspaceId: workspace.id, role: "ADMIN" } }
+                : undefined,
+            }),
+      },
+    });
+  }
+
+  async registerUser(input: RegisterUserInput, invitation: InvitationRecord | null) {
+    const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
+    if (existing) throw new ConflictError("Un compte existe deja avec cet email");
+
+    const workspaceName =
+      input.companyName ||
+      [input.firstName, input.lastName].filter(Boolean).join(" ") ||
+      input.email;
+    const workspace = invitation
+      ? null
+      : await this.prisma.workspace.create({ data: { name: workspaceName } });
+
+    return this.prisma.user.create({
+      data: {
+        email: input.email,
+        passwordHash: input.passwordHash,
+        name: input.name,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phone: input.phone,
+        addressLine1: input.addressLine1,
+        addressLine2: input.addressLine2,
+        postalCode: input.postalCode,
+        city: input.city,
+        country: input.country,
+        companyName: input.companyName,
+        companyAddressLine1: input.companyAddressLine1,
+        companyAddressLine2: input.companyAddressLine2,
+        companyPostalCode: input.companyPostalCode,
+        companyCity: input.companyCity,
+        companyCountry: input.companyCountry,
+        companySiret: input.companySiret,
+        companyVatNumber: input.companyVatNumber,
+        billingEmail: input.billingEmail,
+        locale: input.locale,
+        currency: input.currency,
+        timezone: input.timezone,
+        emailVerified: new Date(),
         role: invitation?.role ?? "ADMIN",
         defaultWorkspaceId: invitation?.workspaceId ?? workspace?.id,
         ...(invitation?.kind === "workspace"

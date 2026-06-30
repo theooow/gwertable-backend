@@ -75,6 +75,7 @@ function isPublicRoute(url: string): boolean {
     url.startsWith("/calendar/tasks/") ||
     url.startsWith("/api/auth/login-options") ||
     url.startsWith("/api/auth/login-link") ||
+    url.startsWith("/api/auth/register") ||
     url.startsWith("/api/auth/verify") ||
     url.startsWith("/api/auth/password/login") ||
     url.startsWith("/api/auth/password/setup")
