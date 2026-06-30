@@ -48,6 +48,18 @@ export const equipmentUsageUpdateSchema = z.object({
   notes: optionalText("Les notes", LIMITS.longText),
 });
 
+export const equipmentBulkImportSchema = z.object({
+  createQuotesBySupplier: z.boolean().default(false),
+  lines: z.array(z.object({
+    itemId: z.string().min(1),
+    quantity: z.number().int().min(1).default(1),
+    unitPriceCents: z.number().int().min(0).optional(),
+    rentalCoef: z.number().min(0).optional(),
+    notes: optionalText("Les notes", LIMITS.longText),
+    quoteId: z.string().optional().nullable(),
+  })).min(1).max(100),
+});
+
 export const equipmentQuoteSchema = z.object({
   label: requiredText("Le libellé", LIMITS.name),
   discountCents: z.number().int().min(0).optional().nullable(),
@@ -84,6 +96,7 @@ export const equipmentImportConfirmSchema = z.object({
 export type EquipmentItemInput = z.infer<typeof equipmentItemSchema>;
 export type EquipmentUsageInput = z.infer<typeof equipmentUsageSchema>;
 export type EquipmentUsageUpdateInput = z.infer<typeof equipmentUsageUpdateSchema>;
+export type EquipmentBulkImportInput = z.infer<typeof equipmentBulkImportSchema>;
 export type EquipmentQuoteInput = z.infer<typeof equipmentQuoteSchema>;
 export type EquipmentImportPreviewInput = z.infer<typeof equipmentImportPreviewSchema>;
 export type EquipmentImportConfirmInput = z.infer<typeof equipmentImportConfirmSchema>;

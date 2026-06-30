@@ -1,6 +1,7 @@
 import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type {
+  EquipmentBulkImportInput,
   EquipmentImportConfirmInput,
   EquipmentImportPreviewInput,
   EquipmentItemInput,
@@ -103,6 +104,11 @@ export class EquipmentService {
   async createUsage(eventId: string, workspaceId: string, role: UserRole, data: EquipmentUsageInput) {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.createUsage(eventId, workspaceId, data);
+  }
+
+  async bulkImportLibraryUsages(eventId: string, workspaceId: string, role: UserRole, data: EquipmentBulkImportInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.bulkImportLibraryUsages(eventId, workspaceId, data);
   }
 
   /**

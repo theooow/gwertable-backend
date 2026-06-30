@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
+import type { EquipmentBulkImportInput, EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
 import { BudgetRepository } from "./budget.repository.js";
@@ -197,6 +197,111 @@ export class EquipmentRepository {
     });
     await this.budgetRepository.syncEquipmentExpenses(eventId);
     return usage;
+  }
+
+  async bulkImportLibraryUsages(eventId: string, workspaceId: string, data: EquipmentBulkImportInput) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, workspaceId },
+      select: { id: true, startsAt: true, endsAt: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
+
+    const itemIds = data.lines.map((line) => line.itemId);
+    if (new Set(itemIds).size !== itemIds.length) {
+      throw new ConflictError("Un equipement ne peut etre importe qu'une seule fois a la fois");
+    }
+
+    const items = await this.prisma.equipmentItem.findMany({
+      where: { id: { in: itemIds }, workspaceId, archivedAt: null },
+      select: {
+        id: true,
+        quantity: true,
+        unitPriceCents: true,
+        rentalCoef: true,
+        supplierId: true,
+        supplier: { select: { id: true, fullName: true } },
+      },
+    });
+    if (items.length !== itemIds.length) throw new NotFoundError("Equipement introuvable");
+
+    const existingUsages = await this.prisma.equipmentUsage.findMany({
+      where: { eventId, itemId: { in: itemIds } },
+      select: { itemId: true },
+    });
+    if (existingUsages.length > 0) {
+      throw new ConflictError("Un ou plusieurs equipements sont deja ajoutes a cet evenement");
+    }
+
+    const explicitQuoteIds = [...new Set(data.lines.map((line) => line.quoteId).filter(Boolean) as string[])];
+    if (explicitQuoteIds.length > 0) {
+      const quoteCount = await this.prisma.equipmentQuote.count({
+        where: { eventId, id: { in: explicitQuoteIds } },
+      });
+      if (quoteCount !== explicitQuoteIds.length) throw new NotFoundError("Devis introuvable");
+    }
+
+    const itemById = new Map(items.map((item) => [item.id, item]));
+    await Promise.all(data.lines.map((line) => {
+      const item = itemById.get(line.itemId);
+      if (!item) throw new NotFoundError("Equipement introuvable");
+      return this.assertNoQuantityConflict(
+        line.itemId,
+        eventId,
+        event.startsAt,
+        event.endsAt,
+        item.quantity,
+        line.quantity,
+      );
+    }));
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const createdQuotes: Array<{ id: string; eventId: string; label: string; discountCents: number | null; discountPct: unknown; fileUrl: string | null }> = [];
+      const quoteBySupplierId = new Map<string, string>();
+
+      if (data.createQuotesBySupplier) {
+        const suppliers = new Map<string, string>();
+        for (const line of data.lines) {
+          if (line.quoteId) continue;
+          const item = itemById.get(line.itemId);
+          if (item?.supplierId && item.supplier?.fullName) {
+            suppliers.set(item.supplierId, item.supplier.fullName);
+          }
+        }
+
+        for (const [supplierId, supplierName] of suppliers.entries()) {
+          const quote = await tx.equipmentQuote.create({
+            data: { eventId, label: `Devis ${supplierName}` },
+          });
+          createdQuotes.push(quote);
+          quoteBySupplierId.set(supplierId, quote.id);
+        }
+      }
+
+      const usages = await Promise.all(data.lines.map((line) => {
+        const item = itemById.get(line.itemId)!;
+        const generatedQuoteId = item.supplierId ? quoteBySupplierId.get(item.supplierId) : undefined;
+        return tx.equipmentUsage.create({
+          data: {
+            eventId,
+            itemId: line.itemId,
+            quantity: line.quantity,
+            unitPriceCents: line.unitPriceCents ?? item.unitPriceCents,
+            rentalCoef: line.rentalCoef ?? item.rentalCoef,
+            notes: line.notes || null,
+            quoteId: line.quoteId || generatedQuoteId || null,
+          },
+          include: {
+            item: { select: itemSelect },
+            quote: { select: { id: true, label: true } },
+          },
+        });
+      }));
+
+      return { usages, quotes: createdQuotes };
+    });
+
+    await this.budgetRepository.syncEquipmentExpenses(eventId);
+    return result;
   }
 
   /**

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { ValidationError, NotFoundError } from "../../lib/errors.js";
 import {
+  equipmentBulkImportSchema,
   equipmentImportConfirmSchema,
   equipmentImportPreviewSchema,
   equipmentQuoteSchema,
@@ -84,6 +85,13 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     const data = equipmentUsageSchema.parse(request.body);
     const usage = await service.createUsage(eventId, request.workspaceId, request.userRole, data);
     return reply.status(201).send(usage);
+  });
+
+  fastify.post("/api/events/:eventId/equipment/bulk-import", async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = equipmentBulkImportSchema.parse(request.body);
+    const result = await service.bulkImportLibraryUsages(eventId, request.workspaceId, request.userRole, data);
+    return reply.status(201).send(result);
   });
 
   fastify.put("/api/events/:eventId/equipment/:usageId", async (request) => {
