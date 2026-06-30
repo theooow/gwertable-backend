@@ -155,6 +155,11 @@ jobs:
                   HOST: 0.0.0.0
                   CORS_ORIGIN: ${FRONTEND_URL}
                   FRONTEND_URL: ${FRONTEND_URL}
+                  DOCUMENT_AI_PROVIDER: ${DOCUMENT_AI_PROVIDER:-ollama}
+                  OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+                  OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
+                  OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://localhost:11434}"
+                  OLLAMA_MODEL: "${OLLAMA_MODEL:-llava}"
                   AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-15}
                   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
                   MAIL_TRANSPORT: smtp
