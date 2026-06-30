@@ -102,6 +102,61 @@ describe("auth and health routes", () => {
     assert.ok(json<{ sessionToken: string }>(codeLogin).sessionToken);
   });
 
+  it("shows registration for unknown emails and creates a complete account", async () => {
+    const options = await request("POST", "/api/auth/login-options", undefined, {
+      email: "new-user@abregi.test",
+    });
+    assert.equal(options.statusCode, 200);
+    assert.deepEqual(json(options), {
+      ok: true,
+      email: "new-user@abregi.test",
+      needsRegistration: true,
+    });
+    assert.equal(await prisma.verificationToken.count({ where: { identifier: "new-user@abregi.test" } }), 0);
+
+    const registered = await request("POST", "/api/auth/register", undefined, {
+      email: "new-user@abregi.test",
+      password: "correct-password",
+      firstName: "Nora",
+      lastName: "Martin",
+      name: "Nora M.",
+      phone: "0600000000",
+      addressLine1: "1 rue du Test",
+      postalCode: "75010",
+      city: "Paris",
+      country: "France",
+      companyName: "Nora Events",
+      companySiret: "12345678900012",
+      billingEmail: "billing@abregi.test",
+      locale: "fr-FR",
+      currency: "EUR",
+      timezone: "Europe/Paris",
+    });
+    assert.equal(registered.statusCode, 201);
+    const payload = json<{
+      sessionToken: string;
+      user: {
+        email: string;
+        firstName: string;
+        companyName: string;
+        billingEmail: string;
+        workspaceName: string;
+        role: string;
+      };
+    }>(registered);
+    assert.ok(payload.sessionToken);
+    assert.equal(payload.user.email, "new-user@abregi.test");
+    assert.equal(payload.user.firstName, "Nora");
+    assert.equal(payload.user.companyName, "Nora Events");
+    assert.equal(payload.user.billingEmail, "billing@abregi.test");
+    assert.equal(payload.user.workspaceName, "Nora Events");
+    assert.equal(payload.user.role, "ADMIN");
+
+    const me = await request("GET", "/api/auth/me", `Bearer ${payload.sessionToken}`);
+    assert.equal(me.statusCode, 200);
+    assert.equal(json<{ user: { email: string } }>(me).user.email, "new-user@abregi.test");
+  });
+
   it("requires authentication on protected routes", async () => {
     const response = await request("GET", "/api/events");
     assert.equal(response.statusCode, 401);
