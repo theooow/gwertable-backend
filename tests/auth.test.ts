@@ -31,19 +31,21 @@ describe("auth and health routes", () => {
     });
     assert.equal(verified.statusCode, 200);
     const verifiedPayload = json<{
-      requiresPasswordSetup: true;
-      setupToken: string;
+      requiresRegistrationSetup: true;
+      registrationToken: string;
       email: string;
     }>(verified);
     assert.equal(verifiedPayload.email, "admin@abregi.test");
-    assert.ok(verifiedPayload.setupToken);
+    assert.ok(verifiedPayload.registrationToken);
 
-    const passwordSetup = await request("POST", "/api/auth/password/setup", undefined, {
+    const passwordSetup = await request("POST", "/api/auth/register", undefined, {
       email: "admin@abregi.test",
-      token: verifiedPayload.setupToken,
+      registrationToken: verifiedPayload.registrationToken,
       password: "correct-password",
+      firstName: "Admin",
+      lastName: "Abregi",
     });
-    assert.equal(passwordSetup.statusCode, 200);
+    assert.equal(passwordSetup.statusCode, 201);
     const passwordSetupPayload = json<{
       sessionToken: string;
       user: { email: string; role: string; workspaceId: string };
@@ -79,11 +81,13 @@ describe("auth and health routes", () => {
       email: "code@abregi.test",
       token: token.token,
     });
-    const setup = json<{ setupToken: string }>(verified);
-    await request("POST", "/api/auth/password/setup", undefined, {
+    const setup = json<{ registrationToken: string }>(verified);
+    await request("POST", "/api/auth/register", undefined, {
       email: "code@abregi.test",
-      token: setup.setupToken,
+      registrationToken: setup.registrationToken,
       password: "correct-password",
+      firstName: "Code",
+      lastName: "User",
     });
 
     await request("POST", "/api/auth/login-link", undefined, {
@@ -110,12 +114,22 @@ describe("auth and health routes", () => {
     assert.deepEqual(json(options), {
       ok: true,
       email: "new-user@abregi.test",
-      needsRegistration: true,
+      hasPassword: false,
+      codeSent: true,
     });
-    assert.equal(await prisma.verificationToken.count({ where: { identifier: "new-user@abregi.test" } }), 0);
+    const verificationToken = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "new-user@abregi.test" },
+    });
+    const verified = await request("POST", "/api/auth/verify", undefined, {
+      email: "new-user@abregi.test",
+      token: verificationToken.token,
+    });
+    assert.equal(verified.statusCode, 200);
+    const registration = json<{ registrationToken: string }>(verified);
 
     const registered = await request("POST", "/api/auth/register", undefined, {
       email: "new-user@abregi.test",
+      registrationToken: registration.registrationToken,
       password: "correct-password",
       firstName: "Nora",
       lastName: "Martin",
@@ -169,7 +183,7 @@ describe("auth and health routes", () => {
       token: token.token,
     });
     assert.equal(verified.statusCode, 200);
-    assert.ok(json<{ setupToken: string }>(verified).setupToken);
+    assert.ok(json<{ registrationToken: string }>(verified).registrationToken);
 
     const options = await request("POST", "/api/auth/login-options", undefined, {
       email: "partial@abregi.test",
@@ -178,12 +192,22 @@ describe("auth and health routes", () => {
     assert.deepEqual(json(options), {
       ok: true,
       email: "partial@abregi.test",
-      needsRegistration: true,
+      hasPassword: false,
+      codeSent: true,
     });
-    assert.equal(await prisma.verificationToken.count({ where: { identifier: "partial@abregi.test" } }), 0);
+    const code = await prisma.verificationToken.findFirstOrThrow({
+      where: { identifier: "code:partial@abregi.test" },
+    });
+    const codeVerified = await request("POST", "/api/auth/verify-code", undefined, {
+      email: "partial@abregi.test",
+      code: code.token,
+    });
+    assert.equal(codeVerified.statusCode, 200);
+    const registration = json<{ registrationToken: string }>(codeVerified);
 
     const registered = await request("POST", "/api/auth/register", undefined, {
       email: "partial@abregi.test",
+      registrationToken: registration.registrationToken,
       password: "correct-password",
       firstName: "Paul",
       lastName: "Durand",
@@ -288,14 +312,17 @@ describe("auth and health routes", () => {
       inviteToken,
     });
     assert.equal(verified.statusCode, 200);
-    const verifiedPayload = json<{ setupToken: string }>(verified);
+    const verifiedPayload = json<{ registrationToken: string }>(verified);
 
-    const passwordSetup = await request("POST", "/api/auth/password/setup", undefined, {
+    const passwordSetup = await request("POST", "/api/auth/register", undefined, {
       email: "collab@abregi.test",
-      token: verifiedPayload.setupToken,
+      registrationToken: verifiedPayload.registrationToken,
       password: "correct-password",
+      firstName: "Collab",
+      lastName: "Invited",
+      inviteToken,
     });
-    assert.equal(passwordSetup.statusCode, 200);
+    assert.equal(passwordSetup.statusCode, 201);
     const passwordSetupPayload = json<{ user: { role: string; workspaceId: string } }>(passwordSetup);
     assert.equal(passwordSetupPayload.user.role, "ORGANIZER");
     assert.equal(passwordSetupPayload.user.workspaceId, workspace.id);

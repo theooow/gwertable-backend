@@ -10,9 +10,9 @@ import type { AuthSessionDTO } from "../dto/auth.dto.js";
 type VerifyResult =
   | AuthSessionDTO
   | {
-      requiresPasswordSetup: true;
+      requiresRegistrationSetup: true;
       email: string;
-      setupToken: string;
+      registrationToken: string;
       expires: string;
     };
 
@@ -49,12 +49,9 @@ export class AuthService {
     await this.authRepository.getValidInvitation(email, inviteToken);
 
     const user = await this.authRepository.findUserByEmail(email);
-    if (!user) {
-      return { ok: true, email, needsRegistration: true };
-    }
-
     if (!user?.passwordHash) {
-      return { ok: true, email, needsRegistration: true };
+      await this.requestLoginLink(email, inviteToken, baseUrl);
+      return { ok: true, email, hasPassword: false, codeSent: true };
     }
 
     return {
@@ -68,7 +65,20 @@ export class AuthService {
   async register(
     input: Omit<RegisterUserInput, "passwordHash"> & { password: string },
     inviteToken: string | undefined,
+    registrationToken: string,
   ): Promise<AuthSessionDTO> {
+    const now = new Date();
+    const maxExpires = new Date(now.getTime() + env.AUTH_TOKEN_TTL_MINUTES * 60 * 1000);
+    const consumed = await this.authRepository.consumeVerificationToken(
+      `registration-setup:${input.email}`,
+      registrationToken,
+      now,
+      maxExpires,
+    );
+    if (consumed !== 1) {
+      throw new UnauthorizedError("Verification d'inscription invalide ou expiree");
+    }
+
     const invitation = await this.authRepository.getValidInvitation(input.email, inviteToken);
     const { password, ...userInput } = input;
     const user = await this.authRepository.registerUser(
@@ -205,25 +215,25 @@ export class AuthService {
     const invitation = await this.authRepository.getValidInvitation(email, inviteToken);
     const user = await this.authRepository.findOrCreateUser(email, invitation);
     const verifiedUser = await this.authRepository.markEmailVerified(user.id);
-    await this.authRepository.acceptInvitation(invitation, verifiedUser.id);
 
     if (!verifiedUser.passwordHash) {
-      const setupToken = randomToken();
+      const registrationToken = randomToken();
       const expires = new Date(Date.now() + env.AUTH_TOKEN_TTL_MINUTES * 60 * 1000);
       await this.authRepository.createVerificationToken(
-        `password-setup:${email}`,
-        setupToken,
+        `registration-setup:${email}`,
+        registrationToken,
         expires,
       );
 
       return {
-        requiresPasswordSetup: true,
+        requiresRegistrationSetup: true,
         email,
-        setupToken,
+        registrationToken,
         expires: expires.toISOString(),
       };
     }
 
+    await this.authRepository.acceptInvitation(invitation, verifiedUser.id);
     return this.createSessionForUser(verifiedUser.id);
   }
 

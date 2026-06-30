@@ -47,6 +47,7 @@ const setupPasswordSchema = z.object({
 const registerSchema = z.object({
   email: z.string().email().transform((email) => email.toLowerCase()),
   password: z.string().min(8),
+  registrationToken: z.string().min(1),
   inviteToken: z.string().optional(),
   name: shortText,
   firstName: shortText,
@@ -122,6 +123,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         timezone: parsed.timezone || "Europe/Paris",
       },
       parsed.inviteToken,
+      parsed.registrationToken,
     );
     return reply.status(201).send(session);
   });

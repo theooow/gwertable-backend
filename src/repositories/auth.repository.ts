@@ -287,6 +287,13 @@ export class AuthRepository {
     };
 
     if (existing) {
+      if (!invitation && existing.defaultWorkspaceId) {
+        await this.prisma.workspace.update({
+          where: { id: existing.defaultWorkspaceId },
+          data: { name: workspaceName },
+        });
+      }
+
       return this.prisma.user.update({
         where: { id: existing.id },
         data: {
