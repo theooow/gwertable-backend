@@ -9,6 +9,7 @@ const reminderOffsets = z
 export const eventNotificationSettingsSchema = z.object({
   enabled: z.boolean().default(false),
   discordChannelId: optionalText("Le canal Discord", LIMITS.shortText),
+  whatsappEnabled: z.boolean().default(false),
   taskReminderOffsetsMinutes: reminderOffsets.default([1440, 60]),
   runOfShowReminderOffsetsMinutes: reminderOffsets.default([30]),
   overdueEnabled: z.boolean().default(true),

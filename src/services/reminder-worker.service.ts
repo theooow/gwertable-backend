@@ -3,14 +3,18 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { env } from "../env.js";
 import type { DiscordSender } from "../lib/discord.js";
+import type { WhatsAppSender } from "../lib/whatsapp.js";
 
 type ReminderTargetType = "TASK" | "RUN_OF_SHOW";
 type ReminderType = "REMINDER" | "OVERDUE";
+type ReminderChannel = "DISCORD" | "WHATSAPP";
 
 type ReminderCandidate = {
   eventId: string;
   eventName: string;
-  channelId: string;
+  channel: ReminderChannel;
+  discordChannelId?: string;
+  whatsappPhone?: string;
   targetType: ReminderTargetType;
   targetId: string;
   reminderType: ReminderType;
@@ -19,7 +23,7 @@ type ReminderCandidate = {
   happensAt: Date;
   title: string;
   personName: string;
-  discordUserId: string;
+  discordUserId?: string;
 };
 
 function formatParisDate(date: Date) {
@@ -31,12 +35,12 @@ function formatParisDate(date: Date) {
 }
 
 function buildMessage(candidate: ReminderCandidate) {
-  const mention = `<@${candidate.discordUserId}>`;
+  const mention = candidate.channel === "DISCORD" && candidate.discordUserId ? `<@${candidate.discordUserId}> ` : "";
   const targetLabel = candidate.targetType === "TASK" ? "tache" : "run of show";
   if (candidate.reminderType === "OVERDUE") {
-    return `${mention} Rappel Abregi - ${candidate.eventName}: la ${targetLabel} "${candidate.title}" etait prevue le ${formatParisDate(candidate.happensAt)} et n'est pas terminee.`;
+    return `${mention}Rappel Abregi - ${candidate.eventName}: la ${targetLabel} "${candidate.title}" etait prevue le ${formatParisDate(candidate.happensAt)} et n'est pas terminee.`;
   }
-  return `${mention} Rappel Abregi - ${candidate.eventName}: tu dois effectuer "${candidate.title}" le ${formatParisDate(candidate.happensAt)}.`;
+  return `${mention}Rappel Abregi - ${candidate.eventName}: tu dois effectuer "${candidate.title}" le ${formatParisDate(candidate.happensAt)}.`;
 }
 
 function isDue(scheduledFor: Date, now: Date, lookbackMs: number) {
@@ -52,26 +56,30 @@ export class ReminderWorkerService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly discord: DiscordSender,
+    private readonly whatsapp?: WhatsAppSender,
     private readonly logger?: FastifyBaseLogger,
   ) {}
 
   async collectDueReminders(now = new Date()) {
     const lookbackMs = env.NOTIFICATION_REMINDER_LOOKBACK_MINUTES * 60_000;
     const settings = await this.prisma.eventNotificationSettings.findMany({
-      where: { enabled: true, discordChannelId: { not: null } },
+      where: {
+        enabled: true,
+        OR: [{ discordChannelId: { not: null } }, { whatsappEnabled: true }],
+      },
       include: {
         event: {
           include: {
             tasks: {
-              where: { dueAt: { not: null }, status: { not: "DONE" }, assignee: { discordUserId: { not: null } } },
-              include: { assignee: { select: { fullName: true, discordUserId: true } } },
+              where: { dueAt: { not: null }, status: { not: "DONE" }, assigneeId: { not: null } },
+              include: { assignee: { select: { fullName: true, discordUserId: true, phone: true } } },
             },
             runOfShow: {
               where: {
                 status: { notIn: ["DONE", "CANCELLED"] },
-                responsiblePerson: { discordUserId: { not: null } },
+                responsiblePersonId: { not: null },
               },
-              include: { responsiblePerson: { select: { fullName: true, discordUserId: true } } },
+              include: { responsiblePerson: { select: { fullName: true, discordUserId: true, phone: true } } },
             },
           },
         },
@@ -80,18 +88,14 @@ export class ReminderWorkerService {
 
     const candidates: ReminderCandidate[] = [];
     for (const setting of settings) {
-      const channelId = setting.discordChannelId;
-      if (!channelId) continue;
-
       for (const task of setting.event.tasks) {
-        if (!task.dueAt || !task.assignee?.discordUserId) continue;
+        if (!task.dueAt || !task.assignee) continue;
         for (const offsetMinutes of setting.taskReminderOffsetsMinutes) {
           const scheduledFor = reminderDate(task.dueAt, offsetMinutes);
           if (!isDue(scheduledFor, now, lookbackMs)) continue;
-          candidates.push({
+          candidates.push(...this.buildChannelCandidates(setting, {
             eventId: setting.eventId,
             eventName: setting.event.name,
-            channelId,
             targetType: "TASK",
             targetId: task.id,
             reminderType: "REMINDER",
@@ -100,14 +104,14 @@ export class ReminderWorkerService {
             happensAt: task.dueAt,
             title: task.title,
             personName: task.assignee.fullName,
-            discordUserId: task.assignee.discordUserId,
-          });
+            discordUserId: task.assignee.discordUserId ?? undefined,
+            whatsappPhone: task.assignee.phone ?? undefined,
+          }));
         }
         if (setting.overdueEnabled && isDue(task.dueAt, now, lookbackMs)) {
-          candidates.push({
+          candidates.push(...this.buildChannelCandidates(setting, {
             eventId: setting.eventId,
             eventName: setting.event.name,
-            channelId,
             targetType: "TASK",
             targetId: task.id,
             reminderType: "OVERDUE",
@@ -116,20 +120,20 @@ export class ReminderWorkerService {
             happensAt: task.dueAt,
             title: task.title,
             personName: task.assignee.fullName,
-            discordUserId: task.assignee.discordUserId,
-          });
+            discordUserId: task.assignee.discordUserId ?? undefined,
+            whatsappPhone: task.assignee.phone ?? undefined,
+          }));
         }
       }
 
       for (const item of setting.event.runOfShow) {
-        if (!item.responsiblePerson?.discordUserId) continue;
+        if (!item.responsiblePerson) continue;
         for (const offsetMinutes of setting.runOfShowReminderOffsetsMinutes) {
           const scheduledFor = reminderDate(item.startsAt, offsetMinutes);
           if (!isDue(scheduledFor, now, lookbackMs)) continue;
-          candidates.push({
+          candidates.push(...this.buildChannelCandidates(setting, {
             eventId: setting.eventId,
             eventName: setting.event.name,
-            channelId,
             targetType: "RUN_OF_SHOW",
             targetId: item.id,
             reminderType: "REMINDER",
@@ -138,14 +142,14 @@ export class ReminderWorkerService {
             happensAt: item.startsAt,
             title: item.title,
             personName: item.responsiblePerson.fullName,
-            discordUserId: item.responsiblePerson.discordUserId,
-          });
+            discordUserId: item.responsiblePerson.discordUserId ?? undefined,
+            whatsappPhone: item.responsiblePerson.phone ?? undefined,
+          }));
         }
         if (setting.overdueEnabled && isDue(item.startsAt, now, lookbackMs)) {
-          candidates.push({
+          candidates.push(...this.buildChannelCandidates(setting, {
             eventId: setting.eventId,
             eventName: setting.event.name,
-            channelId,
             targetType: "RUN_OF_SHOW",
             targetId: item.id,
             reminderType: "OVERDUE",
@@ -154,8 +158,9 @@ export class ReminderWorkerService {
             happensAt: item.startsAt,
             title: item.title,
             personName: item.responsiblePerson.fullName,
-            discordUserId: item.responsiblePerson.discordUserId,
-          });
+            discordUserId: item.responsiblePerson.discordUserId ?? undefined,
+            whatsappPhone: item.responsiblePerson.phone ?? undefined,
+          }));
         }
       }
     }
@@ -177,10 +182,20 @@ export class ReminderWorkerService {
       }
 
       try {
-        await this.discord.sendMessage({
-          channelId: candidate.channelId,
-          content: buildMessage(candidate),
-        });
+        if (candidate.channel === "DISCORD") {
+          if (!candidate.discordChannelId) throw new Error("Discord channel is missing");
+          await this.discord.sendMessage({
+            channelId: candidate.discordChannelId,
+            content: buildMessage(candidate),
+          });
+        } else {
+          if (!this.whatsapp) throw new Error("WhatsApp sender is not configured");
+          if (!candidate.whatsappPhone) throw new Error("WhatsApp phone is missing");
+          await this.whatsapp.sendMessage({
+            to: candidate.whatsappPhone,
+            content: buildMessage(candidate),
+          });
+        }
         await this.prisma.notificationDelivery.update({
           where: { id: delivery.id },
           data: { status: "SENT", sentAt: new Date() },
@@ -200,6 +215,30 @@ export class ReminderWorkerService {
     return { candidates: candidates.length, sent, skipped, failed };
   }
 
+  private buildChannelCandidates(
+    setting: {
+      discordChannelId: string | null;
+      whatsappEnabled: boolean;
+    },
+    candidate: Omit<ReminderCandidate, "channel" | "discordChannelId"> & { whatsappPhone?: string },
+  ): ReminderCandidate[] {
+    const candidates: ReminderCandidate[] = [];
+    if (setting.discordChannelId && candidate.discordUserId) {
+      candidates.push({
+        ...candidate,
+        channel: "DISCORD",
+        discordChannelId: setting.discordChannelId,
+      });
+    }
+    if (setting.whatsappEnabled && candidate.whatsappPhone) {
+      candidates.push({
+        ...candidate,
+        channel: "WHATSAPP",
+      });
+    }
+    return candidates;
+  }
+
   private async createPendingDelivery(candidate: ReminderCandidate) {
     try {
       return await this.prisma.notificationDelivery.create({
@@ -207,6 +246,7 @@ export class ReminderWorkerService {
           eventId: candidate.eventId,
           targetType: candidate.targetType,
           targetId: candidate.targetId,
+          channel: candidate.channel,
           reminderType: candidate.reminderType,
           offsetMinutes: candidate.offsetMinutes,
           scheduledFor: candidate.scheduledFor,

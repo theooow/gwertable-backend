@@ -5,6 +5,7 @@ import type { EventNotificationSettingsInput } from "../schemas/notification.js"
 const defaultSettings = {
   enabled: false,
   discordChannelId: null,
+  whatsappEnabled: false,
   taskReminderOffsetsMinutes: [1440, 60],
   runOfShowReminderOffsetsMinutes: [30],
   overdueEnabled: true,
@@ -37,6 +38,7 @@ export class NotificationRepository {
         eventId,
         enabled: data.enabled,
         discordChannelId: data.discordChannelId || null,
+        whatsappEnabled: data.whatsappEnabled,
         taskReminderOffsetsMinutes: data.taskReminderOffsetsMinutes,
         runOfShowReminderOffsetsMinutes: data.runOfShowReminderOffsetsMinutes,
         overdueEnabled: data.overdueEnabled,
@@ -44,6 +46,7 @@ export class NotificationRepository {
       update: {
         enabled: data.enabled,
         discordChannelId: data.discordChannelId || null,
+        whatsappEnabled: data.whatsappEnabled,
         taskReminderOffsetsMinutes: data.taskReminderOffsetsMinutes,
         runOfShowReminderOffsetsMinutes: data.runOfShowReminderOffsetsMinutes,
         overdueEnabled: data.overdueEnabled,

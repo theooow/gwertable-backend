@@ -552,6 +552,7 @@ model EventNotificationSettings {
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   enabled   Boolean  @default(false)
   discordChannelId String?
+  whatsappEnabled Boolean @default(false)
   taskReminderOffsetsMinutes Int[] @default([1440, 60])
   runOfShowReminderOffsetsMinutes Int[] @default([30])
   overdueEnabled Boolean @default(true)
@@ -568,6 +569,7 @@ model NotificationDelivery {
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   targetType String
   targetId   String
+  channel    String   @default("DISCORD")
   reminderType String
   offsetMinutes Int?
   scheduledFor DateTime
@@ -577,7 +579,7 @@ model NotificationDelivery {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([targetType, targetId, reminderType, offsetMinutes, scheduledFor])
+  @@unique([targetType, targetId, channel, reminderType, offsetMinutes, scheduledFor])
   @@index([eventId])
   @@index([status])
   @@index([scheduledFor])

@@ -4,6 +4,7 @@ import { json, request, seedAdminSession, seedEventContext, setupTestApp } from 
 import { prisma } from "../src/prisma.js";
 import { ReminderWorkerService } from "../src/services/reminder-worker.service.js";
 import type { DiscordMessage, DiscordSender } from "../src/lib/discord.js";
+import type { WhatsAppMessage, WhatsAppSender } from "../src/lib/whatsapp.js";
 
 setupTestApp();
 
@@ -17,12 +18,14 @@ describe("event notification settings", () => {
     const defaults = json<{
       enabled: boolean;
       discordChannelId: string | null;
+      whatsappEnabled: boolean;
       taskReminderOffsetsMinutes: number[];
       runOfShowReminderOffsetsMinutes: number[];
       overdueEnabled: boolean;
     }>(defaultsResponse);
     assert.equal(defaults.enabled, false);
     assert.equal(defaults.discordChannelId, null);
+    assert.equal(defaults.whatsappEnabled, false);
     assert.deepEqual(defaults.taskReminderOffsetsMinutes, [1440, 60]);
     assert.deepEqual(defaults.runOfShowReminderOffsetsMinutes, [30]);
     assert.equal(defaults.overdueEnabled, true);
@@ -30,6 +33,7 @@ describe("event notification settings", () => {
     const updateResponse = await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
       enabled: true,
       discordChannelId: "123456789012345678",
+      whatsappEnabled: true,
       taskReminderOffsetsMinutes: [60, 1440, 60],
       runOfShowReminderOffsetsMinutes: [30],
       overdueEnabled: false,
@@ -38,12 +42,14 @@ describe("event notification settings", () => {
     const updated = json<{
       enabled: boolean;
       discordChannelId: string | null;
+      whatsappEnabled: boolean;
       taskReminderOffsetsMinutes: number[];
       runOfShowReminderOffsetsMinutes: number[];
       overdueEnabled: boolean;
     }>(updateResponse);
     assert.equal(updated.enabled, true);
     assert.equal(updated.discordChannelId, "123456789012345678");
+    assert.equal(updated.whatsappEnabled, true);
     assert.deepEqual(updated.taskReminderOffsetsMinutes, [1440, 60]);
     assert.deepEqual(updated.runOfShowReminderOffsetsMinutes, [30]);
     assert.equal(updated.overdueEnabled, false);
@@ -95,6 +101,7 @@ describe("event notification settings", () => {
     await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
       enabled: true,
       discordChannelId: "987654321098765432",
+      whatsappEnabled: false,
       taskReminderOffsetsMinutes: [1440, 60],
       runOfShowReminderOffsetsMinutes: [30],
       overdueEnabled: true,
@@ -127,5 +134,64 @@ describe("event notification settings", () => {
     });
     assert.equal(deliveries.length, 2);
     assert.equal(deliveries.every((delivery) => delivery.status === "SENT"), true);
+  });
+
+  it("sends direct whatsapp reminders to assigned people", async () => {
+    const { authorization } = await seedAdminSession();
+    const { event, person } = await seedEventContext(authorization);
+    await prisma.person.update({
+      where: { id: person.id },
+      data: { phone: "+33 6 12 34 56 78", discordUserId: null },
+    });
+
+    const now = new Date("2026-06-01T17:00:00.000Z");
+    const taskResponse = await request("POST", `/api/events/${event.id}/tasks`, authorization, {
+      title: "Prepare cash desk",
+      description: "",
+      category: "billetterie",
+      status: "TODO",
+      priority: "HIGH",
+      dueAt: "2026-06-01T18:00:00.000Z",
+      assigneeId: person.id,
+    });
+    assert.equal(taskResponse.statusCode, 201);
+
+    await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
+      enabled: true,
+      discordChannelId: "",
+      whatsappEnabled: true,
+      taskReminderOffsetsMinutes: [60],
+      runOfShowReminderOffsetsMinutes: [30],
+      overdueEnabled: false,
+    });
+
+    const discord: DiscordSender = {
+      async sendMessage() {
+        throw new Error("Discord should not be called");
+      },
+    };
+    const sentMessages: WhatsAppMessage[] = [];
+    const whatsapp: WhatsAppSender = {
+      async sendMessage(message) {
+        sentMessages.push(message);
+      },
+    };
+    const worker = new ReminderWorkerService(prisma, discord, whatsapp);
+
+    const firstRun = await worker.runDueReminders(now);
+    assert.equal(firstRun.sent, 1);
+    assert.equal(sentMessages.length, 1);
+    assert.equal(sentMessages[0]?.to, "+33 6 12 34 56 78");
+    assert.match(sentMessages[0]?.content ?? "", /Prepare cash desk/);
+    assert.doesNotMatch(sentMessages[0]?.content ?? "", /<@/);
+
+    const secondRun = await worker.runDueReminders(now);
+    assert.equal(secondRun.sent, 0);
+    assert.equal(secondRun.skipped, 1);
+
+    const delivery = await prisma.notificationDelivery.findFirstOrThrow({
+      where: { eventId: event.id, channel: "WHATSAPP" },
+    });
+    assert.equal(delivery.status, "SENT");
   });
 });
