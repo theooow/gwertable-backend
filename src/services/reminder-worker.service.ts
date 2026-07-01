@@ -14,6 +14,7 @@ type ReminderCandidate = {
   eventName: string;
   channel: ReminderChannel;
   discordChannelId?: string;
+  discordBotToken?: string;
   whatsappPhone?: string;
   targetType: ReminderTargetType;
   targetId: string;
@@ -186,6 +187,7 @@ export class ReminderWorkerService {
           if (!candidate.discordChannelId) throw new Error("Discord channel is missing");
           await this.discord.sendMessage({
             channelId: candidate.discordChannelId,
+            botToken: candidate.discordBotToken,
             content: buildMessage(candidate),
           });
         } else {
@@ -218,9 +220,10 @@ export class ReminderWorkerService {
   private buildChannelCandidates(
     setting: {
       discordChannelId: string | null;
+      discordBotToken: string | null;
       whatsappEnabled: boolean;
     },
-    candidate: Omit<ReminderCandidate, "channel" | "discordChannelId"> & { whatsappPhone?: string },
+    candidate: Omit<ReminderCandidate, "channel" | "discordChannelId" | "discordBotToken"> & { whatsappPhone?: string },
   ): ReminderCandidate[] {
     const candidates: ReminderCandidate[] = [];
     if (setting.discordChannelId && candidate.discordUserId) {
@@ -228,6 +231,7 @@ export class ReminderWorkerService {
         ...candidate,
         channel: "DISCORD",
         discordChannelId: setting.discordChannelId,
+        discordBotToken: setting.discordBotToken ?? undefined,
       });
     }
     if (setting.whatsappEnabled && candidate.whatsappPhone) {

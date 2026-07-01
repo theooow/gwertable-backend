@@ -18,6 +18,8 @@ describe("event notification settings", () => {
     const defaults = json<{
       enabled: boolean;
       discordChannelId: string | null;
+      hasDiscordBotToken: boolean;
+      discordBotToken?: string | null;
       whatsappEnabled: boolean;
       taskReminderOffsetsMinutes: number[];
       runOfShowReminderOffsetsMinutes: number[];
@@ -25,6 +27,8 @@ describe("event notification settings", () => {
     }>(defaultsResponse);
     assert.equal(defaults.enabled, false);
     assert.equal(defaults.discordChannelId, null);
+    assert.equal(defaults.hasDiscordBotToken, false);
+    assert.equal(defaults.discordBotToken, undefined);
     assert.equal(defaults.whatsappEnabled, false);
     assert.deepEqual(defaults.taskReminderOffsetsMinutes, [1440, 60]);
     assert.deepEqual(defaults.runOfShowReminderOffsetsMinutes, [30]);
@@ -33,6 +37,7 @@ describe("event notification settings", () => {
     const updateResponse = await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
       enabled: true,
       discordChannelId: "123456789012345678",
+      discordBotToken: "test-discord-token",
       whatsappEnabled: true,
       taskReminderOffsetsMinutes: [60, 1440, 60],
       runOfShowReminderOffsetsMinutes: [30],
@@ -42,6 +47,8 @@ describe("event notification settings", () => {
     const updated = json<{
       enabled: boolean;
       discordChannelId: string | null;
+      hasDiscordBotToken: boolean;
+      discordBotToken?: string | null;
       whatsappEnabled: boolean;
       taskReminderOffsetsMinutes: number[];
       runOfShowReminderOffsetsMinutes: number[];
@@ -49,6 +56,8 @@ describe("event notification settings", () => {
     }>(updateResponse);
     assert.equal(updated.enabled, true);
     assert.equal(updated.discordChannelId, "123456789012345678");
+    assert.equal(updated.hasDiscordBotToken, true);
+    assert.equal(updated.discordBotToken, undefined);
     assert.equal(updated.whatsappEnabled, true);
     assert.deepEqual(updated.taskReminderOffsetsMinutes, [1440, 60]);
     assert.deepEqual(updated.runOfShowReminderOffsetsMinutes, [30]);
@@ -101,6 +110,7 @@ describe("event notification settings", () => {
     await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
       enabled: true,
       discordChannelId: "987654321098765432",
+      discordBotToken: "event-discord-token",
       whatsappEnabled: false,
       taskReminderOffsetsMinutes: [1440, 60],
       runOfShowReminderOffsetsMinutes: [30],
@@ -120,6 +130,7 @@ describe("event notification settings", () => {
     assert.equal(firstRun.skipped, 0);
     assert.equal(sentMessages.length, 2);
     assert.equal(sentMessages.every((message) => message.channelId === "987654321098765432"), true);
+    assert.equal(sentMessages.every((message) => message.botToken === "event-discord-token"), true);
     assert.equal(sentMessages.every((message) => message.content.includes("<@123456789012345678>")), true);
     assert.equal(sentMessages.some((message) => message.content.includes("Prepare bar")), true);
     assert.equal(sentMessages.some((message) => message.content.includes("Open doors")), true);
