@@ -1,11 +1,11 @@
 import type { UsagePlan } from "@prisma/client";
 import { ForbiddenError } from "./errors.js";
 
-export type PlanFeature = "ai.documentImport";
+export type PlanFeature = "ai.documentImport" | "whatsapp.notifications";
 
 const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
   BETA_TEST: [],
-  PLATINIUM: ["ai.documentImport"],
+  PLATINIUM: ["ai.documentImport", "whatsapp.notifications"],
 };
 
 export function planCan(plan: UsagePlan, feature: PlanFeature) {
@@ -14,7 +14,7 @@ export function planCan(plan: UsagePlan, feature: PlanFeature) {
 
 export function requirePlanFeature(plan: UsagePlan, feature: PlanFeature) {
   if (!planCan(plan, feature)) {
-    throw new ForbiddenError("Cette fonctionnalite IA necessite le plan Platinium.");
+    throw new ForbiddenError("Cette fonctionnalité nécessite le plan Platinium.");
   }
 }
 

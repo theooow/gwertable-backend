@@ -38,7 +38,7 @@ describe("event notification settings", () => {
       enabled: true,
       discordChannelId: "123456789012345678",
       discordBotToken: "test-discord-token",
-      whatsappEnabled: true,
+      whatsappEnabled: false,
       taskReminderOffsetsMinutes: [60, 1440, 60],
       runOfShowReminderOffsetsMinutes: [30],
       overdueEnabled: false,
@@ -58,10 +58,27 @@ describe("event notification settings", () => {
     assert.equal(updated.discordChannelId, "123456789012345678");
     assert.equal(updated.hasDiscordBotToken, true);
     assert.equal(updated.discordBotToken, undefined);
-    assert.equal(updated.whatsappEnabled, true);
+    assert.equal(updated.whatsappEnabled, false);
     assert.deepEqual(updated.taskReminderOffsetsMinutes, [1440, 60]);
     assert.deepEqual(updated.runOfShowReminderOffsetsMinutes, [30]);
     assert.equal(updated.overdueEnabled, false);
+  });
+
+  it("blocks whatsapp notifications on non premium plans", async () => {
+    const { authorization } = await seedAdminSession();
+    const { event } = await seedEventContext(authorization);
+
+    const response = await request("PUT", `/api/events/${event.id}/notifications`, authorization, {
+      enabled: true,
+      discordChannelId: "",
+      whatsappEnabled: true,
+      taskReminderOffsetsMinutes: [60],
+      runOfShowReminderOffsetsMinutes: [30],
+      overdueEnabled: false,
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.match(response.body, /plan Platinium/);
   });
 
   it("sends due discord reminders once for tasks and run of show items", async () => {
@@ -148,8 +165,9 @@ describe("event notification settings", () => {
   });
 
   it("sends direct whatsapp reminders to assigned people", async () => {
-    const { authorization } = await seedAdminSession();
+    const { authorization, user } = await seedAdminSession();
     const { event, person } = await seedEventContext(authorization);
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
     await prisma.person.update({
       where: { id: person.id },
       data: { phone: "+33 6 12 34 56 78", discordUserId: null },

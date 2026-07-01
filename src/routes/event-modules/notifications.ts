@@ -18,6 +18,6 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   fastify.put("/api/events/:eventId/notifications", async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = eventNotificationSettingsSchema.parse(request.body);
-    return service.updateSettings(eventId, request.workspaceId, request.userRole, data);
+    return service.updateSettings(eventId, request.workspaceId, request.userRole, request.user!.usagePlan, data);
   });
 }
