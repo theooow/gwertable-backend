@@ -49,6 +49,26 @@ export interface DocumentExtractionProvider {
 
 const ANALYZABLE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
+function looksLikeProductReference(value: string) {
+  const clean = value.trim();
+  if (!clean || clean.includes(" ")) return false;
+  return /^[A-Z0-9._/-]{3,18}$/.test(clean) && /\d/.test(clean);
+}
+
+function normalizeExtractedNameAndNotes(name: string, notes?: string | null) {
+  const cleanName = name.trim();
+  const cleanNotes = notes?.trim() || null;
+  if (
+    cleanNotes &&
+    looksLikeProductReference(cleanName) &&
+    cleanNotes.length > cleanName.length + 6 &&
+    cleanNotes.split(/\s+/).length >= 2
+  ) {
+    return { name: cleanNotes, notes: `Ref: ${cleanName}` };
+  }
+  return { name: cleanName, notes: cleanNotes };
+}
+
 function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImportPreview {
   const parsed = value as Partial<EquipmentImportPreview>;
   const lines = Array.isArray(parsed.lines) ? parsed.lines : [];
@@ -67,8 +87,9 @@ function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImpo
     discountPct: typeof parsed.discountPct === "number" ? Math.min(100, Math.max(0, parsed.discountPct)) : null,
     lines: lines.map((line) => {
       const item = line as Partial<ExtractedEquipmentLine>;
+      const normalized = normalizeExtractedNameAndNotes(String(item.name ?? ""), item.notes ? String(item.notes) : null);
       return {
-        name: String(item.name ?? "").trim(),
+        name: normalized.name,
         category: String(item.category ?? "location").trim() || "location",
         quantity: Math.max(1, Math.round(Number(item.quantity ?? 1))),
         unitPriceCents: Math.max(0, Math.round(Number(item.unitPriceCents ?? 0))),
@@ -79,7 +100,7 @@ function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImpo
               ? Math.min(10000, Math.max(0, Math.round(parsed.vatRateBasisPoints)))
               : 2000),
         rentalCoef: Math.max(0, Number(item.rentalCoef ?? 1)),
-        notes: item.notes ? String(item.notes) : null,
+        notes: normalized.notes,
         confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : undefined,
       };
     }).filter((line) => line.name),
@@ -108,6 +129,7 @@ function extractionPrompt(input?: { contentType: string; dataBase64: string }) {
   return [
     "Extract equipment rental quote/invoice lines as strict JSON.",
     "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',supplierName:string|null,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
+    "For each line, put the human-readable product description in name. If the document has a short reference/code and a longer designation, put the longer designation in name and put the reference/code in notes.",
     "Use cents for money. Detect supplierName when visible. Detect whether document line prices are HT or TTC; most French supplier quotes/invoices list TTC totals, so choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Do not create catalog matches. Invoices are treated as equipment quotes.",
     pdfPayload,
   ].filter(Boolean).join("\n\n");
