@@ -73,7 +73,8 @@ function computeBudgetAmountsFromCents(
   vatRateBasisPoints: number,
   vatMode: VatMode,
 ): ComputedAmounts {
-  const effectiveVatRateBasisPoints = vatMode === "ASSUJETTI" ? vatRateBasisPoints : 0;
+  void vatMode;
+  const effectiveVatRateBasisPoints = vatRateBasisPoints;
 
   if (amountInputMode === "HT") {
     const amountHtCents = inputCents;
@@ -216,7 +217,7 @@ export class BudgetRepository {
         amountCents: amounts.amountCents,
         phase: data.phase,
         amountInputMode: data.amountInputMode,
-        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         amountHtCents: amounts.amountHtCents,
         amountVatCents: amounts.amountVatCents,
         amountTtcCents: amounts.amountTtcCents,
@@ -257,7 +258,7 @@ export class BudgetRepository {
           amountCents: amounts.amountCents,
           phase: data.phase,
           amountInputMode: data.amountInputMode,
-          vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+          vatRateBasisPoints: data.vatRateBasisPoints,
           amountHtCents: amounts.amountHtCents,
           amountVatCents: amounts.amountVatCents,
           amountTtcCents: amounts.amountTtcCents,
@@ -343,7 +344,7 @@ export class BudgetRepository {
         amountCents: amounts.amountCents,
         phase: data.phase,
         amountInputMode: data.amountInputMode,
-        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         amountHtCents: amounts.amountHtCents,
         amountVatCents: amounts.amountVatCents,
         amountTtcCents: amounts.amountTtcCents,
@@ -382,7 +383,7 @@ export class BudgetRepository {
         amountCents: amounts.amountCents,
         phase: data.phase,
         amountInputMode: data.amountInputMode,
-        vatRateBasisPoints: eventSettings.vatMode === "ASSUJETTI" ? data.vatRateBasisPoints : 0,
+        vatRateBasisPoints: data.vatRateBasisPoints,
         amountHtCents: amounts.amountHtCents,
         amountVatCents: amounts.amountVatCents,
         amountTtcCents: amounts.amountTtcCents,
@@ -678,7 +679,7 @@ export class BudgetRepository {
           label: quote.label,
           amountCents: amounts.amountCents,
           amountInputMode: quote.amountInputMode,
-          vatRateBasisPoints: event.vatMode === "ASSUJETTI" ? quote.vatRateBasisPoints : 0,
+          vatRateBasisPoints: quote.vatRateBasisPoints,
           amountHtCents: amounts.amountHtCents,
           amountVatCents: amounts.amountVatCents,
           amountTtcCents: amounts.amountTtcCents,
@@ -714,7 +715,7 @@ export class BudgetRepository {
           label,
           amountCents: amounts.amountCents,
           amountInputMode: usage.amountInputMode,
-          vatRateBasisPoints: event.vatMode === "ASSUJETTI" ? usage.vatRateBasisPoints : 0,
+          vatRateBasisPoints: usage.vatRateBasisPoints,
           amountHtCents: amounts.amountHtCents,
           amountVatCents: amounts.amountVatCents,
           amountTtcCents: amounts.amountTtcCents,
