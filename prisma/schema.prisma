@@ -419,6 +419,8 @@ model EquipmentItem {
   photoUrl       String?
   color          String?
   unitPriceCents Int       @default(0)
+  amountInputMode AmountInputMode @default(TTC)
+  vatRateBasisPoints Int @default(2000)
   rentalCoef     Decimal   @default(1) @db.Decimal(5, 2)
   quantity       Int       @default(1)
   notes          String?

@@ -6,7 +6,7 @@ import { BudgetRepository } from "./budget.repository.js";
 
 const itemSelect = {
   id: true, name: true, category: true, ownership: true,
-  quantity: true, unitPriceCents: true, rentalCoef: true,
+  quantity: true, unitPriceCents: true, amountInputMode: true, vatRateBasisPoints: true, rentalCoef: true,
   supplierId: true, color: true, photoUrl: true,
   supplier: { select: { id: true, fullName: true } },
 } as const;
@@ -99,6 +99,8 @@ export class EquipmentRepository {
             category: item.category,
             ownership: item.ownership,
             unitPriceCents: item.unitPriceCents,
+            amountInputMode: item.amountInputMode,
+            vatRateBasisPoints: item.vatRateBasisPoints,
             rentalCoef: item.rentalCoef,
             quantity: item.quantity,
             notes: item.notes,
@@ -140,7 +142,7 @@ export class EquipmentRepository {
   async createUsage(
     eventId: string,
     workspaceId: string,
-    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; amountInputMode: AmountInputMode; vatRateBasisPoints: number; rentalCoef?: number; notes?: string | null; quoteId?: string | null }
+    parsed: { kind: "library"; itemId: string; quantity: number; unitPriceCents?: number; amountInputMode?: AmountInputMode; vatRateBasisPoints?: number; rentalCoef?: number; notes?: string | null; quoteId?: string | null }
            | { kind: "oneoff"; name: string; category: string; quantity: number; unitPriceCents: number; amountInputMode: AmountInputMode; vatRateBasisPoints: number; rentalCoef: number; notes?: string | null; quoteId?: string | null },
   ) {
     const event = await this.prisma.event.findFirst({
@@ -152,7 +154,7 @@ export class EquipmentRepository {
     if (parsed.kind === "library") {
       const libItem = await this.prisma.equipmentItem.findUnique({
         where: { id: parsed.itemId, workspaceId },
-        select: { id: true, quantity: true, unitPriceCents: true, rentalCoef: true },
+        select: { id: true, quantity: true, unitPriceCents: true, amountInputMode: true, vatRateBasisPoints: true, rentalCoef: true },
       });
       if (!libItem) throw new NotFoundError("Équipement introuvable");
 
@@ -172,8 +174,8 @@ export class EquipmentRepository {
           itemId: parsed.itemId,
           quantity: parsed.quantity,
           unitPriceCents: parsed.unitPriceCents ?? libItem.unitPriceCents,
-          amountInputMode: parsed.amountInputMode,
-          vatRateBasisPoints: parsed.vatRateBasisPoints,
+          amountInputMode: parsed.amountInputMode ?? libItem.amountInputMode,
+          vatRateBasisPoints: parsed.vatRateBasisPoints ?? libItem.vatRateBasisPoints,
           rentalCoef: parsed.rentalCoef ?? libItem.rentalCoef,
           notes: parsed.notes || null,
           quoteId: parsed.quoteId || null,
@@ -221,6 +223,8 @@ export class EquipmentRepository {
         id: true,
         quantity: true,
         unitPriceCents: true,
+        amountInputMode: true,
+        vatRateBasisPoints: true,
         rentalCoef: true,
         supplierId: true,
         supplier: { select: { id: true, fullName: true } },
@@ -290,8 +294,8 @@ export class EquipmentRepository {
             itemId: line.itemId,
             quantity: line.quantity,
             unitPriceCents: line.unitPriceCents ?? item.unitPriceCents,
-            amountInputMode: line.amountInputMode,
-            vatRateBasisPoints: line.vatRateBasisPoints,
+            amountInputMode: line.amountInputMode ?? item.amountInputMode,
+            vatRateBasisPoints: line.vatRateBasisPoints ?? item.vatRateBasisPoints,
             rentalCoef: line.rentalCoef ?? item.rentalCoef,
             notes: line.notes || null,
             quoteId: line.quoteId || generatedQuoteId || null,
@@ -458,8 +462,8 @@ export class EquipmentRepository {
         category: string;
         quantity: number;
         unitPriceCents: number;
-        amountInputMode: AmountInputMode;
-        vatRateBasisPoints: number;
+        amountInputMode?: AmountInputMode;
+        vatRateBasisPoints?: number;
         rentalCoef: number;
         notes?: string | null;
       }>;
@@ -487,8 +491,8 @@ export class EquipmentRepository {
           category: line.category,
           quantity: line.quantity,
           unitPriceCents: line.unitPriceCents,
-          amountInputMode: line.amountInputMode,
-          vatRateBasisPoints: line.vatRateBasisPoints,
+          amountInputMode: line.amountInputMode ?? data.amountInputMode,
+          vatRateBasisPoints: line.vatRateBasisPoints ?? data.vatRateBasisPoints,
           rentalCoef: line.rentalCoef,
           notes: line.notes || null,
           quoteId: createdQuote.id,

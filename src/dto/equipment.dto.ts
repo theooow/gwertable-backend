@@ -20,6 +20,8 @@ export type EquipmentItemDTO = {
   photoUrl: string | null;
   color: string | null;
   unitPriceCents: number;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
   rentalCoef: number;
   quantity: number;
   notes: string | null;
@@ -39,6 +41,8 @@ type EquipmentItemWithRelations = {
   photoUrl: string | null;
   color: string | null;
   unitPriceCents: number;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
   rentalCoef: Decimal;
   quantity: number;
   notes: string | null;
@@ -62,6 +66,8 @@ export function toEquipmentItemDTO(item: EquipmentItemWithRelations): EquipmentI
     photoUrl: item.photoUrl,
     color: item.color,
     unitPriceCents: item.unitPriceCents,
+    amountInputMode: item.amountInputMode,
+    vatRateBasisPoints: item.vatRateBasisPoints,
     rentalCoef: item.rentalCoef.toNumber(),
     quantity: item.quantity,
     notes: item.notes,

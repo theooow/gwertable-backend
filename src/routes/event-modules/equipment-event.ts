@@ -189,8 +189,6 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
           kind: "library",
           itemId: gi.itemId,
           quantity: gi.quantity,
-          amountInputMode: "TTC",
-          vatRateBasisPoints: 2000,
           quoteId: quoteId ?? null,
         }),
       ),
