@@ -628,6 +628,8 @@ model Task {
   category    String
   status      TaskStatus @default(TODO)
   priority    Priority   @default(MED)
+  tags        String[]   @default([])
+  checklist   Json       @default("[]")
   dueAt       DateTime?
   assigneeId  String?
   assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])

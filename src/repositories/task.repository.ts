@@ -10,6 +10,8 @@ type TaskInput = {
   category: string;
   status: TaskStatus;
   priority: Priority;
+  tags?: string[];
+  checklist?: Prisma.InputJsonValue;
   dueAt?: string | null;
   assigneeId?: string | null;
 };
@@ -165,6 +167,8 @@ export class TaskRepository {
           category: data.category,
           status: data.status,
           priority: data.priority,
+          tags: data.tags ?? [],
+          checklist: data.checklist ?? [],
           dueAt: data.dueAt ? new Date(data.dueAt) : null,
           assigneeId: data.assigneeId || null,
         },
@@ -196,6 +200,8 @@ export class TaskRepository {
           category: data.category,
           status: data.status,
           priority: data.priority,
+          tags: data.tags ?? [],
+          checklist: data.checklist ?? [],
           dueAt: data.dueAt ? new Date(data.dueAt) : null,
           assigneeId: data.assigneeId || null,
         },

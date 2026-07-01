@@ -81,6 +81,8 @@ describe("event module routes", () => {
       category: "bar",
       status: "TODO",
       priority: "HIGH",
+      tags: ["bar", "urgent"],
+      checklist: [{ id: "stock", text: "Vérifier le stock", done: false }],
       dueAt: "2026-06-01T18:00:00.000Z",
       assigneeId: person.id,
     };
@@ -90,7 +92,12 @@ describe("event module routes", () => {
     assert.equal(task.autoRunOfShowItem.sourceTaskId, task.id);
     assert.equal(task.autoRunOfShowItem.responsiblePersonId, person.id);
 
-    assert.equal((await request("GET", `/api/events/${event.id}/tasks`, authorization)).statusCode, 200);
+    const listedTasks = json<Array<{ id: string; tags: string[]; checklist: Array<{ id: string; text: string; done: boolean }> }>>(
+      await request("GET", `/api/events/${event.id}/tasks`, authorization),
+    );
+    const listedTask = listedTasks.find((item) => item.id === task.id);
+    assert.deepEqual(listedTask?.tags, ["bar", "urgent"]);
+    assert.deepEqual(listedTask?.checklist, [{ id: "stock", text: "Vérifier le stock", done: false }]);
     const calendar = await request("GET", `/api/events/${event.id}/tasks/calendar.ics`, authorization);
     assert.equal(calendar.statusCode, 200);
     assert.match(calendar.body, /BEGIN:VCALENDAR/);
