@@ -19,6 +19,32 @@ export class WhatsAppCloudClient implements WhatsAppSender {
       throw new Error("WhatsApp Cloud API is not configured");
     }
 
+    const payload = env.WHATSAPP_TEMPLATE_NAME
+      ? {
+          messaging_product: "whatsapp",
+          to: normalizePhone(message.to),
+          type: "template",
+          template: {
+            name: env.WHATSAPP_TEMPLATE_NAME,
+            language: { code: env.WHATSAPP_TEMPLATE_LANGUAGE },
+            components: [
+              {
+                type: "body",
+                parameters: [{ type: "text", text: message.content }],
+              },
+            ],
+          },
+        }
+      : {
+          messaging_product: "whatsapp",
+          to: normalizePhone(message.to),
+          type: "text",
+          text: {
+            preview_url: false,
+            body: message.content,
+          },
+        };
+
     const response = await fetch(
       `https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
       {
@@ -27,15 +53,7 @@ export class WhatsAppCloudClient implements WhatsAppSender {
           authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: normalizePhone(message.to),
-          type: "text",
-          text: {
-            preview_url: false,
-            body: message.content,
-          },
-        }),
+        body: JSON.stringify(payload),
       },
     );
 

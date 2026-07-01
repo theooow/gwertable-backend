@@ -33,6 +33,8 @@ const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default("fr"),
   NOTIFICATION_WORKER_ENABLED: z
     .enum(["true", "false"])
     .default(process.env.NODE_ENV === "production" ? "true" : "false")
