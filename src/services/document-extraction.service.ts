@@ -14,14 +14,28 @@ export type ExtractedEquipmentLine = {
   confidence?: number;
 };
 
+export type EquipmentImportCandidate = {
+  id: string;
+  name: string;
+  score: number;
+};
+
+export type EquipmentImportSupplierCandidate = {
+  id: string;
+  fullName: string;
+  score: number;
+};
+
 export type EquipmentImportPreview = {
   label: string;
   documentType: DocumentType;
+  supplierName: string | null;
+  supplierCandidates?: EquipmentImportSupplierCandidate[];
   amountInputMode: "HT" | "TTC";
   vatRateBasisPoints: number;
   discountCents: number | null;
   discountPct: number | null;
-  lines: ExtractedEquipmentLine[];
+  lines: Array<ExtractedEquipmentLine & { equipmentCandidates?: EquipmentImportCandidate[] }>;
   warnings: string[];
 };
 
@@ -42,6 +56,9 @@ function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImpo
   return {
     label: typeof parsed.label === "string" && parsed.label.trim() ? parsed.label.trim() : fallbackLabel,
     documentType: parsed.documentType === "quote" || parsed.documentType === "invoice" ? parsed.documentType : "unknown",
+    supplierName: typeof (parsed as { supplierName?: unknown }).supplierName === "string" && (parsed as { supplierName: string }).supplierName.trim()
+      ? (parsed as { supplierName: string }).supplierName.trim()
+      : null,
     amountInputMode: parsedAmountInputMode,
     vatRateBasisPoints: typeof parsed.vatRateBasisPoints === "number"
       ? Math.min(10000, Math.max(0, Math.round(parsed.vatRateBasisPoints)))
@@ -90,8 +107,8 @@ function extractionPrompt(input?: { contentType: string; dataBase64: string }) {
     : "";
   return [
     "Extract equipment rental quote/invoice lines as strict JSON.",
-    "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
-    "Use cents for money. Detect whether document line prices are HT or TTC; most French supplier quotes/invoices list TTC totals, so choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Do not create catalog matches. Invoices are treated as equipment quotes.",
+    "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',supplierName:string|null,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
+    "Use cents for money. Detect supplierName when visible. Detect whether document line prices are HT or TTC; most French supplier quotes/invoices list TTC totals, so choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Do not create catalog matches. Invoices are treated as equipment quotes.",
     pdfPayload,
   ].filter(Boolean).join("\n\n");
 }

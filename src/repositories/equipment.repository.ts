@@ -3,6 +3,7 @@ import type { EquipmentBulkImportInput, EquipmentItemInput, EquipmentUsageUpdate
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
 import { BudgetRepository } from "./budget.repository.js";
+import type { EquipmentImportPreview } from "../services/document-extraction.service.js";
 
 const itemSelect = {
   id: true, name: true, category: true, ownership: true,
@@ -10,6 +11,29 @@ const itemSelect = {
   supplierId: true, color: true, photoUrl: true,
   supplier: { select: { id: true, fullName: true } },
 } as const;
+
+function normalizeMatchText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function matchScore(query: string, candidate: string) {
+  const normalizedQuery = normalizeMatchText(query);
+  const normalizedCandidate = normalizeMatchText(candidate);
+  if (!normalizedQuery || !normalizedCandidate) return 0;
+  if (normalizedQuery === normalizedCandidate) return 1;
+  if (normalizedCandidate.includes(normalizedQuery) || normalizedQuery.includes(normalizedCandidate)) return 0.9;
+
+  const queryTokens = new Set(normalizedQuery.split(" ").filter((token) => token.length > 1));
+  const candidateTokens = new Set(normalizedCandidate.split(" ").filter((token) => token.length > 1));
+  if (queryTokens.size === 0 || candidateTokens.size === 0) return 0;
+  const common = [...queryTokens].filter((token) => candidateTokens.has(token)).length;
+  return common / Math.max(queryTokens.size, candidateTokens.size);
+}
 
 /**
  * Repository pour le domaine équipement.
@@ -31,6 +55,49 @@ export class EquipmentRepository {
    */
   async listForWorkspace(workspaceId: string) {
     return this.equipmentItemDao.findAllActive(workspaceId);
+  }
+
+  async enrichDocumentImportPreview(workspaceId: string, preview: EquipmentImportPreview): Promise<EquipmentImportPreview> {
+    const [items, suppliers] = await Promise.all([
+      this.prisma.equipmentItem.findMany({
+        where: { workspaceId, archivedAt: null },
+        select: { id: true, name: true, category: true, supplier: { select: { fullName: true } } },
+      }),
+      this.prisma.person.findMany({
+        where: { workspaceId, archivedAt: null, contactType: "SUPPLIER" },
+        select: { id: true, fullName: true },
+      }),
+    ]);
+
+    const supplierCandidates = (preview.supplierName ? suppliers : [])
+      .map((supplier) => ({ id: supplier.id, fullName: supplier.fullName, score: matchScore(preview.supplierName ?? "", supplier.fullName) }))
+      .filter((candidate) => candidate.score >= 0.25)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    return {
+      ...preview,
+      supplierCandidates,
+      lines: preview.lines.map((line) => ({
+        ...line,
+        equipmentCandidates: items
+          .map((item) => {
+            const nameScore = matchScore(line.name, item.name);
+            const categoryBoost = normalizeMatchText(line.category) === normalizeMatchText(item.category) ? 0.05 : 0;
+            const supplierBoost = preview.supplierName && item.supplier?.fullName
+              ? Math.min(matchScore(preview.supplierName, item.supplier.fullName), 1) * 0.1
+              : 0;
+            return {
+              id: item.id,
+              name: item.name,
+              score: Math.min(1, nameScore + categoryBoost + supplierBoost),
+            };
+          })
+          .filter((candidate) => candidate.score >= 0.25)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5),
+      })),
+    };
   }
 
   /**
@@ -457,6 +524,8 @@ export class EquipmentRepository {
       discountCents?: number | null;
       discountPct?: number | null;
       fileUrl?: string | null;
+      supplierId?: string | null;
+      createSupplierName?: string | null;
       lines: Array<{
         name: string;
         category: string;
@@ -465,12 +534,75 @@ export class EquipmentRepository {
         amountInputMode?: AmountInputMode;
         vatRateBasisPoints?: number;
         rentalCoef: number;
+        matchedItemId?: string | null;
+        createCatalogItem?: boolean;
+        supplierId?: string | null;
+        createSupplierName?: string | null;
         notes?: string | null;
       }>;
     },
   ) {
-    await this.assertEventInWorkspace(eventId, workspaceId);
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, workspaceId },
+      select: { id: true, startsAt: true, endsAt: true },
+    });
+    if (!event) throw new NotFoundError("Evenement introuvable");
+
+    const matchedItemIds = data.lines.map((line) => line.matchedItemId).filter(Boolean) as string[];
+    if (matchedItemIds.length > 0) {
+      const matchedItems = await this.prisma.equipmentItem.findMany({
+        where: { id: { in: matchedItemIds }, workspaceId, archivedAt: null },
+        select: { id: true, quantity: true },
+      });
+      if (matchedItems.length !== new Set(matchedItemIds).size) throw new NotFoundError("Equipement introuvable");
+
+      const existingUsages = await this.prisma.equipmentUsage.findMany({
+        where: { eventId, itemId: { in: matchedItemIds } },
+        select: { itemId: true },
+      });
+      if (existingUsages.length > 0) throw new ConflictError("Un ou plusieurs equipements sont deja ajoutes a cet evenement");
+
+      const matchedItemById = new Map(matchedItems.map((item) => [item.id, item]));
+      await Promise.all(data.lines.map((line) => {
+        if (!line.matchedItemId) return Promise.resolve();
+        const item = matchedItemById.get(line.matchedItemId);
+        if (!item) throw new NotFoundError("Equipement introuvable");
+        return this.assertNoQuantityConflict(
+          line.matchedItemId,
+          eventId,
+          event.startsAt,
+          event.endsAt,
+          item.quantity,
+          line.quantity,
+        );
+      }));
+    }
+
     const quote = await this.prisma.$transaction(async (tx) => {
+      const supplierByName = new Map<string, string>();
+      let documentSupplierId = data.supplierId ?? null;
+
+      async function getOrCreateSupplier(name?: string | null) {
+        const cleanName = name?.trim();
+        if (!cleanName) return null;
+        const key = normalizeMatchText(cleanName);
+        const existingId = supplierByName.get(key);
+        if (existingId) return existingId;
+        const person = await tx.person.create({
+          data: {
+            workspaceId,
+            fullName: cleanName,
+            tags: [],
+            contactType: "SUPPLIER",
+          },
+          select: { id: true },
+        });
+        supplierByName.set(key, person.id);
+        return person.id;
+      }
+
+      documentSupplierId = documentSupplierId ?? (await getOrCreateSupplier(data.createSupplierName));
+
       const createdQuote = await tx.equipmentQuote.create({
         data: {
           eventId,
@@ -483,21 +615,43 @@ export class EquipmentRepository {
         },
       });
 
-      await tx.equipmentUsage.createMany({
-        data: data.lines.map((line) => ({
-          eventId,
-          itemId: null,
-          name: line.name,
-          category: line.category,
-          quantity: line.quantity,
-          unitPriceCents: line.unitPriceCents,
-          amountInputMode: line.amountInputMode ?? data.amountInputMode,
-          vatRateBasisPoints: line.vatRateBasisPoints ?? data.vatRateBasisPoints,
-          rentalCoef: line.rentalCoef,
-          notes: line.notes || null,
-          quoteId: createdQuote.id,
-        })),
-      });
+      for (const line of data.lines) {
+        const supplierId = line.supplierId ?? documentSupplierId ?? (await getOrCreateSupplier(line.createSupplierName));
+        const itemId = line.matchedItemId ?? (line.createCatalogItem
+          ? (await tx.equipmentItem.create({
+              data: {
+                workspaceId,
+                name: line.name,
+                category: line.category,
+                ownership: "RENTED",
+                supplierId,
+                unitPriceCents: line.unitPriceCents,
+                amountInputMode: line.amountInputMode ?? data.amountInputMode,
+                vatRateBasisPoints: line.vatRateBasisPoints ?? data.vatRateBasisPoints,
+                rentalCoef: line.rentalCoef,
+                quantity: Math.max(1, line.quantity),
+                notes: line.notes || null,
+              },
+              select: { id: true },
+            })).id
+          : null);
+
+        await tx.equipmentUsage.create({
+          data: {
+            eventId,
+            itemId,
+            name: itemId ? null : line.name,
+            category: itemId ? null : line.category,
+            quantity: line.quantity,
+            unitPriceCents: line.unitPriceCents,
+            amountInputMode: line.amountInputMode ?? data.amountInputMode,
+            vatRateBasisPoints: line.vatRateBasisPoints ?? data.vatRateBasisPoints,
+            rentalCoef: line.rentalCoef,
+            notes: line.notes || null,
+            quoteId: createdQuote.id,
+          },
+        });
+      }
 
       return tx.equipmentQuote.findUniqueOrThrow({
         where: { id: createdQuote.id },

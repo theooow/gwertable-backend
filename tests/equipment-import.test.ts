@@ -30,6 +30,7 @@ describe("equipment document import", () => {
         output_text: JSON.stringify({
           label: "Devis SoundCo",
           documentType: "quote",
+          supplierName: "SoundCo",
           discountCents: null,
           discountPct: 5,
           lines: [{
@@ -49,6 +50,19 @@ describe("equipment document import", () => {
     const { authorization, user } = await seedAdminSession();
     await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
     const { event } = await seedEventContext(authorization);
+    const supplier = await prisma.person.create({
+      data: { workspaceId: user.defaultWorkspaceId!, fullName: "SoundCo", tags: [], contactType: "SUPPLIER" },
+    });
+    const item = await prisma.equipmentItem.create({
+      data: {
+        workspaceId: user.defaultWorkspaceId!,
+        name: "Projecteur LED",
+        category: "son",
+        ownership: "RENTED",
+        supplierId: supplier.id,
+        quantity: 4,
+      },
+    });
     const imageData = base64("fake image bytes");
 
     const response = await request("POST", `/api/events/${event.id}/equipment/import-preview`, authorization, {
@@ -77,15 +91,18 @@ describe("equipment document import", () => {
       label: string;
       documentType: string;
       discountPct: number | null;
-      lines: Array<{ name: string; quantity: number; unitPriceCents: number }>;
+      supplierCandidates?: Array<{ id: string; fullName: string }>;
+      lines: Array<{ name: string; quantity: number; unitPriceCents: number; equipmentCandidates?: Array<{ id: string; name: string }> }>;
     }>(response);
     assert.equal(preview.label, "Devis SoundCo");
     assert.equal(preview.documentType, "quote");
     assert.equal(preview.discountPct, 5);
+    assert.equal(preview.supplierCandidates?.[0]?.id, supplier.id);
     assert.equal(preview.lines.length, 1);
     assert.equal(preview.lines[0]?.name, "Projecteur LED");
     assert.equal(preview.lines[0]?.quantity, 2);
     assert.equal(preview.lines[0]?.unitPriceCents, 1000);
+    assert.equal(preview.lines[0]?.equipmentCandidates?.[0]?.id, item.id);
   });
 
   it("returns a clear error when an AI provider is required but not configured", async () => {
@@ -163,12 +180,14 @@ describe("equipment document import", () => {
       documentType: "invoice",
       discountCents: null,
       discountPct: 5,
+      createSupplierName: "SoundCo",
       lines: [
         {
           name: "Projecteur LED",
           category: "son",
           quantity: 2,
           unitPriceCents: 1000,
+          createCatalogItem: true,
           rentalCoef: 1,
           notes: "ligne editee",
         },
@@ -183,8 +202,12 @@ describe("equipment document import", () => {
 
     const usages = await prisma.equipmentUsage.findMany({ where: { quoteId: quote.id } });
     assert.equal(usages.length, 1);
-    assert.equal(usages[0]?.itemId, null);
-    assert.equal(usages[0]?.name, "Projecteur LED");
+    assert.ok(usages[0]?.itemId);
+    assert.equal(usages[0]?.name, null);
+
+    const createdItem = await prisma.equipmentItem.findUnique({ where: { id: usages[0]!.itemId! }, include: { supplier: true } });
+    assert.equal(createdItem?.name, "Projecteur LED");
+    assert.equal(createdItem?.supplier?.fullName, "SoundCo");
 
     const expenses = await prisma.expense.findMany({ where: { eventId: event.id, isEquipmentSync: true } });
     assert.equal(expenses.length, 1);

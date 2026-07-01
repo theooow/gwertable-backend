@@ -218,12 +218,12 @@ export class EquipmentService {
   async previewDocumentImport(workspaceId: string, role: UserRole, usagePlan: UsagePlan, data: EquipmentImportPreviewInput) {
     requireCan(role, "equipment.write");
     requirePlanFeature(usagePlan, "ai.documentImport");
-    void workspaceId;
-    return previewEquipmentDocument({
+    const preview = await previewEquipmentDocument({
       fileName: data.fileName,
       contentType: data.contentType,
       dataBase64: data.data,
     });
+    return this.equipmentRepository.enrichDocumentImportPreview(workspaceId, preview);
   }
 
   async confirmDocumentImport(
@@ -241,6 +241,8 @@ export class EquipmentService {
       discountCents: data.discountCents ?? null,
       discountPct: data.discountPct ?? null,
       fileUrl,
+      supplierId: data.supplierId ?? null,
+      createSupplierName: data.createSupplierName ?? null,
       lines: data.lines.map((line) => ({
         name: line.name,
         category: line.category,
@@ -249,6 +251,10 @@ export class EquipmentService {
         amountInputMode: line.amountInputMode,
         vatRateBasisPoints: line.vatRateBasisPoints,
         rentalCoef: line.rentalCoef,
+        matchedItemId: line.matchedItemId ?? null,
+        createCatalogItem: line.createCatalogItem ?? false,
+        supplierId: line.supplierId ?? null,
+        createSupplierName: line.createSupplierName ?? null,
         notes: line.notes ?? null,
       })),
     });
