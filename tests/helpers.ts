@@ -30,6 +30,8 @@ export async function resetDatabase() {
       "Task",
       "TicketTier",
       "TaskCalendarSubscription",
+      "EventNotificationSettings",
+      "NotificationDelivery",
       "User",
       "Venue",
       "VerificationToken",

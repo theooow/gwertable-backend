@@ -12,6 +12,7 @@ import { eventModuleRoutes } from "./routes/event-modules.js";
 import { participantRoutes } from "./routes/event-modules/participants.js";
 import { taskRoutes } from "./routes/event-modules/tasks.js";
 import { runOfShowRoutes } from "./routes/event-modules/run-of-show.js";
+import { notificationRoutes } from "./routes/event-modules/notifications.js";
 import { budgetRoutes } from "./routes/event-modules/budget.js";
 import { shoppingRoutes } from "./routes/event-modules/shopping.js";
 import { equipmentEventRoutes } from "./routes/event-modules/equipment-event.js";
@@ -43,6 +44,7 @@ export async function buildApp() {
   await app.register(participantRoutes);
   await app.register(taskRoutes);
   await app.register(runOfShowRoutes);
+  await app.register(notificationRoutes);
   await app.register(budgetRoutes);
   await app.register(shoppingRoutes);
   await app.register(equipmentEventRoutes);

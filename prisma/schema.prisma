@@ -520,6 +520,8 @@ model Event {
   documents       Document[]
   channels        Channel[]
   taskCalendarSubscriptions TaskCalendarSubscription[]
+  notificationSettings EventNotificationSettings?
+  notificationDeliveries NotificationDelivery[]
   ticketTiers      TicketTier[]
   consumables      ConsumableItem[]
   equipmentQuotes  EquipmentQuote[]
@@ -542,6 +544,43 @@ model TaskCalendarSubscription {
 
   @@unique([eventId])
   @@index([token])
+}
+
+model EventNotificationSettings {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(false)
+  discordChannelId String?
+  taskReminderOffsetsMinutes Int[] @default([1440, 60])
+  runOfShowReminderOffsetsMinutes Int[] @default([30])
+  overdueEnabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId])
+  @@index([enabled])
+}
+
+model NotificationDelivery {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  targetType String
+  targetId   String
+  reminderType String
+  offsetMinutes Int?
+  scheduledFor DateTime
+  sentAt DateTime?
+  status String
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([targetType, targetId, reminderType, offsetMinutes, scheduledFor])
+  @@index([eventId])
+  @@index([status])
+  @@index([scheduledFor])
 }
 
 model EventParticipant {
