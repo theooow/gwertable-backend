@@ -51,7 +51,7 @@ describe("equipment document import", () => {
     await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
     const { event } = await seedEventContext(authorization);
     const supplier = await prisma.person.create({
-      data: { workspaceId: user.defaultWorkspaceId!, fullName: "SoundCo", tags: [], contactType: "SUPPLIER" },
+      data: { workspaceId: user.defaultWorkspaceId!, fullName: "SoundCo", tags: [], contactType: "VENDOR" },
     });
     const item = await prisma.equipmentItem.create({
       data: {

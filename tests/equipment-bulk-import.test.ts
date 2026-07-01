@@ -12,10 +12,10 @@ describe("equipment bulk import", () => {
 
     const [soundSupplier, lightSupplier] = await Promise.all([
       prisma.person.create({
-        data: { workspaceId: workspace.id, fullName: "SoundCo", tags: [], contactType: "SUPPLIER" },
+        data: { workspaceId: workspace.id, fullName: "SoundCo", tags: [], contactType: "VENDOR" },
       }),
       prisma.person.create({
-        data: { workspaceId: workspace.id, fullName: "LightCo", tags: [], contactType: "SUPPLIER" },
+        data: { workspaceId: workspace.id, fullName: "LightCo", tags: [], contactType: "VENDOR" },
       }),
     ]);
 

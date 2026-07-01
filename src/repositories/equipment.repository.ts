@@ -66,7 +66,7 @@ export class EquipmentRepository {
         select: { id: true, name: true, category: true, supplier: { select: { fullName: true } } },
       }),
       this.prisma.person.findMany({
-        where: { workspaceId, archivedAt: null, contactType: "SUPPLIER" },
+        where: { workspaceId, archivedAt: null, contactType: "VENDOR" },
         select: { id: true, fullName: true },
       }),
       this.prisma.equipmentImportMatchMemory.findMany({
@@ -616,7 +616,7 @@ export class EquipmentRepository {
             workspaceId,
             fullName: cleanName,
             tags: [],
-            contactType: "SUPPLIER",
+            contactType: "VENDOR",
           },
           select: { id: true },
         });
