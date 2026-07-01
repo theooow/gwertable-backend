@@ -209,6 +209,10 @@ describe("equipment document import", () => {
     assert.equal(createdItem?.name, "Projecteur LED");
     assert.equal(createdItem?.supplier?.fullName, "SoundCo");
 
+    const memories = await prisma.equipmentImportMatchMemory.findMany({ where: { workspaceId: createdItem!.workspaceId } });
+    assert.ok(memories.some((memory) => memory.kind === "equipment" && memory.itemId === createdItem?.id));
+    assert.ok(memories.some((memory) => memory.kind === "supplier" && memory.supplierId === createdItem?.supplierId));
+
     const expenses = await prisma.expense.findMany({ where: { eventId: event.id, isEquipmentSync: true } });
     assert.equal(expenses.length, 1);
     assert.equal(expenses[0]?.label, "Facture SoundCo");

@@ -241,6 +241,7 @@ export class EquipmentService {
       discountCents: data.discountCents ?? null,
       discountPct: data.discountPct ?? null,
       fileUrl,
+      supplierName: data.supplierName ?? null,
       supplierId: data.supplierId ?? null,
       createSupplierName: data.createSupplierName ?? null,
       lines: data.lines.map((line) => ({

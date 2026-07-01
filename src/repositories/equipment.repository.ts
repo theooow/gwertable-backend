@@ -58,7 +58,9 @@ export class EquipmentRepository {
   }
 
   async enrichDocumentImportPreview(workspaceId: string, preview: EquipmentImportPreview): Promise<EquipmentImportPreview> {
-    const [items, suppliers] = await Promise.all([
+    const lineSourceKeys = preview.lines.map((line) => normalizeMatchText(line.name)).filter(Boolean);
+    const supplierSourceKey = preview.supplierName ? normalizeMatchText(preview.supplierName) : "";
+    const [items, suppliers, memories] = await Promise.all([
       this.prisma.equipmentItem.findMany({
         where: { workspaceId, archivedAt: null },
         select: { id: true, name: true, category: true, supplier: { select: { fullName: true } } },
@@ -67,13 +69,33 @@ export class EquipmentRepository {
         where: { workspaceId, archivedAt: null, contactType: "SUPPLIER" },
         select: { id: true, fullName: true },
       }),
+      this.prisma.equipmentImportMatchMemory.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            ...(lineSourceKeys.length > 0 ? [{ kind: "equipment", sourceKey: { in: lineSourceKeys } }] : []),
+            ...(supplierSourceKey ? [{ kind: "supplier", sourceKey: supplierSourceKey }] : []),
+          ],
+        },
+        select: { kind: true, sourceKey: true, itemId: true, supplierId: true },
+      }),
     ]);
 
-    const supplierCandidates = (preview.supplierName ? suppliers : [])
-      .map((supplier) => ({ id: supplier.id, fullName: supplier.fullName, score: matchScore(preview.supplierName ?? "", supplier.fullName) }))
-      .filter((candidate) => candidate.score >= 0.25)
+    const rememberedSupplierId = memories.find((memory) => memory.kind === "supplier" && memory.sourceKey === supplierSourceKey)?.supplierId;
+    const equipmentMemoryBySourceKey = new Map(
+      memories
+        .filter((memory) => memory.kind === "equipment" && memory.itemId)
+        .map((memory) => [memory.sourceKey, memory.itemId!]),
+    );
+
+    const supplierCandidates = suppliers
+      .map((supplier) => ({
+        id: supplier.id,
+        fullName: supplier.fullName,
+        score: rememberedSupplierId === supplier.id ? 1 : matchScore(preview.supplierName ?? "", supplier.fullName),
+      }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
+      .slice(0, 100);
 
     return {
       ...preview,
@@ -82,6 +104,7 @@ export class EquipmentRepository {
         ...line,
         equipmentCandidates: items
           .map((item) => {
+            const rememberedItemId = equipmentMemoryBySourceKey.get(normalizeMatchText(line.name));
             const nameScore = matchScore(line.name, item.name);
             const categoryBoost = normalizeMatchText(line.category) === normalizeMatchText(item.category) ? 0.05 : 0;
             const supplierBoost = preview.supplierName && item.supplier?.fullName
@@ -90,12 +113,11 @@ export class EquipmentRepository {
             return {
               id: item.id,
               name: item.name,
-              score: Math.min(1, nameScore + categoryBoost + supplierBoost),
+              score: rememberedItemId === item.id ? 1 : Math.min(0.99, nameScore + categoryBoost + supplierBoost),
             };
           })
-          .filter((candidate) => candidate.score >= 0.25)
           .sort((a, b) => b.score - a.score)
-          .slice(0, 5),
+          .slice(0, 200),
       })),
     };
   }
@@ -524,6 +546,7 @@ export class EquipmentRepository {
       discountCents?: number | null;
       discountPct?: number | null;
       fileUrl?: string | null;
+      supplierName?: string | null;
       supplierId?: string | null;
       createSupplierName?: string | null;
       lines: Array<{
@@ -602,6 +625,30 @@ export class EquipmentRepository {
       }
 
       documentSupplierId = documentSupplierId ?? (await getOrCreateSupplier(data.createSupplierName));
+      const supplierMemoryName = data.supplierName || data.createSupplierName;
+      if (documentSupplierId && supplierMemoryName?.trim()) {
+        await tx.equipmentImportMatchMemory.upsert({
+          where: {
+            workspaceId_kind_sourceKey: {
+              workspaceId,
+              kind: "supplier",
+              sourceKey: normalizeMatchText(supplierMemoryName),
+            },
+          },
+          create: {
+            workspaceId,
+            kind: "supplier",
+            sourceName: supplierMemoryName.trim(),
+            sourceKey: normalizeMatchText(supplierMemoryName),
+            supplierId: documentSupplierId,
+          },
+          update: {
+            sourceName: supplierMemoryName.trim(),
+            supplierId: documentSupplierId,
+            itemId: null,
+          },
+        });
+      }
 
       const createdQuote = await tx.equipmentQuote.create({
         data: {
@@ -635,6 +682,30 @@ export class EquipmentRepository {
               select: { id: true },
             })).id
           : null);
+
+        if (itemId && line.name.trim()) {
+          await tx.equipmentImportMatchMemory.upsert({
+            where: {
+              workspaceId_kind_sourceKey: {
+                workspaceId,
+                kind: "equipment",
+                sourceKey: normalizeMatchText(line.name),
+              },
+            },
+            create: {
+              workspaceId,
+              kind: "equipment",
+              sourceName: line.name.trim(),
+              sourceKey: normalizeMatchText(line.name),
+              itemId,
+            },
+            update: {
+              sourceName: line.name.trim(),
+              itemId,
+              supplierId: null,
+            },
+          });
+        }
 
         await tx.equipmentUsage.create({
           data: {

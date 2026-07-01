@@ -213,6 +213,7 @@ model Workspace {
   suppliers    Supplier[]
   equipmentItems  EquipmentItem[]
   equipmentGroups EquipmentGroup[]
+  equipmentImportMatchMemories EquipmentImportMatchMemory[]
   events          Event[]
 }
 
@@ -339,6 +340,7 @@ model Person {
   shoppingItems  ShoppingItem[]     @relation("ShoppingBuyer")
   equipmentOwned     EquipmentItem[] @relation("EquipmentOwner")
   equipmentSupplied  EquipmentItem[] @relation("EquipmentSupplier")
+  equipmentImportSupplierMemories EquipmentImportMatchMemory[] @relation("EquipmentImportSupplierMemory")
   announcements  Announcement[]     @relation("AnnouncementAuthor")
   runOfShowResponsible RunOfShowItem[] @relation("RunOfShowResponsible")
   documents            PersonDocument[]
@@ -428,9 +430,30 @@ model EquipmentItem {
 
   usages         EquipmentUsage[]
   groupItems     EquipmentGroupItem[]
+  importMatchMemories EquipmentImportMatchMemory[]
 
   @@index([workspaceId])
   @@index([category])
+}
+
+model EquipmentImportMatchMemory {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  kind          String
+  sourceName    String
+  sourceKey     String
+  itemId        String?
+  item          EquipmentItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  supplierId    String?
+  supplier      Person? @relation("EquipmentImportSupplierMemory", fields: [supplierId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceId, kind, sourceKey])
+  @@index([workspaceId, kind])
+  @@index([itemId])
+  @@index([supplierId])
 }
 
 model EquipmentGroup {
