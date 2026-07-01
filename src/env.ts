@@ -30,6 +30,13 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("llava"),
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  NOTIFICATION_WORKER_ENABLED: z
+    .enum(["true", "false"])
+    .default(process.env.NODE_ENV === "production" ? "true" : "false")
+    .transform((value) => value === "true"),
+  NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  NOTIFICATION_REMINDER_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(5),
 });
 
 export const env = envSchema.parse(process.env);
