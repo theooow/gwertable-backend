@@ -138,7 +138,7 @@ export async function seedEventContext(authorization: string) {
     ...eventPayload,
     venueId: venue.id,
   });
-  const event = json<{ id: string; name: string }>(createdEvent);
+  const event = json<{ id: string; name: string; workspaceId: string }>(createdEvent);
 
   return { person, venue, event };
 }
