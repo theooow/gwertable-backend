@@ -1,13 +1,14 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type { z } from "zod";
-import type { taskAttachmentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../schemas/task.js";
+import type { taskAttachmentSchema, taskCommentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../schemas/task.js";
 import { TaskRepository } from "../repositories/task.repository.js";
 
 type TaskInput = z.infer<typeof taskSchema>;
 type TaskStatusInput = z.infer<typeof taskStatusSchema>;
 type TaskLabelInput = z.infer<typeof taskLabelSchema>;
 type TaskAttachmentInput = z.infer<typeof taskAttachmentSchema>;
+type TaskCommentInput = z.infer<typeof taskCommentSchema>;
 
 /**
  * Service métier pour le domaine tâche.
@@ -58,9 +59,9 @@ export class TaskService {
    * @param data - Données validées
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async create(eventId: string, workspaceId: string, role: UserRole, data: TaskInput) {
+  async create(eventId: string, workspaceId: string, role: UserRole, userId: string, data: TaskInput) {
     requireCan(role, "task.write");
-    return this.taskRepository.create(eventId, workspaceId, data);
+    return this.taskRepository.create(eventId, workspaceId, userId, data);
   }
 
   /**
@@ -72,9 +73,9 @@ export class TaskService {
    * @param data - Données validées de mise à jour
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async update(id: string, workspaceId: string, role: UserRole, data: TaskInput) {
+  async update(id: string, workspaceId: string, role: UserRole, userId: string, data: TaskInput) {
     requireCan(role, "task.write");
-    return this.taskRepository.update(id, workspaceId, data);
+    return this.taskRepository.update(id, workspaceId, userId, data);
   }
 
   /**
@@ -86,9 +87,14 @@ export class TaskService {
    * @param data - Statut validé
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async updateStatus(id: string, workspaceId: string, role: UserRole, data: TaskStatusInput) {
+  async updateStatus(id: string, workspaceId: string, role: UserRole, userId: string, data: TaskStatusInput) {
     requireCan(role, "task.write");
-    return this.taskRepository.updateStatus(id, workspaceId, data.status);
+    return this.taskRepository.updateStatus(id, workspaceId, userId, data.status);
+  }
+
+  async addComment(id: string, workspaceId: string, role: UserRole, userId: string, data: TaskCommentInput) {
+    requireCan(role, "task.write");
+    return this.taskRepository.addComment(id, workspaceId, userId, data.body);
   }
 
   async addAttachment(id: string, workspaceId: string, role: UserRole, data: TaskAttachmentInput) {

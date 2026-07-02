@@ -18,6 +18,23 @@ type TaskAttachmentRow = {
   createdAt: Date;
 };
 
+type TaskActorRow = {
+  taskId: string;
+  createdByUserId: string | null;
+  createdByName: string | null;
+  updatedByUserId: string | null;
+  updatedByName: string | null;
+};
+
+type TaskCommentRow = {
+  id: string;
+  taskId: string;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: string; name: string } | null;
+};
+
 async function findAssignees(prisma: PrismaClient, taskIds: string[]) {
   if (taskIds.length === 0) return new Map<string, Array<{ person: { id: string; fullName: string } }>>();
   const rows = await prisma.$queryRaw<TaskAssigneeRow[]>`
@@ -53,6 +70,63 @@ async function findAttachments(prisma: PrismaClient, taskIds: string[]) {
   return byTask;
 }
 
+async function findActors(prisma: PrismaClient, taskIds: string[]) {
+  if (taskIds.length === 0) return new Map<string, TaskActorRow>();
+  const rows = await prisma.$queryRaw<TaskActorRow[]>`
+    SELECT
+      t."id" AS "taskId",
+      cu."id" AS "createdByUserId",
+      COALESCE(NULLIF(TRIM(CONCAT(cu."firstName", ' ', cu."lastName")), ''), cu."name", cu."email") AS "createdByName",
+      uu."id" AS "updatedByUserId",
+      COALESCE(NULLIF(TRIM(CONCAT(uu."firstName", ' ', uu."lastName")), ''), uu."name", uu."email") AS "updatedByName"
+    FROM "Task" t
+    LEFT JOIN "User" cu ON cu."id" = t."createdByUserId"
+    LEFT JOIN "User" uu ON uu."id" = t."updatedByUserId"
+    WHERE t."id" = ANY(${taskIds})
+  `;
+  return new Map(rows.map((row) => [row.taskId, row]));
+}
+
+async function findComments(prisma: PrismaClient, taskIds: string[]) {
+  if (taskIds.length === 0) return new Map<string, TaskCommentRow[]>();
+  const rows = await prisma.$queryRaw<Array<{
+    id: string;
+    taskId: string;
+    body: string;
+    createdAt: Date;
+    updatedAt: Date;
+    authorId: string | null;
+    authorName: string | null;
+  }>>`
+    SELECT
+      c."id",
+      c."taskId",
+      c."body",
+      c."createdAt",
+      c."updatedAt",
+      u."id" AS "authorId",
+      COALESCE(NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), ''), u."name", u."email") AS "authorName"
+    FROM "TaskComment" c
+    LEFT JOIN "User" u ON u."id" = c."authorId"
+    WHERE c."taskId" = ANY(${taskIds})
+    ORDER BY c."createdAt" ASC
+  `;
+  const byTask = new Map<string, TaskCommentRow[]>();
+  for (const row of rows) {
+    const current = byTask.get(row.taskId) ?? [];
+    current.push({
+      id: row.id,
+      taskId: row.taskId,
+      body: row.body,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      author: row.authorId && row.authorName ? { id: row.authorId, name: row.authorName } : null,
+    });
+    byTask.set(row.taskId, current);
+  }
+  return byTask;
+}
+
 /**
  * DAO pour le modèle {@link Task}.
  * Fournit les opérations CRUD sur les tâches d'un événement.
@@ -76,12 +150,22 @@ export class TaskDao extends BaseDao {
       },
       orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
     });
-    const assignees = await findAssignees(this.prisma, tasks.map((task) => task.id));
-    const attachments = await findAttachments(this.prisma, tasks.map((task) => task.id));
+    const taskIds = tasks.map((task) => task.id);
+    const assignees = await findAssignees(this.prisma, taskIds);
+    const attachments = await findAttachments(this.prisma, taskIds);
+    const actors = await findActors(this.prisma, taskIds);
+    const comments = await findComments(this.prisma, taskIds);
     return tasks.map((task) => ({
       ...task,
       assignees: assignees.get(task.id) ?? [],
       attachments: attachments.get(task.id) ?? [],
+      createdByUser: actors.get(task.id)?.createdByUserId
+        ? { id: actors.get(task.id)!.createdByUserId!, name: actors.get(task.id)!.createdByName ?? "Utilisateur" }
+        : null,
+      updatedByUser: actors.get(task.id)?.updatedByUserId
+        ? { id: actors.get(task.id)!.updatedByUserId!, name: actors.get(task.id)!.updatedByName ?? "Utilisateur" }
+        : null,
+      comments: comments.get(task.id) ?? [],
     }));
   }
 

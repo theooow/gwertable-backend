@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { buildTasksCalendar } from "../../lib/calendar.js";
-import { taskAttachmentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../../schemas/task.js";
+import { taskAttachmentSchema, taskCommentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../../schemas/task.js";
 import { TaskDao } from "../../dao/task.dao.js";
 import { TaskCalendarSubscriptionDao } from "../../dao/task-calendar-subscription.dao.js";
 import { TaskRepository } from "../../repositories/task.repository.js";
@@ -88,6 +88,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       eventId,
       request.workspaceId,
       request.userRole,
+      request.user!.id,
       data,
     );
     return reply.status(201).send({ ...task, autoRunOfShowItem });
@@ -96,25 +97,32 @@ export async function taskRoutes(fastify: FastifyInstance) {
   fastify.put("/api/events/:eventId/tasks/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = taskSchema.parse(request.body);
-    return service.update(id, request.workspaceId, request.userRole, data);
+    return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.put("/api/tasks/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = taskSchema.parse(request.body);
-    return service.update(id, request.workspaceId, request.userRole, data);
+    return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.patch("/api/events/:eventId/tasks/:id/status", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = taskStatusSchema.parse(request.body);
-    return service.updateStatus(id, request.workspaceId, request.userRole, data);
+    return service.updateStatus(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.patch("/api/tasks/:id/status", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = taskStatusSchema.parse(request.body);
-    return service.updateStatus(id, request.workspaceId, request.userRole, data);
+    return service.updateStatus(id, request.workspaceId, request.userRole, request.user!.id, data);
+  });
+
+  fastify.post("/api/tasks/:id/comments", async (request, reply) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = taskCommentSchema.parse(request.body);
+    const comment = await service.addComment(id, request.workspaceId, request.userRole, request.user!.id, data);
+    return reply.status(201).send(comment);
   });
 
   fastify.post("/api/tasks/:id/attachments", async (request, reply) => {

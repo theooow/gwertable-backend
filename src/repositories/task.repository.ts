@@ -45,6 +45,15 @@ type TaskAttachmentRow = TaskAttachmentInput & {
   createdAt: Date;
 };
 
+type TaskCommentRow = {
+  id: string;
+  taskId: string;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+  author: { id: string; name: string } | null;
+};
+
 const defaultLabelColors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#be123c", "#4b5563"];
 
 function colorForLabel(name: string) {
@@ -299,7 +308,7 @@ export class TaskRepository {
    * @param data - Données validées
    * @returns `{ task, autoRunOfShowItem }` — l'élément du conducteur peut être `null`
    */
-  async create(eventId: string, workspaceId: string, data: TaskInput) {
+  async create(eventId: string, workspaceId: string, userId: string, data: TaskInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
     await this.assertPeopleIfProvided(assigneeIds, workspaceId);
@@ -324,6 +333,11 @@ export class TaskRepository {
         },
       });
       await replaceTaskAssignees(tx, task.id, assigneeIds);
+      await tx.$executeRaw`
+        UPDATE "Task"
+        SET "createdByUserId" = ${userId}, "updatedByUserId" = ${userId}
+        WHERE "id" = ${task.id}
+      `;
       const autoRunOfShowItem = await syncRunOfShowItemForTask(tx, task);
       return { task: { ...task, assignees: await findTaskAssignees(tx, task.id) }, autoRunOfShowItem };
     });
@@ -337,7 +351,7 @@ export class TaskRepository {
    * @param data - Données validées de mise à jour
    * @throws {NotFoundError} Si la tâche est introuvable
    */
-  async update(id: string, workspaceId: string, data: TaskInput) {
+  async update(id: string, workspaceId: string, userId: string, data: TaskInput) {
     await this.assertTaskInWorkspace(id, workspaceId);
     const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
     await this.assertPeopleIfProvided(assigneeIds, workspaceId);
@@ -360,6 +374,11 @@ export class TaskRepository {
         },
       });
       await replaceTaskAssignees(tx, id, assigneeIds);
+      await tx.$executeRaw`
+        UPDATE "Task"
+        SET "updatedByUserId" = ${userId}
+        WHERE "id" = ${id}
+      `;
       await syncRunOfShowItemForTask(tx, task);
       const updated = await tx.task.findUniqueOrThrow({
         where: { id },
@@ -379,9 +398,57 @@ export class TaskRepository {
    * @param status - Nouveau statut
    * @throws {NotFoundError} Si la tâche est introuvable
    */
-  async updateStatus(id: string, workspaceId: string, status: TaskStatus) {
+  async updateStatus(id: string, workspaceId: string, userId: string, status: TaskStatus) {
     await this.assertTaskInWorkspace(id, workspaceId);
-    return this.prisma.task.update({ where: { id }, data: { status } });
+    const task = await this.prisma.task.update({ where: { id }, data: { status } });
+    await this.prisma.$executeRaw`
+      UPDATE "Task"
+      SET "updatedByUserId" = ${userId}
+      WHERE "id" = ${id}
+    `;
+    return task;
+  }
+
+  async addComment(id: string, workspaceId: string, userId: string, body: string) {
+    await this.assertTaskInWorkspace(id, workspaceId);
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string;
+      taskId: string;
+      body: string;
+      createdAt: Date;
+      updatedAt: Date;
+      authorId: string | null;
+      authorName: string | null;
+    }>>`
+      INSERT INTO "TaskComment" ("id", "taskId", "authorId", "body", "updatedAt")
+      VALUES (${`taskcomment_${crypto.randomUUID()}`}, ${id}, ${userId}, ${body}, CURRENT_TIMESTAMP)
+      RETURNING
+        "id",
+        "taskId",
+        "body",
+        "createdAt",
+        "updatedAt",
+        "authorId",
+        (
+          SELECT COALESCE(NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), ''), u."name", u."email")
+          FROM "User" u
+          WHERE u."id" = "TaskComment"."authorId"
+        ) AS "authorName"
+    `;
+    await this.prisma.$executeRaw`
+      UPDATE "Task"
+      SET "updatedByUserId" = ${userId}
+      WHERE "id" = ${id}
+    `;
+    const row = rows[0]!;
+    return {
+      id: row.id,
+      taskId: row.taskId,
+      body: row.body,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      author: row.authorId && row.authorName ? { id: row.authorId, name: row.authorName } : null,
+    } satisfies TaskCommentRow;
   }
 
   async addAttachment(id: string, workspaceId: string, data: TaskAttachmentInput) {

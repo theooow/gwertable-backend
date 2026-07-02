@@ -192,6 +192,9 @@ model User {
   sessions      Session[]
   workspaceMemberships WorkspaceMember[]
   eventCollaborations   EventCollaborator[]
+  tasksCreated          Task[]        @relation("TaskCreatedBy")
+  tasksUpdated          Task[]        @relation("TaskUpdatedBy")
+  taskComments          TaskComment[]
 
   @@index([defaultWorkspaceId])
 }
@@ -637,6 +640,11 @@ model Task {
   assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
   assignees   TaskAssignee[]
   attachments TaskAttachment[]
+  comments    TaskComment[]
+  createdByUserId String?
+  createdByUser   User? @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUserId String?
+  updatedByUser   User? @relation("TaskUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   runOfShowItem RunOfShowItem?
 
   createdAt   DateTime @default(now())
@@ -644,7 +652,23 @@ model Task {
 
   @@index([eventId, status])
   @@index([assigneeId])
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
   @@index([dueAt])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([authorId])
 }
 
 model TaskLabel {

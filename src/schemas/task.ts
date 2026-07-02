@@ -35,3 +35,7 @@ export const taskAttachmentSchema = z.object({
   contentType: z.string().min(1).max(120),
   size: z.number().int().positive().max(12 * 1024 * 1024),
 });
+
+export const taskCommentSchema = z.object({
+  body: requiredText("Le commentaire", LIMITS.longText),
+});
