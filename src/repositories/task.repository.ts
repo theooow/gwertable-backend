@@ -55,6 +55,15 @@ type TaskCommentRow = {
 };
 
 const defaultLabelColors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#be123c", "#4b5563"];
+const defaultTaskLabels = [
+  "logistique",
+  "communication",
+  "technique",
+  "artistique",
+  "administratif",
+  "courses",
+  "autre",
+];
 
 function colorForLabel(name: string) {
   const sum = [...name].reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -226,6 +235,15 @@ export class TaskRepository {
   }
 
   async ensureLabelsFromTasks(eventId: string) {
+    const existingLabels = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS "count"
+      FROM "TaskLabel"
+      WHERE "eventId" = ${eventId}
+    `;
+    if ((existingLabels[0]?.count ?? 0n) === 0n) {
+      await ensureTaskLabels(this.prisma, eventId, defaultTaskLabels);
+    }
+
     const rows = await this.prisma.task.findMany({
       where: { eventId },
       select: { tags: true },
