@@ -246,9 +246,9 @@ export class TaskRepository {
 
     const rows = await this.prisma.task.findMany({
       where: { eventId },
-      select: { tags: true },
+      select: { category: true, tags: true },
     });
-    const names = rows.flatMap((row) => row.tags);
+    const names = rows.flatMap((row) => [row.category, ...row.tags]);
     await ensureTaskLabels(this.prisma, eventId, names);
   }
 
@@ -295,7 +295,9 @@ export class TaskRepository {
     if (previousName !== data.name) {
       await this.prisma.$executeRaw`
         UPDATE "Task"
-        SET "tags" = array_replace("tags", ${previousName}, ${data.name})
+        SET
+          "tags" = array_replace("tags", ${previousName}, ${data.name}),
+          "category" = CASE WHEN "category" = ${previousName} THEN ${data.name} ELSE "category" END
         WHERE "eventId" = ${eventId}
       `;
     }
@@ -312,7 +314,13 @@ export class TaskRepository {
     if (!existing[0]) throw new NotFoundError("Etiquette introuvable");
     await this.prisma.$executeRaw`
       UPDATE "Task"
-      SET "tags" = array_remove("tags", ${existing[0].name})
+      SET
+        "tags" = array_remove("tags", ${existing[0].name}),
+        "category" = CASE
+          WHEN "category" = ${existing[0].name}
+          THEN COALESCE((array_remove("tags", ${existing[0].name}))[1], 'autre')
+          ELSE "category"
+        END
       WHERE "eventId" = ${eventId}
     `;
     return { ok: true };
