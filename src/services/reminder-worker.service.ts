@@ -4,10 +4,11 @@ import type { PrismaClient } from "@prisma/client";
 import { env } from "../env.js";
 import type { DiscordSender } from "../lib/discord.js";
 import type { WhatsAppSender } from "../lib/whatsapp.js";
+import { ActivityRepository } from "../repositories/activity.repository.js";
 
 type ReminderTargetType = "TASK" | "RUN_OF_SHOW";
 type ReminderType = "REMINDER" | "OVERDUE";
-type ReminderChannel = "DISCORD" | "WHATSAPP";
+type ReminderChannel = "DISCORD" | "WHATSAPP" | "IN_APP";
 
 type ReminderCandidate = {
   eventId: string;
@@ -54,12 +55,16 @@ function reminderDate(happensAt: Date, offsetMinutes: number) {
 }
 
 export class ReminderWorkerService {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly discord: DiscordSender,
     private readonly whatsapp?: WhatsAppSender,
     private readonly logger?: FastifyBaseLogger,
-  ) {}
+  ) {
+    this.activityRepository = new ActivityRepository(prisma);
+  }
 
   async collectDueReminders(now = new Date()) {
     const lookbackMs = env.NOTIFICATION_REMINDER_LOOKBACK_MINUTES * 60_000;
@@ -170,6 +175,7 @@ export class ReminderWorkerService {
   }
 
   async runDueReminders(now = new Date()) {
+    const inApp = await this.createDueInAppNotifications(now);
     const candidates = await this.collectDueReminders(now);
     let sent = 0;
     let skipped = 0;
@@ -190,13 +196,15 @@ export class ReminderWorkerService {
             botToken: candidate.discordBotToken,
             content: buildMessage(candidate),
           });
-        } else {
+        } else if (candidate.channel === "WHATSAPP") {
           if (!this.whatsapp) throw new Error("WhatsApp sender is not configured");
           if (!candidate.whatsappPhone) throw new Error("WhatsApp phone is missing");
           await this.whatsapp.sendMessage({
             to: candidate.whatsappPhone,
             content: buildMessage(candidate),
           });
+        } else {
+          throw new Error("Unsupported reminder channel");
         }
         await this.prisma.notificationDelivery.update({
           where: { id: delivery.id },
@@ -214,7 +222,84 @@ export class ReminderWorkerService {
       }
     }
 
-    return { candidates: candidates.length, sent, skipped, failed };
+    return { candidates: candidates.length + inApp.created, sent: sent + inApp.created, skipped, failed };
+  }
+
+  private async createDueInAppNotifications(now: Date) {
+    const lookbackMs = env.NOTIFICATION_REMINDER_LOOKBACK_MINUTES * 60_000;
+    const preferences = await this.prisma.activityNotificationPreference.findMany({
+      where: { taskDueSoonEnabled: true, user: { personId: { not: null } } },
+      include: {
+        user: { select: { id: true, personId: true } },
+        workspace: { select: { id: true } },
+      },
+    });
+
+    let created = 0;
+    for (const preference of preferences) {
+      if (!preference.user.personId) continue;
+      const dueFrom = new Date(now.getTime() - lookbackMs);
+      const dueTo = new Date(now.getTime() + preference.taskDueSoonMinutes * 60_000);
+      const tasks = await this.prisma.task.findMany({
+        where: {
+          event: { workspaceId: preference.workspaceId },
+          status: { not: "DONE" },
+          dueAt: { gte: dueFrom, lte: dueTo },
+          OR: [
+            { assigneeId: preference.user.personId },
+            { assignees: { some: { personId: preference.user.personId } } },
+          ],
+        },
+        include: { event: { select: { id: true, name: true } } },
+      });
+
+      for (const task of tasks) {
+        if (!task.dueAt) continue;
+        const scheduledFor = reminderDate(task.dueAt, preference.taskDueSoonMinutes);
+        if (!isDue(scheduledFor, now, lookbackMs) && task.dueAt > now) continue;
+        const delivery = await this.createPendingDelivery({
+          eventId: task.eventId,
+          eventName: task.event.name,
+          channel: "IN_APP",
+          targetType: "TASK",
+          targetId: task.id,
+          reminderType: "REMINDER",
+          offsetMinutes: preference.taskDueSoonMinutes,
+          scheduledFor,
+          happensAt: task.dueAt,
+          title: task.title,
+          personName: "",
+        });
+        if (!delivery) continue;
+        const activity = await this.activityRepository.record({
+          workspaceId: preference.workspaceId,
+          eventId: task.eventId,
+          type: "TASK_DUE_SOON",
+          title: `Tache bientot due: ${task.title}`,
+          body: `${task.event.name} - ${formatParisDate(task.dueAt)}`,
+          entityType: "TASK",
+          entityId: task.id,
+          notify: false,
+        });
+        await this.prisma.inAppNotification.create({
+          data: {
+            workspaceId: preference.workspaceId,
+            eventId: task.eventId,
+            userId: preference.userId,
+            activityId: activity.id,
+            type: "TASK_DUE_SOON",
+            title: `Tache bientot due: ${task.title}`,
+            body: `${task.event.name} - ${formatParisDate(task.dueAt)}`,
+          },
+        });
+        await this.prisma.notificationDelivery.update({
+          where: { id: delivery.id },
+          data: { status: "SENT", sentAt: new Date() },
+        });
+        created += 1;
+      }
+    }
+    return { created };
   }
 
   private buildChannelCandidates(

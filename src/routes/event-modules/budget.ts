@@ -28,30 +28,30 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/expenses", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
-    const expense = await service.createExpense(eventId, request.workspaceId, request.userRole, data);
+    const expense = await service.createExpense(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(expense);
   });
 
   fastify.put("/api/events/:eventId/expenses/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
-    return service.updateExpense(id, request.workspaceId, request.userRole, data);
+    return service.updateExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.put("/api/expenses/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
-    return service.updateExpense(id, request.workspaceId, request.userRole, data);
+    return service.updateExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/events/:eventId/expenses/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
-    return service.deleteExpense(id, request.workspaceId, request.userRole);
+    return service.deleteExpense(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.delete("/api/expenses/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.deleteExpense(id, request.workspaceId, request.userRole);
+    return service.deleteExpense(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.get("/api/events/:eventId/expenses/persons", async (request) => {
@@ -69,19 +69,19 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/incomes", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = incomeSchema.parse(request.body);
-    const income = await service.createIncome(eventId, request.workspaceId, request.userRole, data);
+    const income = await service.createIncome(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(income);
   });
 
   fastify.put("/api/incomes/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = incomeSchema.parse(request.body);
-    return service.updateIncome(id, request.workspaceId, request.userRole, data);
+    return service.updateIncome(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/incomes/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.deleteIncome(id, request.workspaceId, request.userRole);
+    return service.deleteIncome(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   // ── Ticket Tiers ─────────────────────────────────────────────────────────────

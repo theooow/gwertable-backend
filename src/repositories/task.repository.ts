@@ -4,6 +4,7 @@ import { NotFoundError } from "../lib/errors.js";
 import { getParisDayKey } from "../lib/calendar.js";
 import { TaskDao } from "../dao/task.dao.js";
 import { TaskCalendarSubscriptionDao } from "../dao/task-calendar-subscription.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 type TaskInput = {
   title: string;
@@ -174,11 +175,15 @@ async function syncRunOfShowItemForTask(
  * Orchestre le CRUD et la synchronisation bidirectionnelle avec le conducteur.
  */
 export class TaskRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly taskDao: TaskDao,
     private readonly subscriptionDao: TaskCalendarSubscriptionDao,
     private readonly prisma: PrismaClient,
-  ) {}
+  ) {
+    this.activityRepository = new ActivityRepository(prisma);
+  }
 
   /**
    * Vérifie qu'un événement appartient à l'espace de travail.
@@ -339,7 +344,7 @@ export class TaskRepository {
     const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
     await this.assertPeopleIfProvided(assigneeIds, workspaceId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await ensureTaskCategories(tx, eventId, data.tags ?? []);
       const task = await tx.task.create({
         data: {
@@ -367,6 +372,18 @@ export class TaskRepository {
       const autoRunOfShowItem = await syncRunOfShowItemForTask(tx, task);
       return { task: { ...task, assignees: await findTaskAssignees(tx, task.id) }, autoRunOfShowItem };
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "TASK_COMMENT",
+      title: `Tache creee: ${result.task.title}`,
+      body: result.task.dueAt ? `Echeance: ${result.task.dueAt.toISOString()}` : null,
+      entityType: "TASK",
+      entityId: result.task.id,
+      notify: false,
+    });
+    return result;
   }
 
   /**
@@ -382,7 +399,7 @@ export class TaskRepository {
     const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
     await this.assertPeopleIfProvided(assigneeIds, workspaceId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedTask = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.task.findUniqueOrThrow({ where: { id }, select: { eventId: true } });
       await ensureTaskCategories(tx, existing.eventId, data.tags ?? []);
       const task = await tx.task.update({
@@ -414,6 +431,17 @@ export class TaskRepository {
       });
       return { ...updated, assignees: await findTaskAssignees(tx, id) };
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: updatedTask.eventId,
+      actorId: userId,
+      type: "TASK_COMMENT",
+      title: `Tache modifiee: ${updatedTask.title}`,
+      entityType: "TASK",
+      entityId: updatedTask.id,
+      notify: false,
+    });
+    return updatedTask;
   }
 
   /**
@@ -432,6 +460,17 @@ export class TaskRepository {
       SET "updatedByUserId" = ${userId}
       WHERE "id" = ${id}
     `;
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: task.eventId,
+      actorId: userId,
+      type: "TASK_COMMENT",
+      title: `Statut de tache modifie: ${task.title}`,
+      body: `Nouveau statut: ${status}`,
+      entityType: "TASK",
+      entityId: task.id,
+      notify: false,
+    });
     return task;
   }
 
@@ -467,6 +506,22 @@ export class TaskRepository {
       WHERE "id" = ${id}
     `;
     const row = rows[0]!;
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      select: { id: true, title: true, eventId: true },
+    });
+    if (task) {
+      await this.activityRepository.record({
+        workspaceId,
+        eventId: task.eventId,
+        actorId: userId,
+        type: "TASK_COMMENT",
+        title: `Nouveau commentaire sur ${task.title}`,
+        body,
+        entityType: "TASK",
+        entityId: task.id,
+      });
+    }
     return {
       id: row.id,
       taskId: row.taskId,

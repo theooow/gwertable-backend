@@ -195,6 +195,9 @@ model User {
   tasksCreated          Task[]        @relation("TaskCreatedBy")
   tasksUpdated          Task[]        @relation("TaskUpdatedBy")
   taskComments          TaskComment[]
+  activityEntries       ActivityEntry[]
+  notifications         InAppNotification[]
+  notificationPreferences ActivityNotificationPreference[]
 
   @@index([defaultWorkspaceId])
 }
@@ -218,6 +221,9 @@ model Workspace {
   equipmentGroups EquipmentGroup[]
   equipmentImportMatchMemories EquipmentImportMatchMemory[]
   events          Event[]
+  activityEntries ActivityEntry[]
+  notifications   InAppNotification[]
+  notificationPreferences ActivityNotificationPreference[]
 }
 
 model EventCollaborator {
@@ -531,6 +537,8 @@ model Event {
   consumables      ConsumableItem[]
   equipmentQuotes  EquipmentQuote[]
   collaborators    EventCollaborator[]
+  activityEntries  ActivityEntry[]
+  notifications    InAppNotification[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -589,6 +597,69 @@ model NotificationDelivery {
   @@index([eventId])
   @@index([status])
   @@index([scheduledFor])
+}
+
+model ActivityEntry {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  eventId     String?
+  event       Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  type        String
+  title       String
+  body        String?
+  entityType  String?
+  entityId    String?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  notifications InAppNotification[]
+
+  @@index([workspaceId, createdAt])
+  @@index([eventId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([type])
+}
+
+model InAppNotification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  eventId     String?
+  event       Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityId  String?
+  activity    ActivityEntry? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  body        String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, userId, createdAt])
+  @@index([userId, readAt])
+  @@index([eventId, createdAt])
+  @@index([activityId])
+}
+
+model ActivityNotificationPreference {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskCommentsEnabled Boolean @default(true)
+  budgetChangesEnabled Boolean @default(true)
+  taskDueSoonEnabled Boolean @default(true)
+  taskDueSoonMinutes Int @default(1440)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 model EventParticipant {

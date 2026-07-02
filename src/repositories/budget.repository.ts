@@ -17,6 +17,7 @@ import {
   type ShotgunEvent,
 } from "../lib/shotgun.js";
 import { ExpenseDao } from "../dao/expense.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 type ExpenseInput = {
   label: string;
@@ -149,10 +150,14 @@ async function clearParticipantFee(
  * Couvre les dépenses, revenus, tarifs billets, consommables et la synchronisation Shotgun.
  */
 export class BudgetRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly expenseDao: ExpenseDao,
     private readonly prisma: PrismaClient,
-  ) {}
+  ) {
+    this.activityRepository = new ActivityRepository(prisma);
+  }
 
   private async assertEventInWorkspace(eventId: string, workspaceId: string) {
     const event = await this.prisma.event.findFirst({
@@ -200,7 +205,7 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async createExpense(eventId: string, workspaceId: string, data: ExpenseInput) {
+  async createExpense(eventId: string, workspaceId: string, userId: string, data: ExpenseInput) {
     const eventSettings = await this.getEventTaxSettings(eventId, workspaceId);
     await this.assertPersonIfProvided(data.paidById, workspaceId);
     const amounts = computeBudgetAmounts(
@@ -210,7 +215,7 @@ export class BudgetRepository {
       eventSettings.vatMode,
     );
 
-    return this.prisma.expense.create({
+    const expense = await this.prisma.expense.create({
       data: {
         eventId,
         label: data.label,
@@ -229,6 +234,17 @@ export class BudgetRepository {
         notes: data.notes || null,
       },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "BUDGET_CHANGE",
+      title: `Depense ajoutee: ${expense.label}`,
+      body: `${(expense.amountCents / 100).toFixed(2)} EUR`,
+      entityType: "EXPENSE",
+      entityId: expense.id,
+    });
+    return expense;
   }
 
   /**
@@ -239,7 +255,7 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si la dépense est introuvable
    */
-  async updateExpense(id: string, workspaceId: string, data: ExpenseInput) {
+  async updateExpense(id: string, workspaceId: string, userId: string, data: ExpenseInput) {
     const existingExpense = await this.expenseDao.findByIdOrThrow(id, workspaceId);
     await this.assertPersonIfProvided(data.paidById, workspaceId);
     const eventSettings = await this.getEventTaxSettings(existingExpense.eventId, workspaceId);
@@ -250,7 +266,7 @@ export class BudgetRepository {
       eventSettings.vatMode,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const expense = await tx.expense.update({
         where: { id },
         data: {
@@ -273,6 +289,17 @@ export class BudgetRepository {
       await syncParticipantFee(tx, expense);
       return expense;
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: updated.eventId,
+      actorId: userId,
+      type: "BUDGET_CHANGE",
+      title: `Depense modifiee: ${updated.label}`,
+      body: `${(updated.amountCents / 100).toFixed(2)} EUR`,
+      entityType: "EXPENSE",
+      entityId: updated.id,
+    });
+    return updated;
   }
 
   /**
@@ -282,10 +309,10 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si la dépense est introuvable
    */
-  async deleteExpense(id: string, workspaceId: string) {
+  async deleteExpense(id: string, workspaceId: string, userId: string) {
     await this.expenseDao.findByIdOrThrow(id, workspaceId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const deleted = await this.prisma.$transaction(async (tx) => {
       const expense = await tx.expense.findFirst({
         where: { id, event: { workspaceId } },
       });
@@ -293,6 +320,18 @@ export class BudgetRepository {
       await clearParticipantFee(tx, expense?.sourceParticipantId ?? null);
       return expense;
     });
+    if (deleted) {
+      await this.activityRepository.record({
+        workspaceId,
+        eventId: deleted.eventId,
+        actorId: userId,
+        type: "BUDGET_CHANGE",
+        title: `Depense supprimee: ${deleted.label}`,
+        entityType: "EXPENSE",
+        entityId: deleted.id,
+      });
+    }
+    return deleted;
   }
 
   /**
@@ -329,7 +368,7 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async createIncome(eventId: string, workspaceId: string, data: IncomeInput) {
+  async createIncome(eventId: string, workspaceId: string, userId: string, data: IncomeInput) {
     const eventSettings = await this.getEventTaxSettings(eventId, workspaceId);
     const amounts = computeBudgetAmounts(
       data.amount,
@@ -337,7 +376,7 @@ export class BudgetRepository {
       data.vatRateBasisPoints,
       eventSettings.vatMode,
     );
-    return this.prisma.income.create({
+    const income = await this.prisma.income.create({
       data: {
         eventId,
         label: data.label,
@@ -352,6 +391,17 @@ export class BudgetRepository {
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
       },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "BUDGET_CHANGE",
+      title: `Revenu ajoute: ${income.label}`,
+      body: `${(income.amountCents / 100).toFixed(2)} EUR`,
+      entityType: "INCOME",
+      entityId: income.id,
+    });
+    return income;
   }
 
   /**
@@ -362,7 +412,7 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si le revenu est introuvable
    */
-  async updateIncome(id: string, workspaceId: string, data: IncomeInput) {
+  async updateIncome(id: string, workspaceId: string, userId: string, data: IncomeInput) {
     const existing = await this.prisma.income.findFirst({
       where: { id, event: { workspaceId } },
       select: { id: true, eventId: true },
@@ -376,7 +426,7 @@ export class BudgetRepository {
       eventSettings.vatMode,
     );
 
-    return this.prisma.income.update({
+    const income = await this.prisma.income.update({
       where: { id },
       data: {
         label: data.label,
@@ -391,6 +441,17 @@ export class BudgetRepository {
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
       },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: income.eventId,
+      actorId: userId,
+      type: "BUDGET_CHANGE",
+      title: `Revenu modifie: ${income.label}`,
+      body: `${(income.amountCents / 100).toFixed(2)} EUR`,
+      entityType: "INCOME",
+      entityId: income.id,
+    });
+    return income;
   }
 
   /**
@@ -400,13 +461,23 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si le revenu est introuvable
    */
-  async deleteIncome(id: string, workspaceId: string) {
+  async deleteIncome(id: string, workspaceId: string, userId: string) {
     const existing = await this.prisma.income.findFirst({
       where: { id, event: { workspaceId } },
       select: { id: true },
     });
     if (!existing) throw new NotFoundError("Revenu introuvable");
-    return this.prisma.income.delete({ where: { id } });
+    const income = await this.prisma.income.delete({ where: { id } });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: income.eventId,
+      actorId: userId,
+      type: "BUDGET_CHANGE",
+      title: `Revenu supprime: ${income.label}`,
+      entityType: "INCOME",
+      entityId: income.id,
+    });
+    return income;
   }
 
   // ── Ticket Tiers ─────────────────────────────────────────────────────────────

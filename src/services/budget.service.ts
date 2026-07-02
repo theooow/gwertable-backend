@@ -24,19 +24,19 @@ export class BudgetService {
     return this.budgetRepository.listExpenses(eventId, workspaceId);
   }
 
-  async createExpense(eventId: string, workspaceId: string, role: UserRole, data: ExpenseInput) {
+  async createExpense(eventId: string, workspaceId: string, role: UserRole, userId: string, data: ExpenseInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.createExpense(eventId, workspaceId, data);
+    return this.budgetRepository.createExpense(eventId, workspaceId, userId, data);
   }
 
-  async updateExpense(id: string, workspaceId: string, role: UserRole, data: ExpenseInput) {
+  async updateExpense(id: string, workspaceId: string, role: UserRole, userId: string, data: ExpenseInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.updateExpense(id, workspaceId, data);
+    return this.budgetRepository.updateExpense(id, workspaceId, userId, data);
   }
 
-  async deleteExpense(id: string, workspaceId: string, role: UserRole) {
+  async deleteExpense(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.deleteExpense(id, workspaceId);
+    return this.budgetRepository.deleteExpense(id, workspaceId, userId);
   }
 
   async listExpensePersons(eventId: string, workspaceId: string, role: UserRole) {
@@ -49,19 +49,19 @@ export class BudgetService {
     return this.budgetRepository.listIncomes(eventId, workspaceId);
   }
 
-  async createIncome(eventId: string, workspaceId: string, role: UserRole, data: IncomeInput) {
+  async createIncome(eventId: string, workspaceId: string, role: UserRole, userId: string, data: IncomeInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.createIncome(eventId, workspaceId, data);
+    return this.budgetRepository.createIncome(eventId, workspaceId, userId, data);
   }
 
-  async updateIncome(id: string, workspaceId: string, role: UserRole, data: IncomeInput) {
+  async updateIncome(id: string, workspaceId: string, role: UserRole, userId: string, data: IncomeInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.updateIncome(id, workspaceId, data);
+    return this.budgetRepository.updateIncome(id, workspaceId, userId, data);
   }
 
-  async deleteIncome(id: string, workspaceId: string, role: UserRole) {
+  async deleteIncome(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.deleteIncome(id, workspaceId);
+    return this.budgetRepository.deleteIncome(id, workspaceId, userId);
   }
 
   async listTicketTiers(eventId: string, workspaceId: string, role: UserRole) {
