@@ -23,3 +23,15 @@ export const taskSchema = z.object({
 export const taskStatusSchema = z.object({
   status: z.enum(["TODO", "DOING", "DONE", "BLOCKED"]),
 });
+
+export const taskLabelSchema = z.object({
+  name: requiredText("Le nom", LIMITS.tag),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "La couleur est invalide"),
+});
+
+export const taskAttachmentSchema = z.object({
+  label: requiredText("Le nom", LIMITS.name),
+  url: z.string().min(1).max(500),
+  contentType: z.string().min(1).max(120),
+  size: z.number().int().positive().max(12 * 1024 * 1024),
+});

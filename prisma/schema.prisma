@@ -509,6 +509,7 @@ model Event {
 
   participants    EventParticipant[]
   tasks           Task[]
+  taskLabels      TaskLabel[]
   shifts          Shift[]
   runOfShow       RunOfShowItem[]
   runOfShowTracks RunOfShowTrack[]
@@ -635,6 +636,7 @@ model Task {
   assigneeId  String?
   assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
   assignees   TaskAssignee[]
+  attachments TaskAttachment[]
   runOfShowItem RunOfShowItem?
 
   createdAt   DateTime @default(now())
@@ -643,6 +645,32 @@ model Task {
   @@index([eventId, status])
   @@index([assigneeId])
   @@index([dueAt])
+}
+
+model TaskLabel {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, name])
+  @@index([eventId])
+}
+
+model TaskAttachment {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label       String
+  url         String
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
 }
 
 model TaskAssignee {

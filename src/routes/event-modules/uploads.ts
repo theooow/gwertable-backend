@@ -18,6 +18,14 @@ const allowedPersonDocTypes = new Set([
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
+const allowedTaskAttachmentTypes = new Set([
+  ...allowedReceiptTypes,
+  ...allowedPersonDocTypes,
+  "text/plain",
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
 
 const receiptUploadSchema = z.object({
   fileName: z.string().min(1),
@@ -34,6 +42,10 @@ function extensionForContentType(contentType: string) {
     case "image/gif": return ".gif";
     case "application/msword": return ".doc";
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return ".docx";
+    case "text/plain": return ".txt";
+    case "text/csv": return ".csv";
+    case "application/vnd.ms-excel": return ".xls";
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": return ".xlsx";
     default: return "";
   }
 }
@@ -44,6 +56,10 @@ function contentTypeForExtension(ext: string): string {
     ".webp": "image/webp", ".gif": "image/gif",
     ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   };
   return map[ext] ?? "application/octet-stream";
 }
@@ -145,5 +161,31 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     await writeFile(path.join(directory, fileName), buffer);
 
     return reply.status(201).send({ url: `/uploads/person-documents/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
+  });
+
+  fastify.get("/uploads/task-attachments/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
+    if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
+    const data = await readFile(path.join(uploadRoot, "task-attachments", fileName)).catch(() => null);
+    if (!data) return reply.status(404).send({ error: "File not found" });
+    const contentType = contentTypeForExtension(path.extname(fileName).toLowerCase());
+    reply.header("content-type", contentType);
+    reply.header("cache-control", "private, max-age=3600");
+    return reply.send(data);
+  });
+
+  fastify.post("/api/uploads/task-attachments", async (request, reply) => {
+    requireCan(request.userRole, "task.write");
+    const parsed = receiptUploadSchema.parse(request.body);
+    if (!allowedTaskAttachmentTypes.has(parsed.contentType)) throw new ValidationError("Format de piece jointe non supporte");
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (buffer.byteLength > 12 * 1024 * 1024) throw new ValidationError("La piece jointe ne doit pas depasser 12 Mo");
+
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "task-attachments");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+
+    return reply.status(201).send({ url: `/uploads/task-attachments/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
   });
 }

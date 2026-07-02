@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { buildTasksCalendar } from "../../lib/calendar.js";
-import { taskSchema, taskStatusSchema } from "../../schemas/task.js";
+import { taskAttachmentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../../schemas/task.js";
 import { TaskDao } from "../../dao/task.dao.js";
 import { TaskCalendarSubscriptionDao } from "../../dao/task-calendar-subscription.dao.js";
 import { TaskRepository } from "../../repositories/task.repository.js";
@@ -11,6 +11,7 @@ import { TaskService } from "../../services/task.service.js";
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const eventItemParamsSchema = z.object({ eventId: z.string().min(1), id: z.string().min(1) });
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const attachmentParamsSchema = z.object({ id: z.string().min(1), attachmentId: z.string().min(1) });
 const tokenParamsSchema = z.object({ token: z.string().min(24) });
 
 const service = new TaskService(
@@ -35,6 +36,29 @@ export async function taskRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events/:eventId/tasks", async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.list(eventId, request.workspaceId, request.userRole);
+  });
+
+  fastify.get("/api/events/:eventId/task-labels", async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    return service.listLabels(eventId, request.workspaceId, request.userRole);
+  });
+
+  fastify.post("/api/events/:eventId/task-labels", async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = taskLabelSchema.parse(request.body);
+    const label = await service.createLabel(eventId, request.workspaceId, request.userRole, data);
+    return reply.status(201).send(label);
+  });
+
+  fastify.put("/api/events/:eventId/task-labels/:id", async (request) => {
+    const { eventId, id } = eventItemParamsSchema.parse(request.params);
+    const data = taskLabelSchema.parse(request.body);
+    return service.updateLabel(eventId, id, request.workspaceId, request.userRole, data);
+  });
+
+  fastify.delete("/api/events/:eventId/task-labels/:id", async (request) => {
+    const { eventId, id } = eventItemParamsSchema.parse(request.params);
+    return service.deleteLabel(eventId, id, request.workspaceId, request.userRole);
   });
 
   fastify.get("/api/events/:eventId/tasks/calendar.ics", async (request, reply) => {
@@ -91,6 +115,18 @@ export async function taskRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = taskStatusSchema.parse(request.body);
     return service.updateStatus(id, request.workspaceId, request.userRole, data);
+  });
+
+  fastify.post("/api/tasks/:id/attachments", async (request, reply) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = taskAttachmentSchema.parse(request.body);
+    const attachment = await service.addAttachment(id, request.workspaceId, request.userRole, data);
+    return reply.status(201).send(attachment);
+  });
+
+  fastify.delete("/api/tasks/:id/attachments/:attachmentId", async (request) => {
+    const { id, attachmentId } = attachmentParamsSchema.parse(request.params);
+    return service.deleteAttachment(id, attachmentId, request.workspaceId, request.userRole);
   });
 
   fastify.delete("/api/events/:eventId/tasks/:id", async (request) => {

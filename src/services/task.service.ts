@@ -1,11 +1,13 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type { z } from "zod";
-import type { taskSchema, taskStatusSchema } from "../schemas/task.js";
+import type { taskAttachmentSchema, taskLabelSchema, taskSchema, taskStatusSchema } from "../schemas/task.js";
 import { TaskRepository } from "../repositories/task.repository.js";
 
 type TaskInput = z.infer<typeof taskSchema>;
 type TaskStatusInput = z.infer<typeof taskStatusSchema>;
+type TaskLabelInput = z.infer<typeof taskLabelSchema>;
+type TaskAttachmentInput = z.infer<typeof taskAttachmentSchema>;
 
 /**
  * Service métier pour le domaine tâche.
@@ -25,6 +27,26 @@ export class TaskService {
   async list(eventId: string, workspaceId: string, role: UserRole) {
     requireCan(role, "task.read");
     return this.taskRepository.listTasks(eventId, workspaceId);
+  }
+
+  async listLabels(eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "task.read");
+    return this.taskRepository.listLabels(eventId, workspaceId);
+  }
+
+  async createLabel(eventId: string, workspaceId: string, role: UserRole, data: TaskLabelInput) {
+    requireCan(role, "task.write");
+    return this.taskRepository.createLabel(eventId, workspaceId, data);
+  }
+
+  async updateLabel(eventId: string, labelId: string, workspaceId: string, role: UserRole, data: TaskLabelInput) {
+    requireCan(role, "task.write");
+    return this.taskRepository.updateLabel(eventId, workspaceId, labelId, data);
+  }
+
+  async deleteLabel(eventId: string, labelId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "task.write");
+    return this.taskRepository.deleteLabel(eventId, workspaceId, labelId);
   }
 
   /**
@@ -67,6 +89,16 @@ export class TaskService {
   async updateStatus(id: string, workspaceId: string, role: UserRole, data: TaskStatusInput) {
     requireCan(role, "task.write");
     return this.taskRepository.updateStatus(id, workspaceId, data.status);
+  }
+
+  async addAttachment(id: string, workspaceId: string, role: UserRole, data: TaskAttachmentInput) {
+    requireCan(role, "task.write");
+    return this.taskRepository.addAttachment(id, workspaceId, data);
+  }
+
+  async deleteAttachment(id: string, attachmentId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "task.write");
+    return this.taskRepository.deleteAttachment(id, attachmentId, workspaceId);
   }
 
   /**

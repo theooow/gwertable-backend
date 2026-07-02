@@ -8,6 +8,16 @@ type TaskAssigneeRow = {
   fullName: string;
 };
 
+type TaskAttachmentRow = {
+  id: string;
+  taskId: string;
+  label: string;
+  url: string;
+  contentType: string;
+  size: number;
+  createdAt: Date;
+};
+
 async function findAssignees(prisma: PrismaClient, taskIds: string[]) {
   if (taskIds.length === 0) return new Map<string, Array<{ person: { id: string; fullName: string } }>>();
   const rows = await prisma.$queryRaw<TaskAssigneeRow[]>`
@@ -21,6 +31,23 @@ async function findAssignees(prisma: PrismaClient, taskIds: string[]) {
   for (const row of rows) {
     const current = byTask.get(row.taskId) ?? [];
     current.push({ person: { id: row.personId, fullName: row.fullName } });
+    byTask.set(row.taskId, current);
+  }
+  return byTask;
+}
+
+async function findAttachments(prisma: PrismaClient, taskIds: string[]) {
+  if (taskIds.length === 0) return new Map<string, TaskAttachmentRow[]>();
+  const rows = await prisma.$queryRaw<TaskAttachmentRow[]>`
+    SELECT "id", "taskId", "label", "url", "contentType", "size", "createdAt"
+    FROM "TaskAttachment"
+    WHERE "taskId" = ANY(${taskIds})
+    ORDER BY "createdAt" ASC
+  `;
+  const byTask = new Map<string, TaskAttachmentRow[]>();
+  for (const row of rows) {
+    const current = byTask.get(row.taskId) ?? [];
+    current.push(row);
     byTask.set(row.taskId, current);
   }
   return byTask;
@@ -50,7 +77,12 @@ export class TaskDao extends BaseDao {
       orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
     });
     const assignees = await findAssignees(this.prisma, tasks.map((task) => task.id));
-    return tasks.map((task) => ({ ...task, assignees: assignees.get(task.id) ?? [] }));
+    const attachments = await findAttachments(this.prisma, tasks.map((task) => task.id));
+    return tasks.map((task) => ({
+      ...task,
+      assignees: assignees.get(task.id) ?? [],
+      attachments: attachments.get(task.id) ?? [],
+    }));
   }
 
   /**
@@ -104,9 +136,14 @@ export class TaskDao extends BaseDao {
     });
     if (!event) return null;
     const assignees = await findAssignees(this.prisma, event.tasks.map((task) => task.id));
+    const attachments = await findAttachments(this.prisma, event.tasks.map((task) => task.id));
     return {
       ...event,
-      tasks: event.tasks.map((task) => ({ ...task, assignees: assignees.get(task.id) ?? [] })),
+      tasks: event.tasks.map((task) => ({
+        ...task,
+        assignees: assignees.get(task.id) ?? [],
+        attachments: attachments.get(task.id) ?? [],
+      })),
     };
   }
 }
