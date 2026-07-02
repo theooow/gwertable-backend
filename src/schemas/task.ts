@@ -24,7 +24,7 @@ export const taskStatusSchema = z.object({
   status: z.enum(["TODO", "DOING", "DONE", "BLOCKED"]),
 });
 
-export const taskLabelSchema = z.object({
+export const taskCategorySchema = z.object({
   name: requiredText("Le nom", LIMITS.tag),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "La couleur est invalide"),
 });

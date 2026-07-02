@@ -23,7 +23,7 @@ type TaskAssigneeRow = {
   fullName: string;
 };
 
-type TaskLabelRow = {
+type TaskCategoryRow = {
   id: string;
   eventId: string;
   name: string;
@@ -54,8 +54,8 @@ type TaskCommentRow = {
   author: { id: string; name: string } | null;
 };
 
-const defaultLabelColors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#be123c", "#4b5563"];
-const defaultTaskLabels = [
+const defaultCategoryColors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#be123c", "#4b5563"];
+const defaultTaskCategories = [
   "logistique",
   "communication",
   "technique",
@@ -65,16 +65,16 @@ const defaultTaskLabels = [
   "autre",
 ];
 
-function colorForLabel(name: string) {
+function colorForCategory(name: string) {
   const sum = [...name].reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return defaultLabelColors[sum % defaultLabelColors.length];
+  return defaultCategoryColors[sum % defaultCategoryColors.length];
 }
 
-async function ensureTaskLabels(tx: Pick<PrismaClient, "$executeRaw">, eventId: string, names: string[]) {
+async function ensureTaskCategories(tx: Pick<PrismaClient, "$executeRaw">, eventId: string, names: string[]) {
   for (const name of [...new Set(names.map((item) => item.trim()).filter(Boolean))]) {
     await tx.$executeRaw`
-      INSERT INTO "TaskLabel" ("id", "eventId", "name", "color", "updatedAt")
-      VALUES (${`tasklabel_${crypto.randomUUID()}`}, ${eventId}, ${name}, ${colorForLabel(name)}, CURRENT_TIMESTAMP)
+      INSERT INTO "TaskCategory" ("id", "eventId", "name", "color", "updatedAt")
+      VALUES (${`taskcategory_${crypto.randomUUID()}`}, ${eventId}, ${name}, ${colorForCategory(name)}, CURRENT_TIMESTAMP)
       ON CONFLICT ("eventId", "name") DO NOTHING
     `;
   }
@@ -230,18 +230,18 @@ export class TaskRepository {
    */
   async listTasks(eventId: string, workspaceId: string) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    await this.ensureLabelsFromTasks(eventId);
+    await this.ensureCategoriesFromTasks(eventId);
     return this.taskDao.findMany(eventId, workspaceId);
   }
 
-  async ensureLabelsFromTasks(eventId: string) {
-    const existingLabels = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+  async ensureCategoriesFromTasks(eventId: string) {
+    const existingCategories = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS "count"
-      FROM "TaskLabel"
+      FROM "TaskCategory"
       WHERE "eventId" = ${eventId}
     `;
-    if ((existingLabels[0]?.count ?? 0n) === 0n) {
-      await ensureTaskLabels(this.prisma, eventId, defaultTaskLabels);
+    if ((existingCategories[0]?.count ?? 0n) === 0n) {
+      await ensureTaskCategories(this.prisma, eventId, defaultTaskCategories);
     }
 
     const rows = await this.prisma.task.findMany({
@@ -249,25 +249,25 @@ export class TaskRepository {
       select: { category: true, tags: true },
     });
     const names = rows.flatMap((row) => [row.category, ...row.tags]);
-    await ensureTaskLabels(this.prisma, eventId, names);
+    await ensureTaskCategories(this.prisma, eventId, names);
   }
 
-  async listLabels(eventId: string, workspaceId: string) {
+  async listCategories(eventId: string, workspaceId: string) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    await this.ensureLabelsFromTasks(eventId);
-    return this.prisma.$queryRaw<TaskLabelRow[]>`
+    await this.ensureCategoriesFromTasks(eventId);
+    return this.prisma.$queryRaw<TaskCategoryRow[]>`
       SELECT "id", "eventId", "name", "color", "createdAt", "updatedAt"
-      FROM "TaskLabel"
+      FROM "TaskCategory"
       WHERE "eventId" = ${eventId}
       ORDER BY lower("name") ASC
     `;
   }
 
-  async createLabel(eventId: string, workspaceId: string, data: { name: string; color: string }) {
+  async createCategory(eventId: string, workspaceId: string, data: { name: string; color: string }) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    const id = `tasklabel_${crypto.randomUUID()}`;
-    const rows = await this.prisma.$queryRaw<TaskLabelRow[]>`
-      INSERT INTO "TaskLabel" ("id", "eventId", "name", "color", "updatedAt")
+    const id = `taskcategory_${crypto.randomUUID()}`;
+    const rows = await this.prisma.$queryRaw<TaskCategoryRow[]>`
+      INSERT INTO "TaskCategory" ("id", "eventId", "name", "color", "updatedAt")
       VALUES (${id}, ${eventId}, ${data.name}, ${data.color}, CURRENT_TIMESTAMP)
       ON CONFLICT ("eventId", "name") DO UPDATE
       SET "color" = EXCLUDED."color", "updatedAt" = CURRENT_TIMESTAMP
@@ -276,18 +276,18 @@ export class TaskRepository {
     return rows[0];
   }
 
-  async updateLabel(eventId: string, workspaceId: string, id: string, data: { name: string; color: string }) {
+  async updateCategory(eventId: string, workspaceId: string, id: string, data: { name: string; color: string }) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    const existing = await this.prisma.$queryRaw<TaskLabelRow[]>`
+    const existing = await this.prisma.$queryRaw<TaskCategoryRow[]>`
       SELECT "id", "eventId", "name", "color", "createdAt", "updatedAt"
-      FROM "TaskLabel"
+      FROM "TaskCategory"
       WHERE "id" = ${id} AND "eventId" = ${eventId}
       LIMIT 1
     `;
-    if (!existing[0]) throw new NotFoundError("Etiquette introuvable");
+    if (!existing[0]) throw new NotFoundError("Categorie introuvable");
     const previousName = existing[0].name;
-    const rows = await this.prisma.$queryRaw<TaskLabelRow[]>`
-      UPDATE "TaskLabel"
+    const rows = await this.prisma.$queryRaw<TaskCategoryRow[]>`
+      UPDATE "TaskCategory"
       SET "name" = ${data.name}, "color" = ${data.color}, "updatedAt" = CURRENT_TIMESTAMP
       WHERE "id" = ${id} AND "eventId" = ${eventId}
       RETURNING "id", "eventId", "name", "color", "createdAt", "updatedAt"
@@ -304,14 +304,14 @@ export class TaskRepository {
     return rows[0];
   }
 
-  async deleteLabel(eventId: string, workspaceId: string, id: string) {
+  async deleteCategory(eventId: string, workspaceId: string, id: string) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    const existing = await this.prisma.$queryRaw<TaskLabelRow[]>`
-      DELETE FROM "TaskLabel"
+    const existing = await this.prisma.$queryRaw<TaskCategoryRow[]>`
+      DELETE FROM "TaskCategory"
       WHERE "id" = ${id} AND "eventId" = ${eventId}
       RETURNING "name"
     `;
-    if (!existing[0]) throw new NotFoundError("Etiquette introuvable");
+    if (!existing[0]) throw new NotFoundError("Categorie introuvable");
     await this.prisma.$executeRaw`
       UPDATE "Task"
       SET
@@ -340,7 +340,7 @@ export class TaskRepository {
     await this.assertPeopleIfProvided(assigneeIds, workspaceId);
 
     return this.prisma.$transaction(async (tx) => {
-      await ensureTaskLabels(tx, eventId, data.tags ?? []);
+      await ensureTaskCategories(tx, eventId, data.tags ?? []);
       const task = await tx.task.create({
         data: {
           eventId,
@@ -384,7 +384,7 @@ export class TaskRepository {
 
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.task.findUniqueOrThrow({ where: { id }, select: { eventId: true } });
-      await ensureTaskLabels(tx, existing.eventId, data.tags ?? []);
+      await ensureTaskCategories(tx, existing.eventId, data.tags ?? []);
       const task = await tx.task.update({
         where: { id },
         data: {

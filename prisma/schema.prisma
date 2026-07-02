@@ -512,7 +512,7 @@ model Event {
 
   participants    EventParticipant[]
   tasks           Task[]
-  taskLabels      TaskLabel[]
+  taskCategories  TaskCategory[]
   shifts          Shift[]
   runOfShow       RunOfShowItem[]
   runOfShowTracks RunOfShowTrack[]
@@ -671,7 +671,7 @@ model TaskComment {
   @@index([authorId])
 }
 
-model TaskLabel {
+model TaskCategory {
   id        String   @id @default(cuid())
   eventId   String
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
