@@ -336,6 +336,7 @@ model Person {
   participations EventParticipant[]
   expensesPaid   Expense[]          @relation("PaidBy")
   tasksAssigned  Task[]             @relation("TaskAssignee")
+  taskAssignments TaskAssignee[]
   shifts         Shift[]
   shoppingItems  ShoppingItem[]     @relation("ShoppingBuyer")
   equipmentOwned     EquipmentItem[] @relation("EquipmentOwner")
@@ -633,6 +634,7 @@ model Task {
   dueAt       DateTime?
   assigneeId  String?
   assignee    Person?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assignees   TaskAssignee[]
   runOfShowItem RunOfShowItem?
 
   createdAt   DateTime @default(now())
@@ -641,6 +643,18 @@ model Task {
   @@index([eventId, status])
   @@index([assigneeId])
   @@index([dueAt])
+}
+
+model TaskAssignee {
+  taskId   String
+  personId String
+  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([taskId, personId])
+  @@index([personId])
 }
 
 model Shift {

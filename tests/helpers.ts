@@ -28,6 +28,7 @@ export async function resetDatabase() {
       "ShoppingItem",
       "Supplier",
       "Task",
+      "TaskAssignee",
       "TicketTier",
       "TaskCalendarSubscription",
       "EventNotificationSettings",

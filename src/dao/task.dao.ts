@@ -2,6 +2,30 @@ import type { PrismaClient } from "@prisma/client";
 import { BaseDao } from "./base.dao.js";
 import { NotFoundError } from "../lib/errors.js";
 
+type TaskAssigneeRow = {
+  taskId: string;
+  personId: string;
+  fullName: string;
+};
+
+async function findAssignees(prisma: PrismaClient, taskIds: string[]) {
+  if (taskIds.length === 0) return new Map<string, Array<{ person: { id: string; fullName: string } }>>();
+  const rows = await prisma.$queryRaw<TaskAssigneeRow[]>`
+    SELECT ta."taskId", p."id" AS "personId", p."fullName"
+    FROM "TaskAssignee" ta
+    JOIN "Person" p ON p."id" = ta."personId"
+    WHERE ta."taskId" = ANY(${taskIds})
+    ORDER BY ta."createdAt" ASC
+  `;
+  const byTask = new Map<string, Array<{ person: { id: string; fullName: string } }>>();
+  for (const row of rows) {
+    const current = byTask.get(row.taskId) ?? [];
+    current.push({ person: { id: row.personId, fullName: row.fullName } });
+    byTask.set(row.taskId, current);
+  }
+  return byTask;
+}
+
 /**
  * DAO pour le modèle {@link Task}.
  * Fournit les opérations CRUD sur les tâches d'un événement.
@@ -18,11 +42,15 @@ export class TaskDao extends BaseDao {
    * @param workspaceId - Identifiant de l'espace de travail
    */
   async findMany(eventId: string, workspaceId: string) {
-    return this.prisma.task.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: { eventId, event: { workspaceId } },
-      include: { assignee: { select: { id: true, fullName: true } } },
+      include: {
+        assignee: { select: { id: true, fullName: true } },
+      },
       orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
     });
+    const assignees = await findAssignees(this.prisma, tasks.map((task) => task.id));
+    return tasks.map((task) => ({ ...task, assignees: assignees.get(task.id) ?? [] }));
   }
 
   /**
@@ -60,17 +88,25 @@ export class TaskDao extends BaseDao {
    * @returns L'événement avec ses tâches, ou `null` si absent
    */
   async findEventForCalendar(eventId: string, workspaceId: string) {
-    return this.prisma.event.findFirst({
+    const event = await this.prisma.event.findFirst({
       where: { id: eventId, workspaceId },
       select: {
         id: true,
         name: true,
         tasks: {
           where: { dueAt: { not: null } },
-          include: { assignee: { select: { fullName: true } } },
+          include: {
+            assignee: { select: { fullName: true } },
+          },
           orderBy: [{ dueAt: "asc" }, { priority: "desc" }],
         },
       },
     });
+    if (!event) return null;
+    const assignees = await findAssignees(this.prisma, event.tasks.map((task) => task.id));
+    return {
+      ...event,
+      tasks: event.tasks.map((task) => ({ ...task, assignees: assignees.get(task.id) ?? [] })),
+    };
   }
 }

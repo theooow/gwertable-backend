@@ -60,6 +60,7 @@ type CalendarTask = {
   priority: string;
   dueAt: Date | null;
   assignee: { fullName: string } | null;
+  assignees?: Array<{ person: { fullName: string } }>;
   updatedAt: Date;
 };
 
@@ -95,7 +96,9 @@ export function buildTasksCalendar(event: {
       `Statut: ${task.status}`,
       `Priorite: ${task.priority}`,
       `Categorie: ${task.category}`,
-      task.assignee ? `Assigne a: ${task.assignee.fullName}` : null,
+      task.assignees && task.assignees.length > 0
+        ? `Assignes a: ${task.assignees.map((item) => item.person.fullName).join(", ")}`
+        : task.assignee ? `Assigne a: ${task.assignee.fullName}` : null,
     ]
       .filter(Boolean)
       .join("\n");

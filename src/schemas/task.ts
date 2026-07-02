@@ -17,6 +17,7 @@ export const taskSchema = z.object({
   checklist: z.array(taskChecklistItemSchema).max(50).default([]),
   dueAt: z.string().optional().or(z.literal("")),
   assigneeId: z.string().optional().or(z.literal("")),
+  assigneeIds: z.array(z.string().trim().min(1)).max(20).default([]),
 });
 
 export const taskStatusSchema = z.object({

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { json, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
+import { prisma } from "../src/prisma.js";
 
 setupTestApp();
 
@@ -8,6 +9,15 @@ describe("event module routes", () => {
   it("covers participants, tasks, expenses, shopping and people search", async () => {
     const { authorization } = await seedAdminSession();
     const { person, event } = await seedEventContext(authorization);
+    const secondPerson = await prisma.person.create({
+      data: {
+        workspaceId: event.workspaceId,
+        fullName: "Bob Runner",
+        email: "bob@example.test",
+        phone: "",
+        tags: [],
+      },
+    });
 
     const participantPayload = {
       personId: person.id,
@@ -84,7 +94,7 @@ describe("event module routes", () => {
       tags: ["bar", "urgent"],
       checklist: [{ id: "stock", text: "Vérifier le stock", done: false }],
       dueAt: "2026-06-01T18:00:00.000Z",
-      assigneeId: person.id,
+      assigneeIds: [person.id, secondPerson.id],
     };
     const createdTask = await request("POST", `/api/events/${event.id}/tasks`, authorization, taskPayload);
     assert.equal(createdTask.statusCode, 201);
@@ -92,10 +102,20 @@ describe("event module routes", () => {
     assert.equal(task.autoRunOfShowItem.sourceTaskId, task.id);
     assert.equal(task.autoRunOfShowItem.responsiblePersonId, person.id);
 
-    const listedTasks = json<Array<{ id: string; tags: string[]; checklist: Array<{ id: string; text: string; done: boolean }> }>>(
+    const listedTasks = json<
+      Array<{
+        id: string;
+        assigneeId: string | null;
+        assignees: Array<{ person: { id: string; fullName: string } }>;
+        tags: string[];
+        checklist: Array<{ id: string; text: string; done: boolean }>;
+      }>
+    >(
       await request("GET", `/api/events/${event.id}/tasks`, authorization),
     );
     const listedTask = listedTasks.find((item) => item.id === task.id);
+    assert.equal(listedTask?.assigneeId, person.id);
+    assert.deepEqual(listedTask?.assignees.map((item) => item.person.id).sort(), [person.id, secondPerson.id].sort());
     assert.deepEqual(listedTask?.tags, ["bar", "urgent"]);
     assert.deepEqual(listedTask?.checklist, [{ id: "stock", text: "Vérifier le stock", done: false }]);
     const calendar = await request("GET", `/api/events/${event.id}/tasks/calendar.ics`, authorization);
@@ -135,6 +155,7 @@ describe("event module routes", () => {
       description: "Stock drinks and ice",
       dueAt: "2026-06-01T19:15:00.000Z",
       assigneeId: "",
+      assigneeIds: [],
     };
     assert.equal(
       (await request("PUT", `/api/events/${event.id}/tasks/${task.id}`, authorization, updatedTaskPayload)).statusCode,

@@ -14,7 +14,35 @@ type TaskInput = {
   checklist?: Prisma.InputJsonValue;
   dueAt?: string | null;
   assigneeId?: string | null;
+  assigneeIds?: string[];
 };
+
+type TaskAssigneeRow = {
+  personId: string;
+  fullName: string;
+};
+
+async function replaceTaskAssignees(tx: Prisma.TransactionClient, taskId: string, personIds: string[]) {
+  await tx.$executeRaw`DELETE FROM "TaskAssignee" WHERE "taskId" = ${taskId}`;
+  for (const personId of personIds) {
+    await tx.$executeRaw`
+      INSERT INTO "TaskAssignee" ("taskId", "personId")
+      VALUES (${taskId}, ${personId})
+      ON CONFLICT DO NOTHING
+    `;
+  }
+}
+
+async function findTaskAssignees(tx: Prisma.TransactionClient, taskId: string) {
+  const rows = await tx.$queryRaw<TaskAssigneeRow[]>`
+    SELECT p."id" AS "personId", p."fullName"
+    FROM "TaskAssignee" ta
+    JOIN "Person" p ON p."id" = ta."personId"
+    WHERE ta."taskId" = ${taskId}
+    ORDER BY ta."createdAt" ASC
+  `;
+  return rows.map((row) => ({ person: { id: row.personId, fullName: row.fullName } }));
+}
 
 /**
  * Synchronise l'élément du conducteur lié à une tâche dans une transaction.
@@ -127,13 +155,13 @@ export class TaskRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si la personne est introuvable
    */
-  async assertPersonIfProvided(personId: string | undefined | null, workspaceId: string) {
-    if (!personId) return;
-    const person = await this.prisma.person.findFirst({
-      where: { id: personId, workspaceId },
+  async assertPeopleIfProvided(personIds: string[], workspaceId: string) {
+    if (personIds.length === 0) return;
+    const people = await this.prisma.person.findMany({
+      where: { id: { in: personIds }, workspaceId },
       select: { id: true },
     });
-    if (!person) throw new NotFoundError("Personne introuvable");
+    if (people.length !== new Set(personIds).size) throw new NotFoundError("Personne introuvable");
   }
 
   /**
@@ -156,7 +184,8 @@ export class TaskRepository {
    */
   async create(eventId: string, workspaceId: string, data: TaskInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    await this.assertPersonIfProvided(data.assigneeId, workspaceId);
+    const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
+    await this.assertPeopleIfProvided(assigneeIds, workspaceId);
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
@@ -170,12 +199,15 @@ export class TaskRepository {
           tags: data.tags ?? [],
           checklist: data.checklist ?? [],
           dueAt: data.dueAt ? new Date(data.dueAt) : null,
-          assigneeId: data.assigneeId || null,
+          assigneeId: assigneeIds[0] ?? null,
         },
-        include: { assignee: { select: { id: true, fullName: true } } },
+        include: {
+          assignee: { select: { id: true, fullName: true } },
+        },
       });
+      await replaceTaskAssignees(tx, task.id, assigneeIds);
       const autoRunOfShowItem = await syncRunOfShowItemForTask(tx, task);
-      return { task, autoRunOfShowItem };
+      return { task: { ...task, assignees: await findTaskAssignees(tx, task.id) }, autoRunOfShowItem };
     });
   }
 
@@ -189,7 +221,8 @@ export class TaskRepository {
    */
   async update(id: string, workspaceId: string, data: TaskInput) {
     await this.assertTaskInWorkspace(id, workspaceId);
-    await this.assertPersonIfProvided(data.assigneeId, workspaceId);
+    const assigneeIds = [...new Set([...(data.assigneeIds ?? []), ...(data.assigneeId ? [data.assigneeId] : [])])];
+    await this.assertPeopleIfProvided(assigneeIds, workspaceId);
 
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.update({
@@ -203,11 +236,18 @@ export class TaskRepository {
           tags: data.tags ?? [],
           checklist: data.checklist ?? [],
           dueAt: data.dueAt ? new Date(data.dueAt) : null,
-          assigneeId: data.assigneeId || null,
+          assigneeId: assigneeIds[0] ?? null,
         },
       });
+      await replaceTaskAssignees(tx, id, assigneeIds);
       await syncRunOfShowItemForTask(tx, task);
-      return task;
+      const updated = await tx.task.findUniqueOrThrow({
+        where: { id },
+        include: {
+          assignee: { select: { id: true, fullName: true } },
+        },
+      });
+      return { ...updated, assignees: await findTaskAssignees(tx, id) };
     });
   }
 
