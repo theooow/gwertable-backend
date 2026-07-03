@@ -71,6 +71,14 @@ function colorForCategory(name: string) {
   return defaultCategoryColors[sum % defaultCategoryColors.length];
 }
 
+function formatActivityDate(date: Date) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 async function ensureTaskCategories(tx: Pick<PrismaClient, "$executeRaw">, eventId: string, names: string[]) {
   for (const name of [...new Set(names.map((item) => item.trim()).filter(Boolean))]) {
     await tx.$executeRaw`
@@ -376,9 +384,9 @@ export class TaskRepository {
       workspaceId,
       eventId,
       actorId: userId,
-      type: "TASK_COMMENT",
-      title: `Tache creee: ${result.task.title}`,
-      body: result.task.dueAt ? `Echeance: ${result.task.dueAt.toISOString()}` : null,
+      type: "TASK_CREATED",
+      title: `Tâche créée : ${result.task.title}`,
+      body: result.task.dueAt ? `Échéance : ${formatActivityDate(result.task.dueAt)}` : null,
       entityType: "TASK",
       entityId: result.task.id,
       notify: false,
@@ -435,8 +443,8 @@ export class TaskRepository {
       workspaceId,
       eventId: updatedTask.eventId,
       actorId: userId,
-      type: "TASK_COMMENT",
-      title: `Tache modifiee: ${updatedTask.title}`,
+      type: "TASK_UPDATED",
+      title: `Tâche modifiée : ${updatedTask.title}`,
       entityType: "TASK",
       entityId: updatedTask.id,
       notify: false,
@@ -464,9 +472,9 @@ export class TaskRepository {
       workspaceId,
       eventId: task.eventId,
       actorId: userId,
-      type: "TASK_COMMENT",
-      title: `Statut de tache modifie: ${task.title}`,
-      body: `Nouveau statut: ${status}`,
+      type: "TASK_STATUS_UPDATED",
+      title: `Statut de tâche modifié : ${task.title}`,
+      body: `Nouveau statut : ${status}`,
       entityType: "TASK",
       entityId: task.id,
       notify: false,

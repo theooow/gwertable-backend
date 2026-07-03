@@ -1,6 +1,17 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
-export type ActivityNotificationType = "TASK_COMMENT" | "BUDGET_CHANGE" | "TASK_DUE_SOON";
+export type ActivityNotificationType =
+  | "TASK_CREATED"
+  | "TASK_UPDATED"
+  | "TASK_STATUS_UPDATED"
+  | "TASK_COMMENT"
+  | "TASK_DUE_SOON"
+  | "EXPENSE_CREATED"
+  | "EXPENSE_UPDATED"
+  | "EXPENSE_DELETED"
+  | "INCOME_CREATED"
+  | "INCOME_UPDATED"
+  | "INCOME_DELETED";
 
 type RecordActivityInput = {
   workspaceId: string;
@@ -28,8 +39,8 @@ const defaultPreference: Preference = {
 };
 
 function isEnabled(type: ActivityNotificationType, preference: Preference) {
-  if (type === "TASK_COMMENT") return preference.taskCommentsEnabled;
-  if (type === "BUDGET_CHANGE") return preference.budgetChangesEnabled;
+  if (type.startsWith("TASK_") && type !== "TASK_DUE_SOON") return preference.taskCommentsEnabled;
+  if (type.startsWith("EXPENSE_") || type.startsWith("INCOME_")) return preference.budgetChangesEnabled;
   if (type === "TASK_DUE_SOON") return preference.taskDueSoonEnabled;
   return true;
 }
@@ -58,6 +69,12 @@ export class ActivityRepository {
         take: 40,
         include: {
           event: { select: { id: true, name: true } },
+          activity: {
+            include: {
+              actor: { select: { id: true, email: true, name: true, firstName: true, lastName: true, image: true } },
+              event: { select: { id: true, name: true } },
+            },
+          },
         },
       }),
       this.prisma.inAppNotification.count({

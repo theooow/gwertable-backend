@@ -275,7 +275,7 @@ export class ReminderWorkerService {
           workspaceId: preference.workspaceId,
           eventId: task.eventId,
           type: "TASK_DUE_SOON",
-          title: `Tache bientot due: ${task.title}`,
+          title: `Tâche bientôt due : ${task.title}`,
           body: `${task.event.name} - ${formatParisDate(task.dueAt)}`,
           entityType: "TASK",
           entityId: task.id,
@@ -288,7 +288,7 @@ export class ReminderWorkerService {
             userId: preference.userId,
             activityId: activity.id,
             type: "TASK_DUE_SOON",
-            title: `Tache bientot due: ${task.title}`,
+            title: `Tâche bientôt due : ${task.title}`,
             body: `${task.event.name} - ${formatParisDate(task.dueAt)}`,
           },
         });
