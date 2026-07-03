@@ -20,35 +20,36 @@ export class ShoppingService {
     return this.shoppingRepository.listItems(eventId, workspaceId);
   }
 
-  async create(eventId: string, workspaceId: string, role: UserRole, data: ShoppingInput) {
+  async create(eventId: string, workspaceId: string, role: UserRole, userId: string, data: ShoppingInput) {
     requireCan(role, "shopping.write");
-    return this.shoppingRepository.create(eventId, workspaceId, data);
+    return this.shoppingRepository.create(eventId, workspaceId, userId, data);
   }
 
-  async update(id: string, workspaceId: string, role: UserRole, data: ShoppingInput) {
+  async update(id: string, workspaceId: string, role: UserRole, userId: string, data: ShoppingInput) {
     requireCan(role, "shopping.write");
-    return this.shoppingRepository.update(id, workspaceId, data);
+    return this.shoppingRepository.update(id, workspaceId, userId, data);
   }
 
-  async updateBought(id: string, workspaceId: string, role: UserRole, data: BoughtInput) {
+  async updateBought(id: string, workspaceId: string, role: UserRole, userId: string, data: BoughtInput) {
     requireCan(role, "shopping.write");
-    return this.shoppingRepository.updateBought(id, workspaceId, data.bought);
+    return this.shoppingRepository.updateBought(id, workspaceId, userId, data.bought);
   }
 
   async buyWithExpense(
     id: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: BoughtWithExpenseInput,
     eventId?: string,
   ) {
     requireCan(role, "shopping.write");
-    return this.shoppingRepository.buyWithExpense(id, workspaceId, data, eventId);
+    return this.shoppingRepository.buyWithExpense(id, workspaceId, userId, data, eventId);
   }
 
-  async delete(id: string, workspaceId: string, role: UserRole) {
+  async delete(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "shopping.write");
-    return this.shoppingRepository.delete(id, workspaceId);
+    return this.shoppingRepository.delete(id, workspaceId, userId);
   }
 
   async listPersons(eventId: string, workspaceId: string, role: UserRole) {

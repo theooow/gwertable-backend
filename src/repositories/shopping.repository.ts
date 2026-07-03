@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { NotFoundError } from "../lib/errors.js";
 import { parseEuros } from "../lib/money.js";
 import { ShoppingDao } from "../dao/shopping.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 type ShoppingInput = {
   name: string;
@@ -22,10 +23,14 @@ type BoughtWithExpenseInput = {
  * Orchestre le CRUD des articles et la création liée de dépenses.
  */
 export class ShoppingRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly shoppingDao: ShoppingDao,
     private readonly prisma: PrismaClient,
-  ) {}
+  ) {
+    this.activityRepository = new ActivityRepository(prisma);
+  }
 
   private async assertEventInWorkspace(eventId: string, workspaceId: string) {
     const event = await this.prisma.event.findFirst({
@@ -62,11 +67,11 @@ export class ShoppingRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async create(eventId: string, workspaceId: string, data: ShoppingInput) {
+  async create(eventId: string, workspaceId: string, userId: string, data: ShoppingInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     await this.assertPersonIfProvided(data.buyerId, workspaceId);
 
-    return this.prisma.shoppingItem.create({
+    const item = await this.prisma.shoppingItem.create({
       data: {
         eventId,
         name: data.name,
@@ -77,6 +82,16 @@ export class ShoppingRepository {
         buyerId: data.buyerId || null,
       },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "SHOPPING_CREATED",
+      title: `Course ajoutée : ${item.name}`,
+      entityType: "SHOPPING",
+      entityId: item.id,
+    });
+    return item;
   }
 
   /**
@@ -87,11 +102,11 @@ export class ShoppingRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si l'article est introuvable
    */
-  async update(id: string, workspaceId: string, data: ShoppingInput) {
-    await this.shoppingDao.findByIdOrThrow(id, workspaceId);
+  async update(id: string, workspaceId: string, userId: string, data: ShoppingInput) {
+    const existing = await this.shoppingDao.findByIdOrThrow(id, workspaceId);
     await this.assertPersonIfProvided(data.buyerId, workspaceId);
 
-    return this.prisma.shoppingItem.update({
+    const item = await this.prisma.shoppingItem.update({
       where: { id },
       data: {
         name: data.name,
@@ -102,6 +117,16 @@ export class ShoppingRepository {
         buyerId: data.buyerId || null,
       },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "SHOPPING_UPDATED",
+      title: `Course modifiée : ${item.name}`,
+      entityType: "SHOPPING",
+      entityId: item.id,
+    });
+    return item;
   }
 
   /**
@@ -112,9 +137,19 @@ export class ShoppingRepository {
    * @param bought - Nouveau statut
    * @throws {NotFoundError} Si l'article est introuvable
    */
-  async updateBought(id: string, workspaceId: string, bought: boolean) {
-    await this.shoppingDao.findByIdOrThrow(id, workspaceId);
-    return this.prisma.shoppingItem.update({ where: { id }, data: { bought } });
+  async updateBought(id: string, workspaceId: string, userId: string, bought: boolean) {
+    const existing = await this.shoppingDao.findByIdOrThrow(id, workspaceId);
+    const item = await this.prisma.shoppingItem.update({ where: { id }, data: { bought } });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "SHOPPING_BOUGHT",
+      title: bought ? `Course achetée : ${item.name}` : `Course remise à faire : ${item.name}`,
+      entityType: "SHOPPING",
+      entityId: item.id,
+    });
+    return item;
   }
 
   /**
@@ -129,6 +164,7 @@ export class ShoppingRepository {
   async buyWithExpense(
     id: string,
     workspaceId: string,
+    userId: string,
     data: BoughtWithExpenseInput,
     eventId?: string,
   ) {
@@ -155,6 +191,17 @@ export class ShoppingRepository {
       data: { bought: true, expenseId: expense.id },
     });
 
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: eventId ?? item.eventId,
+      actorId: userId,
+      type: "SHOPPING_BOUGHT",
+      title: `Course achetée : ${item.name}`,
+      body: `${(expense.amountCents / 100).toFixed(2)} EUR`,
+      entityType: "SHOPPING",
+      entityId: item.id,
+    });
+
     return expense;
   }
 
@@ -165,13 +212,23 @@ export class ShoppingRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si l'article est introuvable
    */
-  async delete(id: string, workspaceId: string) {
-    await this.shoppingDao.findByIdOrThrow(id, workspaceId);
-    return this.prisma.$transaction(async (tx) => {
+  async delete(id: string, workspaceId: string, userId: string) {
+    const existing = await this.shoppingDao.findByIdOrThrow(id, workspaceId);
+    const deleted = await this.prisma.$transaction(async (tx) => {
       const item = await tx.shoppingItem.delete({ where: { id } });
       if (item.expenseId) await tx.expense.delete({ where: { id: item.expenseId } });
       return item;
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "SHOPPING_DELETED",
+      title: `Course supprimée : ${deleted.name}`,
+      entityType: "SHOPPING",
+      entityId: deleted.id,
+    });
+    return deleted;
   }
 
   /**

@@ -2,6 +2,7 @@ import type { PrismaClient, Prisma } from "@prisma/client";
 import type { ParticipantInput } from "../schemas/participant.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EventParticipantDao } from "../dao/event-participant.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 /**
  * Calcule le montant de cachet normalisé pour un participant.
@@ -79,10 +80,15 @@ async function syncArtistExpense(
  * Orchestre le CRUD et la synchronisation de la dépense artiste.
  */
 export class EventParticipantRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly participantDao: EventParticipantDao,
     private readonly prisma: PrismaClient,
-  ) {}
+    activityRepository?: ActivityRepository,
+  ) {
+    this.activityRepository = activityRepository ?? new ActivityRepository(prisma);
+  }
 
   /**
    * Vérifie qu'un événement appartient à l'espace de travail.
@@ -132,7 +138,7 @@ export class EventParticipantRepository {
    * @param data - Données validées
    * @throws {ConflictError} Si la personne est déjà participante
    */
-  async create(eventId: string, workspaceId: string, data: ParticipantInput) {
+  async create(eventId: string, workspaceId: string, userId: string, data: ParticipantInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     await this.assertPersonInWorkspace(data.personId, workspaceId);
 
@@ -144,7 +150,7 @@ export class EventParticipantRepository {
     if (existing) throw new ConflictError("Cette personne est deja participante de cet evenement");
 
     const fee = normalizeFee(data.fee, data.roles);
-    return this.prisma.$transaction(async (tx) => {
+    const participant = await this.prisma.$transaction(async (tx) => {
       const created = await tx.eventParticipant.create({
         data: {
           eventId,
@@ -164,6 +170,19 @@ export class EventParticipantRepository {
       await syncArtistExpense(tx, created);
       return created;
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "PARTICIPANT_CREATED",
+      title: `Participant ajouté : ${participant.person.fullName}`,
+      entityType: "PARTICIPANT",
+      entityId: participant.id,
+      notify: false,
+    });
+
+    return participant;
   }
 
   /**
@@ -174,12 +193,16 @@ export class EventParticipantRepository {
    * @param data - Données validées de mise à jour
    * @throws {NotFoundError} Si le participant est introuvable
    */
-  async update(id: string, workspaceId: string, data: ParticipantInput) {
-    await this.participantDao.findByIdOrThrow(id, workspaceId);
+  async update(id: string, workspaceId: string, userId: string, data: ParticipantInput) {
+    const existing = await this.prisma.eventParticipant.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true, eventId: true },
+    });
+    if (!existing) throw new NotFoundError("Participant introuvable");
     await this.assertPersonInWorkspace(data.personId, workspaceId);
 
     const fee = normalizeFee(data.fee, data.roles);
-    return this.prisma.$transaction(async (tx) => {
+    const participant = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.eventParticipant.update({
         where: { id },
         data: {
@@ -198,6 +221,19 @@ export class EventParticipantRepository {
       await syncArtistExpense(tx, updated);
       return updated;
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "PARTICIPANT_UPDATED",
+      title: `Participant modifié : ${participant.person.fullName}`,
+      entityType: "PARTICIPANT",
+      entityId: participant.id,
+      notify: false,
+    });
+
+    return participant;
   }
 
   /**
@@ -207,9 +243,26 @@ export class EventParticipantRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si le participant est introuvable
    */
-  async delete(id: string, workspaceId: string) {
-    await this.participantDao.findByIdOrThrow(id, workspaceId);
-    return this.participantDao.delete(id);
+  async delete(id: string, workspaceId: string, userId: string) {
+    const participant = await this.prisma.eventParticipant.findFirst({
+      where: { id, event: { workspaceId } },
+      include: { person: { select: { fullName: true } } },
+    });
+    if (!participant) throw new NotFoundError("Participant introuvable");
+    const deleted = await this.participantDao.delete(id);
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: participant.eventId,
+      actorId: userId,
+      type: "PARTICIPANT_DELETED",
+      title: `Participant supprimé : ${participant.person.fullName}`,
+      entityType: "PARTICIPANT",
+      entityId: participant.id,
+      notify: false,
+    });
+
+    return deleted;
   }
 
   /**

@@ -37,25 +37,27 @@ export class RunOfShowService {
     eventId: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: RunOfShowTrackInput,
   ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.createTrack(eventId, workspaceId, data);
+    return this.runOfShowRepository.createTrack(eventId, workspaceId, userId, data);
   }
 
   async updateTrack(
     id: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: RunOfShowTrackInput,
   ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.updateTrack(id, workspaceId, data);
+    return this.runOfShowRepository.updateTrack(id, workspaceId, userId, data);
   }
 
-  async deleteTrack(id: string, workspaceId: string, role: UserRole) {
+  async deleteTrack(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.deleteTrack(id, workspaceId);
+    return this.runOfShowRepository.deleteTrack(id, workspaceId, userId);
   }
 
   async listSections(eventId: string, workspaceId: string, role: UserRole) {
@@ -67,25 +69,27 @@ export class RunOfShowService {
     eventId: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: RunOfShowSectionInput,
   ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.createSection(eventId, workspaceId, data);
+    return this.runOfShowRepository.createSection(eventId, workspaceId, userId, data);
   }
 
   async updateSection(
     id: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: RunOfShowSectionInput,
   ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.updateSection(id, workspaceId, data);
+    return this.runOfShowRepository.updateSection(id, workspaceId, userId, data);
   }
 
-  async deleteSection(id: string, workspaceId: string, role: UserRole) {
+  async deleteSection(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.deleteSection(id, workspaceId);
+    return this.runOfShowRepository.deleteSection(id, workspaceId, userId);
   }
 
   /**
@@ -97,9 +101,15 @@ export class RunOfShowService {
    * @param data - Données validées
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async create(eventId: string, workspaceId: string, role: UserRole, data: RunOfShowInput) {
+  async create(
+    eventId: string,
+    workspaceId: string,
+    role: UserRole,
+    userId: string,
+    data: RunOfShowInput,
+  ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.create(eventId, workspaceId, data);
+    return this.runOfShowRepository.create(eventId, workspaceId, userId, data);
   }
 
   /**
@@ -116,11 +126,12 @@ export class RunOfShowService {
     id: string,
     workspaceId: string,
     role: UserRole,
+    userId: string,
     data: RunOfShowInput,
     eventId?: string,
   ) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.update(id, workspaceId, data, eventId);
+    return this.runOfShowRepository.update(id, workspaceId, userId, data, eventId);
   }
 
   /**
@@ -132,8 +143,8 @@ export class RunOfShowService {
    * @param eventId - Identifiant optionnel de l'événement
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async delete(id: string, workspaceId: string, role: UserRole, eventId?: string) {
+  async delete(id: string, workspaceId: string, role: UserRole, userId: string, eventId?: string) {
     requireCan(role, "runOfShow.write");
-    return this.runOfShowRepository.delete(id, workspaceId, eventId);
+    return this.runOfShowRepository.delete(id, workspaceId, userId, eventId);
   }
 }

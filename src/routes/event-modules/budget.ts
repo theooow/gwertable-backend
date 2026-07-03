@@ -94,19 +94,19 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/ticket-tiers", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = ticketTierSchema.parse(request.body);
-    const tier = await service.createTicketTier(eventId, request.workspaceId, request.userRole, data);
+    const tier = await service.createTicketTier(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(tier);
   });
 
   fastify.put("/api/ticket-tiers/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = ticketTierSchema.parse(request.body);
-    return service.updateTicketTier(id, request.workspaceId, request.userRole, data);
+    return service.updateTicketTier(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/ticket-tiers/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.deleteTicketTier(id, request.workspaceId, request.userRole);
+    return service.deleteTicketTier(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.post("/api/events/:eventId/shotgun/sync", async (request) => {
@@ -125,18 +125,18 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/consumables", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = consumableSchema.parse(request.body);
-    const item = await service.createConsumable(eventId, request.workspaceId, request.userRole, data);
+    const item = await service.createConsumable(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(item);
   });
 
   fastify.put("/api/consumables/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = consumableSchema.parse(request.body);
-    return service.updateConsumable(id, request.workspaceId, request.userRole, data);
+    return service.updateConsumable(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/consumables/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.deleteConsumable(id, request.workspaceId, request.userRole);
+    return service.deleteConsumable(id, request.workspaceId, request.userRole, request.user!.id);
   });
 }

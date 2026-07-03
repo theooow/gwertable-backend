@@ -6,12 +6,45 @@ export type ActivityNotificationType =
   | "TASK_STATUS_UPDATED"
   | "TASK_COMMENT"
   | "TASK_DUE_SOON"
+  | "TASK_DELETED"
+  | "TASK_CATEGORY_CREATED"
+  | "TASK_CATEGORY_UPDATED"
+  | "TASK_CATEGORY_DELETED"
+  | "TASK_ATTACHMENT_CREATED"
+  | "TASK_ATTACHMENT_DELETED"
+  | "EVENT_CREATED"
+  | "EVENT_UPDATED"
+  | "EVENT_DELETED"
   | "EXPENSE_CREATED"
   | "EXPENSE_UPDATED"
   | "EXPENSE_DELETED"
   | "INCOME_CREATED"
   | "INCOME_UPDATED"
-  | "INCOME_DELETED";
+  | "INCOME_DELETED"
+  | "TICKET_TIER_CREATED"
+  | "TICKET_TIER_UPDATED"
+  | "TICKET_TIER_DELETED"
+  | "CONSUMABLE_CREATED"
+  | "CONSUMABLE_UPDATED"
+  | "CONSUMABLE_DELETED"
+  | "SHOPPING_CREATED"
+  | "SHOPPING_UPDATED"
+  | "SHOPPING_BOUGHT"
+  | "SHOPPING_DELETED"
+  | "PARTICIPANT_CREATED"
+  | "PARTICIPANT_UPDATED"
+  | "PARTICIPANT_DELETED"
+  | "COLLABORATOR_INVITED"
+  | "COLLABORATOR_REMOVED"
+  | "RUN_OF_SHOW_CREATED"
+  | "RUN_OF_SHOW_UPDATED"
+  | "RUN_OF_SHOW_DELETED"
+  | "RUN_OF_SHOW_TRACK_CREATED"
+  | "RUN_OF_SHOW_TRACK_UPDATED"
+  | "RUN_OF_SHOW_TRACK_DELETED"
+  | "RUN_OF_SHOW_SECTION_CREATED"
+  | "RUN_OF_SHOW_SECTION_UPDATED"
+  | "RUN_OF_SHOW_SECTION_DELETED";
 
 type RecordActivityInput = {
   workspaceId: string;
@@ -40,7 +73,9 @@ const defaultPreference: Preference = {
 
 function isEnabled(type: ActivityNotificationType, preference: Preference) {
   if (type.startsWith("TASK_") && type !== "TASK_DUE_SOON") return preference.taskCommentsEnabled;
-  if (type.startsWith("EXPENSE_") || type.startsWith("INCOME_")) return preference.budgetChangesEnabled;
+  if (type.startsWith("EXPENSE_") || type.startsWith("INCOME_") || type.startsWith("SHOPPING_")) {
+    return preference.budgetChangesEnabled;
+  }
   if (type === "TASK_DUE_SOON") return preference.taskDueSoonEnabled;
   return true;
 }

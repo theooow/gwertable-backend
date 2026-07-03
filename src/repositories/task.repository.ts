@@ -276,7 +276,7 @@ export class TaskRepository {
     `;
   }
 
-  async createCategory(eventId: string, workspaceId: string, data: { name: string; color: string }) {
+  async createCategory(eventId: string, workspaceId: string, userId: string, data: { name: string; color: string }) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const id = `taskcategory_${crypto.randomUUID()}`;
     const rows = await this.prisma.$queryRaw<TaskCategoryRow[]>`
@@ -286,10 +286,21 @@ export class TaskRepository {
       SET "color" = EXCLUDED."color", "updatedAt" = CURRENT_TIMESTAMP
       RETURNING "id", "eventId", "name", "color", "createdAt", "updatedAt"
     `;
-    return rows[0];
+    const category = rows[0];
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "TASK_CATEGORY_CREATED",
+      title: `Catégorie de tâche créée : ${category.name}`,
+      entityType: "TASK_CATEGORY",
+      entityId: category.id,
+      notify: false,
+    });
+    return category;
   }
 
-  async updateCategory(eventId: string, workspaceId: string, id: string, data: { name: string; color: string }) {
+  async updateCategory(eventId: string, workspaceId: string, userId: string, id: string, data: { name: string; color: string }) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const existing = await this.prisma.$queryRaw<TaskCategoryRow[]>`
       SELECT "id", "eventId", "name", "color", "createdAt", "updatedAt"
@@ -314,10 +325,21 @@ export class TaskRepository {
         WHERE "eventId" = ${eventId}
       `;
     }
-    return rows[0];
+    const category = rows[0];
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "TASK_CATEGORY_UPDATED",
+      title: `Catégorie de tâche modifiée : ${category.name}`,
+      entityType: "TASK_CATEGORY",
+      entityId: category.id,
+      notify: false,
+    });
+    return category;
   }
 
-  async deleteCategory(eventId: string, workspaceId: string, id: string) {
+  async deleteCategory(eventId: string, workspaceId: string, userId: string, id: string) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const existing = await this.prisma.$queryRaw<TaskCategoryRow[]>`
       DELETE FROM "TaskCategory"
@@ -336,6 +358,16 @@ export class TaskRepository {
         END
       WHERE "eventId" = ${eventId}
     `;
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "TASK_CATEGORY_DELETED",
+      title: `Catégorie de tâche supprimée : ${existing[0].name}`,
+      entityType: "TASK_CATEGORY",
+      entityId: id,
+      notify: false,
+    });
     return { ok: true };
   }
 
@@ -540,24 +572,45 @@ export class TaskRepository {
     } satisfies TaskCommentRow;
   }
 
-  async addAttachment(id: string, workspaceId: string, data: TaskAttachmentInput) {
-    await this.assertTaskInWorkspace(id, workspaceId);
+  async addAttachment(id: string, workspaceId: string, userId: string, data: TaskAttachmentInput) {
+    const task = await this.assertTaskInWorkspace(id, workspaceId);
     const rows = await this.prisma.$queryRaw<TaskAttachmentRow[]>`
       INSERT INTO "TaskAttachment" ("id", "taskId", "label", "url", "contentType", "size")
       VALUES (${`taskatt_${crypto.randomUUID()}`}, ${id}, ${data.label}, ${data.url}, ${data.contentType}, ${data.size})
       RETURNING "id", "taskId", "label", "url", "contentType", "size", "createdAt"
     `;
-    return rows[0];
+    const attachment = rows[0];
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: task.eventId,
+      actorId: userId,
+      type: "TASK_ATTACHMENT_CREATED",
+      title: `Pièce jointe ajoutée : ${attachment.label}`,
+      entityType: "TASK",
+      entityId: task.id,
+      notify: false,
+    });
+    return attachment;
   }
 
-  async deleteAttachment(id: string, attachmentId: string, workspaceId: string) {
-    await this.assertTaskInWorkspace(id, workspaceId);
-    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+  async deleteAttachment(id: string, attachmentId: string, workspaceId: string, userId: string) {
+    const task = await this.assertTaskInWorkspace(id, workspaceId);
+    const rows = await this.prisma.$queryRaw<{ id: string; label: string }[]>`
       DELETE FROM "TaskAttachment"
       WHERE "id" = ${attachmentId} AND "taskId" = ${id}
-      RETURNING "id"
+      RETURNING "id", "label"
     `;
     if (!rows[0]) throw new NotFoundError("Piece jointe introuvable");
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: task.eventId,
+      actorId: userId,
+      type: "TASK_ATTACHMENT_DELETED",
+      title: `Pièce jointe supprimée : ${rows[0].label}`,
+      entityType: "TASK",
+      entityId: task.id,
+      notify: false,
+    });
     return { ok: true };
   }
 
@@ -568,9 +621,9 @@ export class TaskRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si la tâche est introuvable
    */
-  async delete(id: string, workspaceId: string) {
-    await this.assertTaskInWorkspace(id, workspaceId);
-    return this.prisma.$transaction(async (tx) => {
+  async delete(id: string, workspaceId: string, userId: string) {
+    const task = await this.assertTaskInWorkspace(id, workspaceId);
+    const deleted = await this.prisma.$transaction(async (tx) => {
       const linked = await tx.runOfShowItem.findUnique({
         where: { sourceTaskId: id },
         select: { id: true },
@@ -578,6 +631,17 @@ export class TaskRepository {
       if (linked) await tx.runOfShowItem.delete({ where: { id: linked.id } });
       return tx.task.delete({ where: { id } });
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: task.eventId,
+      actorId: userId,
+      type: "TASK_DELETED",
+      title: `Tâche supprimée : ${task.title}`,
+      entityType: "TASK",
+      entityId: task.id,
+      notify: false,
+    });
+    return deleted;
   }
 
   /**

@@ -35,19 +35,26 @@ export class TaskService {
     return this.taskRepository.listCategories(eventId, workspaceId);
   }
 
-  async createCategory(eventId: string, workspaceId: string, role: UserRole, data: TaskCategoryInput) {
+  async createCategory(eventId: string, workspaceId: string, role: UserRole, userId: string, data: TaskCategoryInput) {
     requireCan(role, "task.write");
-    return this.taskRepository.createCategory(eventId, workspaceId, data);
+    return this.taskRepository.createCategory(eventId, workspaceId, userId, data);
   }
 
-  async updateCategory(eventId: string, categoryId: string, workspaceId: string, role: UserRole, data: TaskCategoryInput) {
+  async updateCategory(
+    eventId: string,
+    categoryId: string,
+    workspaceId: string,
+    role: UserRole,
+    userId: string,
+    data: TaskCategoryInput,
+  ) {
     requireCan(role, "task.write");
-    return this.taskRepository.updateCategory(eventId, workspaceId, categoryId, data);
+    return this.taskRepository.updateCategory(eventId, workspaceId, userId, categoryId, data);
   }
 
-  async deleteCategory(eventId: string, categoryId: string, workspaceId: string, role: UserRole) {
+  async deleteCategory(eventId: string, categoryId: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "task.write");
-    return this.taskRepository.deleteCategory(eventId, workspaceId, categoryId);
+    return this.taskRepository.deleteCategory(eventId, workspaceId, userId, categoryId);
   }
 
   /**
@@ -97,14 +104,14 @@ export class TaskService {
     return this.taskRepository.addComment(id, workspaceId, userId, data.body);
   }
 
-  async addAttachment(id: string, workspaceId: string, role: UserRole, data: TaskAttachmentInput) {
+  async addAttachment(id: string, workspaceId: string, role: UserRole, userId: string, data: TaskAttachmentInput) {
     requireCan(role, "task.write");
-    return this.taskRepository.addAttachment(id, workspaceId, data);
+    return this.taskRepository.addAttachment(id, workspaceId, userId, data);
   }
 
-  async deleteAttachment(id: string, attachmentId: string, workspaceId: string, role: UserRole) {
+  async deleteAttachment(id: string, attachmentId: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "task.write");
-    return this.taskRepository.deleteAttachment(id, attachmentId, workspaceId);
+    return this.taskRepository.deleteAttachment(id, attachmentId, workspaceId, userId);
   }
 
   /**
@@ -115,9 +122,9 @@ export class TaskService {
    * @param role - Rôle de l'utilisateur courant
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async delete(id: string, workspaceId: string, role: UserRole) {
+  async delete(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "task.write");
-    return this.taskRepository.delete(id, workspaceId);
+    return this.taskRepository.delete(id, workspaceId, userId);
   }
 
   /**

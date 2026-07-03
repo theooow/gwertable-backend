@@ -69,19 +69,19 @@ export class BudgetService {
     return this.budgetRepository.listTicketTiers(eventId, workspaceId);
   }
 
-  async createTicketTier(eventId: string, workspaceId: string, role: UserRole, data: TicketTierInput) {
+  async createTicketTier(eventId: string, workspaceId: string, role: UserRole, userId: string, data: TicketTierInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.createTicketTier(eventId, workspaceId, data);
+    return this.budgetRepository.createTicketTier(eventId, workspaceId, userId, data);
   }
 
-  async updateTicketTier(id: string, workspaceId: string, role: UserRole, data: TicketTierInput) {
+  async updateTicketTier(id: string, workspaceId: string, role: UserRole, userId: string, data: TicketTierInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.updateTicketTier(id, workspaceId, data);
+    return this.budgetRepository.updateTicketTier(id, workspaceId, userId, data);
   }
 
-  async deleteTicketTier(id: string, workspaceId: string, role: UserRole) {
+  async deleteTicketTier(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.deleteTicketTier(id, workspaceId);
+    return this.budgetRepository.deleteTicketTier(id, workspaceId, userId);
   }
 
   async syncShotgunTiers(eventId: string, workspaceId: string, role: UserRole) {
@@ -94,18 +94,18 @@ export class BudgetService {
     return this.budgetRepository.listConsumables(eventId, workspaceId);
   }
 
-  async createConsumable(eventId: string, workspaceId: string, role: UserRole, data: ConsumableInput) {
+  async createConsumable(eventId: string, workspaceId: string, role: UserRole, userId: string, data: ConsumableInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.createConsumable(eventId, workspaceId, data);
+    return this.budgetRepository.createConsumable(eventId, workspaceId, userId, data);
   }
 
-  async updateConsumable(id: string, workspaceId: string, role: UserRole, data: ConsumableInput) {
+  async updateConsumable(id: string, workspaceId: string, role: UserRole, userId: string, data: ConsumableInput) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.updateConsumable(id, workspaceId, data);
+    return this.budgetRepository.updateConsumable(id, workspaceId, userId, data);
   }
 
-  async deleteConsumable(id: string, workspaceId: string, role: UserRole) {
+  async deleteConsumable(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "budget.write");
-    return this.budgetRepository.deleteConsumable(id, workspaceId);
+    return this.budgetRepository.deleteConsumable(id, workspaceId, userId);
   }
 }

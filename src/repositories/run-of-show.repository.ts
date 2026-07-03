@@ -1,6 +1,7 @@
 import type { PrismaClient, Prisma, RunOfShowStatus } from "@prisma/client";
 import { NotFoundError } from "../lib/errors.js";
 import { RunOfShowDao } from "../dao/run-of-show.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 type RunOfShowInput = {
   trackId?: string | null;
@@ -102,10 +103,15 @@ async function syncTaskForRunOfShowItem(
  * Orchestre le CRUD et la synchronisation avec les tâches liées.
  */
 export class RunOfShowRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly runOfShowDao: RunOfShowDao,
     private readonly prisma: PrismaClient,
-  ) {}
+    activityRepository?: ActivityRepository,
+  ) {
+    this.activityRepository = activityRepository ?? new ActivityRepository(prisma);
+  }
 
   /**
    * Vérifie qu'un événement appartient à l'espace de travail.
@@ -206,14 +212,14 @@ export class RunOfShowRepository {
     });
   }
 
-  async createTrack(eventId: string, workspaceId: string, data: RunOfShowTrackInput) {
+  async createTrack(eventId: string, workspaceId: string, userId: string, data: RunOfShowTrackInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const lastTrack = await this.prisma.runOfShowTrack.findFirst({
       where: { eventId, event: { workspaceId } },
       orderBy: { position: "desc" },
       select: { position: true },
     });
-    return this.prisma.runOfShowTrack.create({
+    const track = await this.prisma.runOfShowTrack.create({
       data: {
         eventId,
         name: data.name,
@@ -222,28 +228,67 @@ export class RunOfShowRepository {
       },
       include: { _count: { select: { items: true } } },
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_TRACK_CREATED",
+      title: `Piste de conducteur créée : ${track.name}`,
+      entityType: "RUN_OF_SHOW_TRACK",
+      entityId: track.id,
+      notify: false,
+    });
+
+    return track;
   }
 
-  async updateTrack(id: string, workspaceId: string, data: RunOfShowTrackInput) {
+  async updateTrack(id: string, workspaceId: string, userId: string, data: RunOfShowTrackInput) {
     const track = await this.prisma.runOfShowTrack.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!track) throw new NotFoundError("Metier de conducteur introuvable");
-    return this.prisma.runOfShowTrack.update({
+    const updated = await this.prisma.runOfShowTrack.update({
       where: { id },
       data: { name: data.name, color: data.color || null },
       include: { _count: { select: { items: true } } },
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: track.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_TRACK_UPDATED",
+      title: `Piste de conducteur modifiée : ${updated.name}`,
+      entityType: "RUN_OF_SHOW_TRACK",
+      entityId: updated.id,
+      notify: false,
+    });
+
+    return updated;
   }
 
-  async deleteTrack(id: string, workspaceId: string) {
+  async deleteTrack(id: string, workspaceId: string, userId: string) {
     const track = await this.prisma.runOfShowTrack.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true, name: true },
     });
     if (!track) throw new NotFoundError("Metier de conducteur introuvable");
-    return this.prisma.runOfShowTrack.delete({ where: { id } });
+    const deleted = await this.prisma.runOfShowTrack.delete({ where: { id } });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: track.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_TRACK_DELETED",
+      title: `Piste de conducteur supprimée : ${track.name}`,
+      entityType: "RUN_OF_SHOW_TRACK",
+      entityId: track.id,
+      notify: false,
+    });
+
+    return deleted;
   }
 
   async listSections(eventId: string, workspaceId: string) {
@@ -255,14 +300,14 @@ export class RunOfShowRepository {
     });
   }
 
-  async createSection(eventId: string, workspaceId: string, data: RunOfShowSectionInput) {
+  async createSection(eventId: string, workspaceId: string, userId: string, data: RunOfShowSectionInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     const lastSection = await this.prisma.runOfShowSection.findFirst({
       where: { eventId, event: { workspaceId } },
       orderBy: { position: "desc" },
       select: { position: true },
     });
-    return this.prisma.runOfShowSection.create({
+    const section = await this.prisma.runOfShowSection.create({
       data: {
         eventId,
         name: data.name,
@@ -271,28 +316,67 @@ export class RunOfShowRepository {
       },
       include: { _count: { select: { items: true } } },
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_SECTION_CREATED",
+      title: `Section de conducteur créée : ${section.name}`,
+      entityType: "RUN_OF_SHOW_SECTION",
+      entityId: section.id,
+      notify: false,
+    });
+
+    return section;
   }
 
-  async updateSection(id: string, workspaceId: string, data: RunOfShowSectionInput) {
+  async updateSection(id: string, workspaceId: string, userId: string, data: RunOfShowSectionInput) {
     const section = await this.prisma.runOfShowSection.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!section) throw new NotFoundError("Section de conducteur introuvable");
-    return this.prisma.runOfShowSection.update({
+    const updated = await this.prisma.runOfShowSection.update({
       where: { id },
       data: { name: data.name, color: data.color || null },
       include: { _count: { select: { items: true } } },
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: section.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_SECTION_UPDATED",
+      title: `Section de conducteur modifiée : ${updated.name}`,
+      entityType: "RUN_OF_SHOW_SECTION",
+      entityId: updated.id,
+      notify: false,
+    });
+
+    return updated;
   }
 
-  async deleteSection(id: string, workspaceId: string) {
+  async deleteSection(id: string, workspaceId: string, userId: string) {
     const section = await this.prisma.runOfShowSection.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true, name: true },
     });
     if (!section) throw new NotFoundError("Section de conducteur introuvable");
-    return this.prisma.runOfShowSection.delete({ where: { id } });
+    const deleted = await this.prisma.runOfShowSection.delete({ where: { id } });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: section.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_SECTION_DELETED",
+      title: `Section de conducteur supprimée : ${section.name}`,
+      entityType: "RUN_OF_SHOW_SECTION",
+      entityId: section.id,
+      notify: false,
+    });
+
+    return deleted;
   }
 
   /**
@@ -302,7 +386,7 @@ export class RunOfShowRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async create(eventId: string, workspaceId: string, data: RunOfShowInput) {
+  async create(eventId: string, workspaceId: string, userId: string, data: RunOfShowInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
     await this.assertParticipantPersonIfProvided(
       data.responsiblePersonId,
@@ -313,7 +397,7 @@ export class RunOfShowRepository {
     await this.assertSectionIfProvided(data.sectionId, eventId, workspaceId);
     const dependsOnIds = await this.assertDependenciesIfProvided(data.dependsOnIds, eventId, workspaceId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const item = await this.prisma.$transaction(async (tx) => {
       const item = await tx.runOfShowItem.create({
         data: {
           eventId,
@@ -326,6 +410,19 @@ export class RunOfShowRepository {
       });
       return item;
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_CREATED",
+      title: `Élément de conducteur créé : ${item.title}`,
+      entityType: "RUN_OF_SHOW",
+      entityId: item.id,
+      notify: false,
+    });
+
+    return item;
   }
 
   /**
@@ -337,7 +434,7 @@ export class RunOfShowRepository {
    * @param eventId - Identifiant optionnel de l'événement (pour validation supplémentaire)
    * @throws {NotFoundError} Si l'élément est introuvable
    */
-  async update(id: string, workspaceId: string, data: RunOfShowInput, eventId?: string) {
+  async update(id: string, workspaceId: string, userId: string, data: RunOfShowInput, eventId?: string) {
     const existing = await this.runOfShowDao.findByIdOrThrow(id, workspaceId, eventId);
     await this.assertParticipantPersonIfProvided(
       data.responsiblePersonId,
@@ -353,7 +450,7 @@ export class RunOfShowRepository {
       id,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const item = await this.prisma.$transaction(async (tx) => {
       await tx.runOfShowDependency.deleteMany({ where: { itemId: id } });
       const item = await tx.runOfShowItem.update({
         where: { id },
@@ -368,6 +465,19 @@ export class RunOfShowRepository {
       await syncTaskForRunOfShowItem(tx, item);
       return item;
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_UPDATED",
+      title: `Élément de conducteur modifié : ${item.title}`,
+      entityType: "RUN_OF_SHOW",
+      entityId: item.id,
+      notify: false,
+    });
+
+    return item;
   }
 
   /**
@@ -378,12 +488,25 @@ export class RunOfShowRepository {
    * @param eventId - Identifiant optionnel de l'événement
    * @throws {NotFoundError} Si l'élément est introuvable
    */
-  async delete(id: string, workspaceId: string, eventId?: string) {
+  async delete(id: string, workspaceId: string, userId: string, eventId?: string) {
     const item = await this.runOfShowDao.findByIdOrThrow(id, workspaceId, eventId);
-    return this.prisma.$transaction(async (tx) => {
+    const deleted = await this.prisma.$transaction(async (tx) => {
       await tx.runOfShowItem.delete({ where: { id } });
       if (item.sourceTaskId) await tx.task.delete({ where: { id: item.sourceTaskId } });
       return item;
     });
+
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: item.eventId,
+      actorId: userId,
+      type: "RUN_OF_SHOW_DELETED",
+      title: `Élément de conducteur supprimé : ${item.title}`,
+      entityType: "RUN_OF_SHOW",
+      entityId: item.id,
+      notify: false,
+    });
+
+    return deleted;
   }
 }

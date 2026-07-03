@@ -46,19 +46,19 @@ export async function taskRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/task-categories", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = taskCategorySchema.parse(request.body);
-    const category = await service.createCategory(eventId, request.workspaceId, request.userRole, data);
+    const category = await service.createCategory(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(category);
   });
 
   fastify.put("/api/events/:eventId/task-categories/:id", async (request) => {
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     const data = taskCategorySchema.parse(request.body);
-    return service.updateCategory(eventId, id, request.workspaceId, request.userRole, data);
+    return service.updateCategory(eventId, id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/events/:eventId/task-categories/:id", async (request) => {
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
-    return service.deleteCategory(eventId, id, request.workspaceId, request.userRole);
+    return service.deleteCategory(eventId, id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.get("/api/events/:eventId/tasks/calendar.ics", async (request, reply) => {
@@ -128,22 +128,22 @@ export async function taskRoutes(fastify: FastifyInstance) {
   fastify.post("/api/tasks/:id/attachments", async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = taskAttachmentSchema.parse(request.body);
-    const attachment = await service.addAttachment(id, request.workspaceId, request.userRole, data);
+    const attachment = await service.addAttachment(id, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(attachment);
   });
 
   fastify.delete("/api/tasks/:id/attachments/:attachmentId", async (request) => {
     const { id, attachmentId } = attachmentParamsSchema.parse(request.params);
-    return service.deleteAttachment(id, attachmentId, request.workspaceId, request.userRole);
+    return service.deleteAttachment(id, attachmentId, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.delete("/api/events/:eventId/tasks/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.delete("/api/tasks/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 }

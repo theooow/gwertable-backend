@@ -10,6 +10,7 @@ import { EventParticipantDao } from "../../dao/event-participant.dao.js";
 import { EventParticipantRepository } from "../../repositories/event-participant.repository.js";
 import { EventParticipantService } from "../../services/event-participant.service.js";
 import { toParticipantDTO } from "../../dto/participant.dto.js";
+import { ActivityRepository } from "../../repositories/activity.repository.js";
 
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const eventItemParamsSchema = z.object({ eventId: z.string().min(1), id: z.string().min(1) });
@@ -26,6 +27,7 @@ const eventCollaboratorSchema = z.object({
 const service = new EventParticipantService(
   new EventParticipantRepository(new EventParticipantDao(prisma), prisma),
 );
+const activityRepository = new ActivityRepository(prisma);
 
 export async function participantRoutes(fastify: FastifyInstance) {
   fastify.get("/api/events/:eventId/participants", async (request) => {
@@ -38,7 +40,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/participants", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
-    const participant = await service.create(eventId, request.workspaceId, request.userRole, data);
+    const participant = await service.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     const canSee = service.canSeeSensitive(request.userRole);
     return reply.status(201).send(toParticipantDTO(participant, canSee));
   });
@@ -46,7 +48,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
   fastify.put("/api/events/:eventId/participants/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
-    const participant = await service.update(id, request.workspaceId, request.userRole, data);
+    const participant = await service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
     const canSee = service.canSeeSensitive(request.userRole);
     return toParticipantDTO(participant, canSee);
   });
@@ -54,19 +56,19 @@ export async function participantRoutes(fastify: FastifyInstance) {
   fastify.put("/api/participants/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
-    const participant = await service.update(id, request.workspaceId, request.userRole, data);
+    const participant = await service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
     const canSee = service.canSeeSensitive(request.userRole);
     return toParticipantDTO(participant, canSee);
   });
 
   fastify.delete("/api/events/:eventId/participants/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.delete("/api/participants/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.get("/api/events/:eventId/participants/persons", async (request) => {
@@ -127,6 +129,18 @@ export async function participantRoutes(fastify: FastifyInstance) {
     const inviteUrl = new URL("/login", env.FRONTEND_URL);
     inviteUrl.searchParams.set("invite", collaborator.token);
 
+    await activityRepository.record({
+      workspaceId: request.workspaceId,
+      eventId,
+      actorId: request.user!.id,
+      type: "COLLABORATOR_INVITED",
+      title: `Collaborateur invité : ${collaborator.email}`,
+      body: `Rôle : ${collaborator.role}`,
+      entityType: "COLLABORATOR",
+      entityId: collaborator.id,
+      notify: false,
+    });
+
     return reply.status(201).send({
       id: collaborator.id,
       email: collaborator.email,
@@ -150,11 +164,21 @@ export async function participantRoutes(fastify: FastifyInstance) {
 
     const collaborator = await prisma.eventCollaborator.findFirst({
       where: { id: collaboratorId, eventId, workspaceId: request.workspaceId },
-      select: { id: true },
+      select: { id: true, email: true },
     });
     if (!collaborator) throw new NotFoundError("Collaborateur introuvable");
 
     await prisma.eventCollaborator.delete({ where: { id: collaborator.id } });
+    await activityRepository.record({
+      workspaceId: request.workspaceId,
+      eventId,
+      actorId: request.user!.id,
+      type: "COLLABORATOR_REMOVED",
+      title: `Collaborateur retiré : ${collaborator.email}`,
+      entityType: "COLLABORATOR",
+      entityId: collaborator.id,
+      notify: false,
+    });
     return { ok: true };
   });
 }

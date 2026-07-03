@@ -32,9 +32,15 @@ export class EventParticipantService {
    * @param data - Données validées
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async create(eventId: string, workspaceId: string, role: UserRole, data: ParticipantInput) {
+  async create(
+    eventId: string,
+    workspaceId: string,
+    role: UserRole,
+    userId: string,
+    data: ParticipantInput,
+  ) {
     requireCan(role, "participant.write");
-    return this.participantRepository.create(eventId, workspaceId, data);
+    return this.participantRepository.create(eventId, workspaceId, userId, data);
   }
 
   /**
@@ -46,9 +52,15 @@ export class EventParticipantService {
    * @param data - Données validées de mise à jour
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async update(id: string, workspaceId: string, role: UserRole, data: ParticipantInput) {
+  async update(
+    id: string,
+    workspaceId: string,
+    role: UserRole,
+    userId: string,
+    data: ParticipantInput,
+  ) {
     requireCan(role, "participant.write");
-    return this.participantRepository.update(id, workspaceId, data);
+    return this.participantRepository.update(id, workspaceId, userId, data);
   }
 
   /**
@@ -59,9 +71,9 @@ export class EventParticipantService {
    * @param role - Rôle de l'utilisateur courant
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    */
-  async delete(id: string, workspaceId: string, role: UserRole) {
+  async delete(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "participant.write");
-    return this.participantRepository.delete(id, workspaceId);
+    return this.participantRepository.delete(id, workspaceId, userId);
   }
 
   /**

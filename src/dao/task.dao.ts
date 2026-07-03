@@ -179,7 +179,7 @@ export class TaskDao extends BaseDao {
   async findByIdInWorkspace(id: string, workspaceId: string) {
     return this.prisma.task.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true, title: true },
     });
   }
 

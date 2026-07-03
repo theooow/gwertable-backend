@@ -52,9 +52,9 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    * @throws {NotFoundError} Si le lieu spécifié est introuvable
    */
-  async create(workspaceId: string, role: UserRole, data: EventInput) {
+  async create(workspaceId: string, role: UserRole, userId: string, data: EventInput) {
     requireCan(role, "event.write");
-    return this.eventRepository.createEvent(workspaceId, data);
+    return this.eventRepository.createEvent(workspaceId, userId, data);
   }
 
   /**
@@ -67,9 +67,9 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    * @throws {NotFoundError} Si l'événement ou le lieu est introuvable
    */
-  async update(id: string, workspaceId: string, role: UserRole, data: EventInput) {
+  async update(id: string, workspaceId: string, role: UserRole, userId: string, data: EventInput) {
     requireCan(role, "event.write");
-    return this.eventRepository.updateEvent(id, workspaceId, data);
+    return this.eventRepository.updateEvent(id, workspaceId, userId, data);
   }
 
   /**
@@ -81,9 +81,9 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    * @throws {NotFoundError} Si l'événement est introuvable
    */
-  async delete(id: string, workspaceId: string, role: UserRole) {
+  async delete(id: string, workspaceId: string, role: UserRole, userId: string) {
     requireCan(role, "event.write");
-    return this.eventRepository.deleteEvent(id, workspaceId);
+    return this.eventRepository.deleteEvent(id, workspaceId, userId);
   }
 
   /**

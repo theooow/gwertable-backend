@@ -53,7 +53,7 @@ export class RunOfShowDao extends BaseDao {
   async findByIdInWorkspace(id: string, workspaceId: string, eventId?: string) {
     return this.prisma.runOfShowItem.findFirst({
       where: { id, ...(eventId ? { eventId } : {}), event: { workspaceId } },
-      select: { id: true, eventId: true, sourceTaskId: true },
+      select: { id: true, eventId: true, title: true, sourceTaskId: true },
     });
   }
 

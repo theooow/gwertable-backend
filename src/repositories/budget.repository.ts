@@ -509,9 +509,20 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async createTicketTier(eventId: string, workspaceId: string, data: TicketTierInput) {
+  async createTicketTier(eventId: string, workspaceId: string, userId: string, data: TicketTierInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    return this.prisma.ticketTier.create({ data: { eventId, ...data } });
+    const tier = await this.prisma.ticketTier.create({ data: { eventId, ...data } });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "TICKET_TIER_CREATED",
+      title: `Tarif billet créé : ${tier.name}`,
+      entityType: "TICKET_TIER",
+      entityId: tier.id,
+      notify: false,
+    });
+    return tier;
   }
 
   /**
@@ -522,13 +533,24 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si le tarif est introuvable
    */
-  async updateTicketTier(id: string, workspaceId: string, data: TicketTierInput) {
+  async updateTicketTier(id: string, workspaceId: string, userId: string, data: TicketTierInput) {
     const existing = await this.prisma.ticketTier.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true },
     });
     if (!existing) throw new NotFoundError("Tarif billet introuvable");
-    return this.prisma.ticketTier.update({ where: { id }, data });
+    const tier = await this.prisma.ticketTier.update({ where: { id }, data });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "TICKET_TIER_UPDATED",
+      title: `Tarif billet modifié : ${tier.name}`,
+      entityType: "TICKET_TIER",
+      entityId: tier.id,
+      notify: false,
+    });
+    return tier;
   }
 
   /**
@@ -538,13 +560,24 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si le tarif est introuvable
    */
-  async deleteTicketTier(id: string, workspaceId: string) {
+  async deleteTicketTier(id: string, workspaceId: string, userId: string) {
     const existing = await this.prisma.ticketTier.findFirst({
       where: { id, event: { workspaceId } },
-      select: { id: true },
+      select: { id: true, eventId: true, name: true },
     });
     if (!existing) throw new NotFoundError("Tarif billet introuvable");
-    return this.prisma.ticketTier.delete({ where: { id } });
+    const tier = await this.prisma.ticketTier.delete({ where: { id } });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "TICKET_TIER_DELETED",
+      title: `Tarif billet supprimé : ${existing.name}`,
+      entityType: "TICKET_TIER",
+      entityId: existing.id,
+      notify: false,
+    });
+    return tier;
   }
 
   /**
@@ -653,11 +686,22 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param data - Données validées
    */
-  async createConsumable(eventId: string, workspaceId: string, data: ConsumableInput) {
+  async createConsumable(eventId: string, workspaceId: string, userId: string, data: ConsumableInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    return this.prisma.consumableItem.create({
+    const item = await this.prisma.consumableItem.create({
       data: { eventId, name: data.name, unitPriceCents: data.unitPriceCents, estimatedQty: data.estimatedQty },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId,
+      actorId: userId,
+      type: "CONSUMABLE_CREATED",
+      title: `Consommable créé : ${item.name}`,
+      entityType: "CONSUMABLE",
+      entityId: item.id,
+      notify: false,
+    });
+    return item;
   }
 
   /**
@@ -668,18 +712,29 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si le consommable est introuvable
    */
-  async updateConsumable(id: string, workspaceId: string, data: ConsumableInput) {
+  async updateConsumable(id: string, workspaceId: string, userId: string, data: ConsumableInput) {
     const existing = await this.prisma.consumableItem.findUnique({
       where: { id },
-      select: { event: { select: { workspaceId: true } } },
+      select: { eventId: true, event: { select: { workspaceId: true } } },
     });
     if (!existing || existing.event.workspaceId !== workspaceId) {
       throw new NotFoundError("Consommable introuvable");
     }
-    return this.prisma.consumableItem.update({
+    const item = await this.prisma.consumableItem.update({
       where: { id },
       data: { name: data.name, unitPriceCents: data.unitPriceCents, estimatedQty: data.estimatedQty },
     });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "CONSUMABLE_UPDATED",
+      title: `Consommable modifié : ${item.name}`,
+      entityType: "CONSUMABLE",
+      entityId: item.id,
+      notify: false,
+    });
+    return item;
   }
 
   /**
@@ -689,15 +744,26 @@ export class BudgetRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si le consommable est introuvable
    */
-  async deleteConsumable(id: string, workspaceId: string) {
+  async deleteConsumable(id: string, workspaceId: string, userId: string) {
     const existing = await this.prisma.consumableItem.findUnique({
       where: { id },
-      select: { event: { select: { workspaceId: true } } },
+      select: { id: true, eventId: true, name: true, event: { select: { workspaceId: true } } },
     });
     if (!existing || existing.event.workspaceId !== workspaceId) {
       throw new NotFoundError("Consommable introuvable");
     }
-    return this.prisma.consumableItem.delete({ where: { id } });
+    const item = await this.prisma.consumableItem.delete({ where: { id } });
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: existing.eventId,
+      actorId: userId,
+      type: "CONSUMABLE_DELETED",
+      title: `Consommable supprimé : ${existing.name}`,
+      entityType: "CONSUMABLE",
+      entityId: existing.id,
+      notify: false,
+    });
+    return item;
   }
 
   // ── Equipment Expenses Sync ──────────────────────────────────────────────────

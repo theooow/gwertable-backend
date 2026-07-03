@@ -2,6 +2,7 @@ import type { EventInput } from "../schemas/event.js";
 import { NotFoundError } from "../lib/errors.js";
 import { EventDao } from "../dao/event.dao.js";
 import { VenueDao } from "../dao/venue.dao.js";
+import { ActivityRepository } from "./activity.repository.js";
 
 type EventListRow = Awaited<ReturnType<EventDao["findAll"]>>[number];
 
@@ -62,10 +63,15 @@ export type CollaboratorContext = {
  * Orchestre l'accès aux données via {@link EventDao} et {@link VenueDao}.
  */
 export class EventRepository {
+  private readonly activityRepository: ActivityRepository;
+
   constructor(
     private readonly eventDao: EventDao,
     private readonly venueDao: VenueDao,
-  ) {}
+    activityRepository: ActivityRepository,
+  ) {
+    this.activityRepository = activityRepository;
+  }
 
   /**
    * Retourne la liste des événements de l'espace de travail.
@@ -120,11 +126,22 @@ export class EventRepository {
    * @param data - Données validées de l'événement
    * @throws {NotFoundError} Si le lieu spécifié est introuvable
    */
-  async createEvent(workspaceId: string, data: EventInput) {
+  async createEvent(workspaceId: string, userId: string, data: EventInput) {
     if (data.venueId) {
       await this.venueDao.findByIdOrThrow(data.venueId, workspaceId);
     }
-    return this.eventDao.create(workspaceId, data);
+    const event = await this.eventDao.create(workspaceId, data);
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: event.id,
+      actorId: userId,
+      type: "EVENT_CREATED",
+      title: `Événement créé : ${event.name}`,
+      entityType: "EVENT",
+      entityId: event.id,
+      notify: false,
+    });
+    return event;
   }
 
   /**
@@ -136,7 +153,7 @@ export class EventRepository {
    * @param data - Données validées de mise à jour
    * @throws {NotFoundError} Si l'événement ou le lieu est introuvable
    */
-  async updateEvent(id: string, workspaceId: string, data: EventInput) {
+  async updateEvent(id: string, workspaceId: string, userId: string, data: EventInput) {
     const current = await this.eventDao.findShotgunId(id, workspaceId);
     if (!current) throw new NotFoundError("Evenement introuvable");
 
@@ -150,6 +167,16 @@ export class EventRepository {
       await this.eventDao.deleteShotgunTicketTiers(id);
     }
 
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: updated.id,
+      actorId: userId,
+      type: "EVENT_UPDATED",
+      title: `Événement modifié : ${updated.name}`,
+      entityType: "EVENT",
+      entityId: updated.id,
+      notify: false,
+    });
     return updated;
   }
 
@@ -160,10 +187,21 @@ export class EventRepository {
    * @param workspaceId - Identifiant de l'espace de travail
    * @throws {NotFoundError} Si l'événement est introuvable
    */
-  async deleteEvent(id: string, workspaceId: string) {
+  async deleteEvent(id: string, workspaceId: string, userId: string) {
     const event = await this.eventDao.findById(id, workspaceId);
     if (!event) throw new NotFoundError("Evenement introuvable");
-    return this.eventDao.delete(id);
+    const deleted = await this.eventDao.delete(id);
+    await this.activityRepository.record({
+      workspaceId,
+      eventId: null,
+      actorId: userId,
+      type: "EVENT_DELETED",
+      title: `Événement supprimé : ${deleted.name}`,
+      entityType: "EVENT",
+      entityId: deleted.id,
+      notify: false,
+    });
+    return deleted;
   }
 
   /**

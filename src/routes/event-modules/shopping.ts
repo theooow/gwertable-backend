@@ -25,54 +25,54 @@ export async function shoppingRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/shopping", async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = shoppingSchema.parse(request.body);
-    const item = await service.create(eventId, request.workspaceId, request.userRole, data);
+    const item = await service.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(item);
   });
 
   fastify.put("/api/events/:eventId/shopping/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = shoppingSchema.parse(request.body);
-    return service.update(id, request.workspaceId, request.userRole, data);
+    return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.put("/api/shopping/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = shoppingSchema.parse(request.body);
-    return service.update(id, request.workspaceId, request.userRole, data);
+    return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.patch("/api/events/:eventId/shopping/:id/bought", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = boughtSchema.parse(request.body);
-    return service.updateBought(id, request.workspaceId, request.userRole, data);
+    return service.updateBought(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.patch("/api/shopping/:id/bought", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = boughtSchema.parse(request.body);
-    return service.updateBought(id, request.workspaceId, request.userRole, data);
+    return service.updateBought(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.post("/api/events/:eventId/shopping/:id/bought-with-expense", async (request) => {
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     const data = boughtWithExpenseSchema.parse(request.body);
-    return service.buyWithExpense(id, request.workspaceId, request.userRole, data, eventId);
+    return service.buyWithExpense(id, request.workspaceId, request.userRole, request.user!.id, data, eventId);
   });
 
   fastify.post("/api/shopping/:id/bought-with-expense", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = boughtWithExpenseSchema.parse(request.body);
-    return service.buyWithExpense(id, request.workspaceId, request.userRole, data);
+    return service.buyWithExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/events/:eventId/shopping/:id", async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.delete("/api/shopping/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.delete(id, request.workspaceId, request.userRole);
+    return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   fastify.get("/api/events/:eventId/shopping/persons", async (request) => {
