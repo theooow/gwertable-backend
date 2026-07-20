@@ -47,6 +47,8 @@ describe("shotgun integration", () => {
             { ticket_id: 2, ticket_status: "refunded", deal_id: 284482 },
             { ticket_id: 3, ticket_status: "resold", deal_id: 284482 },
             { ticket_id: 4, ticket_status: "valid", deal_id: 284482 },
+            { ticket_id: 5, ticket_status: "transferred", deal_id: 284482 },
+            { ticket_id: 6, ticket_status: "valid", deal_id: null },
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -99,4 +101,3 @@ describe("shotgun integration", () => {
     }
   });
 });
-

@@ -28,17 +28,9 @@ const shotgunEventsResponseSchema = z.object({
 });
 
 const shotgunTicketSchema = z.object({
-  ticket_id: z.coerce.number().int(),
-  ticket_status: z.enum([
-    "valid",
-    "resold",
-    "refunded",
-    "canceled",
-    "payment_plan_pending",
-    "pending_approval",
-    "rejected",
-  ]),
-  deal_id: z.coerce.number().int(),
+  ticket_id: z.coerce.number().int().optional(),
+  ticket_status: z.string().min(1),
+  deal_id: z.coerce.number().int().optional().nullable(),
 });
 
 const shotgunTicketsResponseSchema = z.union([
@@ -147,6 +139,7 @@ export function groupShotgunSoldTickets(tickets: ShotgunTicket[]) {
   const counts = new Map<number, number>();
   for (const ticket of tickets) {
     if (!activeStatuses.has(ticket.ticket_status)) continue;
+    if (typeof ticket.deal_id !== "number") continue;
     counts.set(ticket.deal_id, (counts.get(ticket.deal_id) ?? 0) + 1);
   }
   return counts;
