@@ -4,6 +4,10 @@ on:
   push:
     branches: [main, master]
 
+concurrency:
+  group: backend-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -65,6 +69,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/setup-buildx-action@v3
+
       - uses: docker/metadata-action@v5
         id: meta
         with:
@@ -77,6 +83,9 @@ jobs:
         with:
           context: .
           push: true
+          pull: true
+          provenance: false
+          sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
