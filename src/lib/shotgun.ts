@@ -35,7 +35,12 @@ const shotgunTicketSchema = z.object({
 
 const shotgunTicketsResponseSchema = z.union([
   z.array(shotgunTicketSchema),
-  z.object({ data: z.array(shotgunTicketSchema) }),
+  z.object({
+    data: z.array(shotgunTicketSchema),
+    pagination: z
+      .object({ next: z.string().url().nullable().optional() })
+      .optional(),
+  }),
 ]);
 
 export type ShotgunEvent = z.infer<typeof shotgunEventSchema>;
@@ -122,16 +127,35 @@ export async function fetchShotgunEventsForSearch(config: ShotgunWorkspaceConfig
 }
 
 export async function fetchShotgunTickets(config: ShotgunWorkspaceConfig, eventId: number) {
-  const url = buildShotgunUrl("https://api.shotgun.live/tickets", {
+  let url = buildShotgunUrl("https://api.shotgun.live/tickets", {
     token: config.apiToken,
     organizer_id: config.organizerId,
     event_id: eventId,
     include_cohosted_events: 1,
   });
+  const tickets: ShotgunTicket[] = [];
 
-  const payload = await fetchShotgunJson(url);
-  const parsed = shotgunTicketsResponseSchema.parse(payload);
-  return Array.isArray(parsed) ? parsed : parsed.data;
+  while (true) {
+    const payload = await fetchShotgunJson(url);
+    const parsed = shotgunTicketsResponseSchema.parse(payload);
+
+    // Les anciennes réponses sous forme de tableau ne sont pas paginées.
+    if (Array.isArray(parsed)) return [...tickets, ...parsed];
+
+    tickets.push(...parsed.data);
+    const next = parsed.pagination?.next;
+    if (!next) return tickets;
+
+    url = parseShotgunTicketNextPage(next);
+  }
+}
+
+function parseShotgunTicketNextPage(next: string) {
+  const url = new URL(next);
+  if (url.protocol !== "https:" || url.hostname !== "api.shotgun.live" || url.pathname !== "/tickets") {
+    throw new Error("Shotgun returned an invalid ticket pagination URL");
+  }
+  return url;
 }
 
 export function groupShotgunSoldTickets(tickets: ShotgunTicket[]) {
