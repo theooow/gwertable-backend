@@ -95,10 +95,15 @@ jobs:
 
     steps:
       - uses: appleboy/ssh-action@v1
+        env:
+          SUPER_PDP_CLIENT_ID: ${{ secrets.SUPER_PDP_CLIENT_ID }}
+          SUPER_PDP_CLIENT_SECRET: ${{ secrets.SUPER_PDP_CLIENT_SECRET }}
+          PDP_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.PDP_CREDENTIAL_ENCRYPTION_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: SUPER_PDP_CLIENT_ID,SUPER_PDP_CLIENT_SECRET,PDP_CREDENTIAL_ENCRYPTION_KEY
           timeout: 120s
           command_timeout: 15m
           script: |
@@ -122,9 +127,20 @@ jobs:
                 printf '%s=%s\n' "$key" "$value" >> .env
               fi
             }
+            upsert_secret_env() {
+              key="$1"
+              value="$2"
+              # A missing GitHub secret must not erase a working production value.
+              if [ -n "$value" ]; then
+                upsert_env "$key" "$value"
+              fi
+            }
 
             upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:latest"
+            upsert_secret_env SUPER_PDP_CLIENT_ID "$SUPER_PDP_CLIENT_ID"
+            upsert_secret_env SUPER_PDP_CLIENT_SECRET "$SUPER_PDP_CLIENT_SECRET"
+            upsert_secret_env PDP_CREDENTIAL_ENCRYPTION_KEY "$PDP_CREDENTIAL_ENCRYPTION_KEY"
 
             cat > docker-compose.yml <<'COMPOSE'
             services:
@@ -178,6 +194,9 @@ jobs:
                   SMTP_SECURE: "${SMTP_SECURE:-false}"
                   SMTP_USER: "${SMTP_USER:-}"
                   SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+                  SUPER_PDP_CLIENT_ID: "${SUPER_PDP_CLIENT_ID:-}"
+                  SUPER_PDP_CLIENT_SECRET: "${SUPER_PDP_CLIENT_SECRET:-}"
+                  PDP_CREDENTIAL_ENCRYPTION_KEY: "${PDP_CREDENTIAL_ENCRYPTION_KEY:-}"
                 expose:
                   - "4000"
                 volumes:
