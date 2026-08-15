@@ -141,6 +141,7 @@ jobs:
             upsert_secret_env SUPER_PDP_CLIENT_ID "$SUPER_PDP_CLIENT_ID"
             upsert_secret_env SUPER_PDP_CLIENT_SECRET "$SUPER_PDP_CLIENT_SECRET"
             upsert_secret_env PDP_CREDENTIAL_ENCRYPTION_KEY "$PDP_CREDENTIAL_ENCRYPTION_KEY"
+            upsert_env SUPER_PDP_REDIRECT_URI "https://www.abregi.com/api/integrations/super-pdp/oauth/callback"
 
             cat > docker-compose.yml <<'COMPOSE'
             services:
@@ -197,6 +198,7 @@ jobs:
                   SUPER_PDP_CLIENT_ID: "${SUPER_PDP_CLIENT_ID:-}"
                   SUPER_PDP_CLIENT_SECRET: "${SUPER_PDP_CLIENT_SECRET:-}"
                   PDP_CREDENTIAL_ENCRYPTION_KEY: "${PDP_CREDENTIAL_ENCRYPTION_KEY:-}"
+                  SUPER_PDP_REDIRECT_URI: "${SUPER_PDP_REDIRECT_URI:-https://www.abregi.com/api/integrations/super-pdp/oauth/callback}"
                 expose:
                   - "4000"
                 volumes:
