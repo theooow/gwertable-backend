@@ -4,7 +4,13 @@ import { prisma } from "../prisma.js";
 import { UnauthorizedError, ForbiddenError } from "../lib/errors.js";
 import { isAdminEmail } from "../lib/admin.js";
 
-type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personId"> & {
+/**
+ * Authenticated account in a workspace context.
+ *
+ * `role` is retained for API compatibility, but always represents the role in
+ * the current workspace (never the legacy `User.role` database column).
+ */
+type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "personId"> & {
   usagePlan: User["usagePlan"];
   firstName: User["firstName"];
   lastName: User["lastName"];
@@ -33,6 +39,8 @@ type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "role" | "personI
   themeMode: User["themeMode"];
   themePreset: User["themePreset"];
   themePrimaryColor: User["themePrimaryColor"];
+  role: UserRole;
+  workspaceRole: UserRole;
   workspaceId: string;
   workspaceName: string;
 };
@@ -143,7 +151,6 @@ export const authPlugin = fp(async (fastify) => {
             themeMode: true,
             themePreset: true,
             themePrimaryColor: true,
-            role: true,
             usagePlan: true,
             personId: true,
             defaultWorkspaceId: true,
@@ -163,11 +170,14 @@ export const authPlugin = fp(async (fastify) => {
       request.eventScoped = false;
       request.user = {
         ...user,
-        role: session.user.role,
+        role: "VIEWER",
+        workspaceRole: "VIEWER",
         workspaceId: defaultWorkspaceId ?? "",
         workspaceName: "Administration",
       };
-      request.userRole = session.user.role;
+      // Platform administration is deliberately separate from workspace roles.
+      // Admin routes authorise through isAdminEmail(), not through User.role.
+      request.userRole = "VIEWER";
       return;
     }
 
@@ -222,6 +232,7 @@ export const authPlugin = fp(async (fastify) => {
     request.user = {
       ...user,
       role: membership.role,
+      workspaceRole: membership.role,
       workspaceId,
       workspaceName: membership.workspace.name,
     };

@@ -35,7 +35,10 @@ export type UserSessionDTO = {
   themeMode: UserThemeMode;
   themePreset: UserThemePreset;
   themePrimaryColor: string | null;
+  /** @deprecated Use workspaceRole. Kept while clients migrate. */
   role: UserRole;
+  /** Role granted by the currently selected workspace. */
+  workspaceRole: UserRole;
   usagePlan: UsagePlan;
   personId: string | null;
   workspaceId: string | null | undefined;

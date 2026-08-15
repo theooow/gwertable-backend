@@ -214,7 +214,9 @@ export class AuthRepository {
         data: {
           defaultWorkspaceId: workspace.id,
           workspaceMemberships: {
-            create: { workspaceId: workspace.id, role: existing.role },
+            // An account without an existing workspace owns the workspace we
+            // create for it. Do not inherit the obsolete account-level role.
+            create: { workspaceId: workspace.id, role: "ADMIN" },
           },
         },
       });
@@ -227,7 +229,9 @@ export class AuthRepository {
     return this.prisma.user.create({
       data: {
         email,
-        role: invitation?.role ?? "ADMIN",
+        // Roles belong to WorkspaceMember. This column is kept only for a
+        // safe, backwards-compatible schema transition.
+        role: "VIEWER",
         defaultWorkspaceId: invitation?.workspaceId ?? workspace?.id,
         ...(invitation?.kind === "workspace"
           ? {
@@ -282,9 +286,11 @@ export class AuthRepository {
       currency: input.currency,
       timezone: input.timezone,
       emailVerified: new Date(),
-      role: invitation?.role ?? existing?.role ?? "ADMIN",
-      defaultWorkspaceId: invitation?.workspaceId ?? existing?.defaultWorkspaceId ?? workspace?.id,
+      // Never promote an account globally through an invitation or signup.
+      // The granted role is written exclusively to WorkspaceMember below.
+      role: "VIEWER" as UserRole,
     };
+    const defaultWorkspaceId = invitation?.workspaceId ?? existing?.defaultWorkspaceId ?? workspace?.id;
 
     if (existing) {
       if (!invitation && existing.defaultWorkspaceId) {
@@ -298,6 +304,9 @@ export class AuthRepository {
         where: { id: existing.id },
         data: {
           ...userData,
+          ...(defaultWorkspaceId
+            ? { defaultWorkspace: { connect: { id: defaultWorkspaceId } } }
+            : {}),
           ...(invitation?.kind === "workspace"
             ? {
                 workspaceMemberships: {
@@ -322,6 +331,9 @@ export class AuthRepository {
       data: {
         email: input.email,
         ...userData,
+        ...(defaultWorkspaceId
+          ? { defaultWorkspace: { connect: { id: defaultWorkspaceId } } }
+          : {}),
         ...(invitation?.kind === "workspace"
           ? {
               workspaceMemberships: {

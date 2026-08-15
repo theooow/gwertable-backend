@@ -54,6 +54,14 @@ describe("auth and health routes", () => {
     assert.equal(passwordSetupPayload.user.role, "ADMIN");
     assert.ok(passwordSetupPayload.user.workspaceId);
 
+    const createdAccount = await prisma.user.findUniqueOrThrow({
+      where: { email: "admin@abregi.test" },
+      include: { workspaceMemberships: true },
+    });
+    assert.equal(createdAccount.role, "VIEWER");
+    assert.equal(createdAccount.workspaceMemberships.length, 1);
+    assert.equal(createdAccount.workspaceMemberships[0]?.role, "ADMIN");
+
     const me = await request("GET", "/api/auth/me", `Bearer ${passwordSetupPayload.sessionToken}`);
     assert.equal(me.statusCode, 200);
     assert.equal(json<{ user: { email: string } }>(me).user.email, "admin@abregi.test");
@@ -165,6 +173,21 @@ describe("auth and health routes", () => {
     assert.equal(payload.user.billingEmail, "billing@abregi.test");
     assert.equal(payload.user.workspaceName, "Nora Events");
     assert.equal(payload.user.role, "ADMIN");
+
+    const additionalWorkspace = await request("POST", "/api/workspaces", `Bearer ${payload.sessionToken}`, {
+      name: "Deuxieme espace",
+    });
+    assert.equal(additionalWorkspace.statusCode, 201);
+    const additionalWorkspacePayload = json<{ workspace: { id: string } }>(additionalWorkspace);
+    const ownerMembership = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: additionalWorkspacePayload.workspace.id,
+          userId: (await prisma.user.findUniqueOrThrow({ where: { email: "new-user@abregi.test" } })).id,
+        },
+      },
+    });
+    assert.equal(ownerMembership?.role, "ADMIN");
 
     const me = await request("GET", "/api/auth/me", `Bearer ${payload.sessionToken}`);
     assert.equal(me.statusCode, 200);

@@ -242,7 +242,9 @@ export class AuthService {
     if (!user) throw new UnauthorizedError("Utilisateur introuvable");
 
     let workspaceId = user.defaultWorkspaceId;
-    let role = user.role;
+    // A user's persistent role is legacy metadata. Permissions are always
+    // resolved from the active workspace membership or event collaboration.
+    let role: AuthSessionDTO["user"]["role"] = "VIEWER";
     let workspaceName = "";
 
     if (workspaceId) {
@@ -302,6 +304,7 @@ export class AuthService {
         themePreset: user.themePreset,
         themePrimaryColor: user.themePrimaryColor,
         role,
+        workspaceRole: role,
         usagePlan: user.usagePlan,
         personId: user.personId,
         workspaceId,
