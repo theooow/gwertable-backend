@@ -6,6 +6,7 @@ import { requireCan } from "../lib/permissions.js";
 import { sendInvoiceEmail } from "../lib/mailer.js";
 import { renderInvoicePdf } from "../services/invoice-pdf.service.js";
 import { decryptCredential } from "../lib/encrypted-credentials.js";
+import { buildUblInvoice } from "../services/ubl-invoice.service.js";
 
 const money = z.coerce.number().nonnegative().max(9_999_999).transform((value) => Math.round(value * 100));
 const date = z.string().datetime().optional().or(z.literal(""));
@@ -86,11 +87,10 @@ export async function financeRoutes(fastify: FastifyInstance) {
     if (!invoice) throw new NotFoundError("Facture introuvable"); if (!invoice.number) throw new ValidationError("Envoyez d'abord la facture pour lui attribuer un numéro"); if (!invoice.counterpartSiren) throw new ValidationError("Le SIREN du client est requis pour transmettre une facture B2B à Super PDP");
     const [legal, connection] = await Promise.all([prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }), prisma.electronicInvoicingConnection.findUnique({ where: { workspaceId_provider: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } } })]);
     if (!legal?.siren || !connection?.accessToken || connection.status !== "CONNECTED") throw new ValidationError("Connectez Super PDP et renseignez le SIREN de l'entité légale avant transmission");
-    const asAmount = (cents: number) => (cents / 100).toFixed(2); const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
-    const payload = { data: [{ direction: "out", invoice_id: invoice.superPdpInvoiceId ?? undefined, number: invoice.number, issue_date: dateOnly(invoice.issuedAt ?? new Date()), due_date: invoice.dueAt ? dateOnly(invoice.dueAt) : undefined, currency_code: invoice.currency, type_code: "380", seller: { company_id: legal.siren, company_id_scheme_id: "0002", country: legal.countryCode, tax_registration_id: legal.vatNumber ?? undefined }, buyer: { company_id: invoice.counterpartSiren, company_id_scheme_id: "0002", country: "FR" }, lines: invoice.lines.map((line) => ({ product_name: line.label, billed_quantity: String(line.quantity), billed_quantity_unit_code: "C62", price: { amount: asAmount(line.unitPriceHtCents) } })), tax_subtotals: [...new Map(invoice.lines.map((line) => [line.vatRateBasisPoints, line])).values()].map((line) => ({ taxable_amount: asAmount(invoice.totalHtCents), tax_amount: asAmount(invoice.totalVatCents), tax_category: { code: line.vatRateBasisPoints ? "S" : "E", percent: (line.vatRateBasisPoints / 100).toFixed(2) } })), total: { currency_code: invoice.currency, tax_exclusive_amount: asAmount(invoice.totalHtCents), tax_amount: asAmount(invoice.totalVatCents) } }] };
-    const response = await fetch("https://api.superpdp.tech/v1.beta/b2bint_invoices", { method: "POST", headers: { authorization: `Bearer ${decryptCredential(connection.accessToken)}`, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(payload) });
+    const ubl = buildUblInvoice({ ...invoice, number: invoice.number!, counterpartSiren: invoice.counterpartSiren!, issuedAt: invoice.issuedAt ?? new Date() }, { ...legal, siren: legal.siren! });
+    const response = await fetch(`https://api.superpdp.tech/v1.beta/invoices?processing_rule=B2B&external_id=${encodeURIComponent(invoice.id)}`, { method: "POST", headers: { authorization: `Bearer ${decryptCredential(connection.accessToken)}`, "content-type": "application/xml", accept: "application/json" }, body: ubl });
     const rawBody = await response.text(); const body = (() => { try { return JSON.parse(rawBody) as { data?: Array<{ id?: number }>; message?: string }; } catch { return null; } })();
     if (!response.ok) { const error = body?.message ?? `Super PDP HTTP ${response.status}${rawBody ? ` : ${rawBody.slice(0, 500)}` : ""}`; await prisma.invoice.update({ where: { id }, data: { superPdpStatus: "ERROR", superPdpError: error } }); throw new ValidationError(error); }
-    return prisma.invoice.update({ where: { id }, data: { superPdpInvoiceId: body?.data?.[0]?.id ?? null, superPdpStatus: "TRANSMITTED", superPdpError: null, superPdpSentAt: new Date() } });
+    return prisma.invoice.update({ where: { id }, data: { superPdpInvoiceId: body?.data?.[0]?.id ?? (body as { id?: number } | null)?.id ?? null, superPdpStatus: "QUEUED", superPdpError: null, superPdpSentAt: new Date() } });
   });
 }
