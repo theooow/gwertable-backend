@@ -41,6 +41,15 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   NOTIFICATION_REMINDER_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(5),
+  // Super PDP OAuth settings. They remain optional until the connector is enabled.
+  SUPER_PDP_CLIENT_ID: z.string().min(1).optional(),
+  SUPER_PDP_CLIENT_SECRET: z.string().min(1).optional(),
+  SUPER_PDP_AUTHORIZATION_URL: z.string().url().default("https://api.superpdp.tech/oauth2/authorize"),
+  SUPER_PDP_TOKEN_URL: z.string().url().default("https://api.superpdp.tech/oauth2/token"),
+  SUPER_PDP_REDIRECT_URI: z.string().url().default("https://abregi.com/api/integrations/super-pdp/oauth/callback"),
+  SUPER_PDP_SCOPES: z.string().default(""),
+  // 32-byte base64 or 64-character hex key; required before storing OAuth tokens.
+  PDP_CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
 });
 
 export const env = envSchema.parse(process.env);

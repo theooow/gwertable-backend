@@ -36,6 +36,16 @@ enum UsagePlan {
   PLATINIUM
 }
 
+enum ElectronicInvoicingProvider {
+  SUPER_PDP
+}
+
+enum ElectronicInvoicingConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
 enum UserThemeMode {
   system
   light
@@ -178,6 +188,8 @@ model User {
   themePreset       UserThemePreset @default(default)
   themePrimaryColor String?
   emailVerified DateTime?
+  // Legacy account-level field. It is no longer used for authorisation:
+  // permissions are granted exclusively by WorkspaceMember.role.
   role          UserRole  @default(VIEWER)
   usagePlan     UsagePlan @default(BETA_TEST)
   discordUserId String?   @unique
@@ -198,6 +210,7 @@ model User {
   activityEntries       ActivityEntry[]
   notifications         InAppNotification[]
   notificationPreferences ActivityNotificationPreference[]
+  electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
 
   @@index([defaultWorkspaceId])
 }
@@ -224,6 +237,67 @@ model Workspace {
   activityEntries ActivityEntry[]
   notifications   InAppNotification[]
   notificationPreferences ActivityNotificationPreference[]
+  legalEntity     LegalEntity?
+  electronicInvoicingConnections ElectronicInvoicingConnection[]
+  electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
+}
+
+/// Legal issuer/recipient identity. A workspace has one entity in this first
+/// iteration; this keeps a PDP connection strictly isolated per customer.
+model LegalEntity {
+  id             String   @id @default(cuid())
+  workspaceId    String   @unique
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  legalName      String
+  siren          String?
+  siret          String?
+  vatNumber      String?
+  addressLine1   String?
+  addressLine2   String?
+  postalCode     String?
+  city           String?
+  countryCode    String   @default("FR")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([siren])
+  @@index([siret])
+}
+
+/// Provider credentials are encrypted at rest. They are never returned by the API.
+model ElectronicInvoicingConnection {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider        ElectronicInvoicingProvider
+  status          ElectronicInvoicingConnectionStatus @default(DISCONNECTED)
+  providerOrgId   String?
+  accessToken     String?
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  lastError       String?
+  connectedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([workspaceId, provider])
+}
+
+/// Short-lived, one-time OAuth state bound to an Abregi user and workspace.
+model ElectronicInvoicingOAuthState {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    ElectronicInvoicingProvider
+  state       String   @unique
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, provider])
+  @@index([userId])
 }
 
 model EventCollaborator {
