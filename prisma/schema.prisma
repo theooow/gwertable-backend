@@ -244,6 +244,7 @@ model Workspace {
   shotgunApiToken    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  expenseClaimAnalytics String[] @default(["FEST", "TRAJ", "AUTRE"])
 
   defaultUsers User[] @relation("DefaultWorkspace")
   members      WorkspaceMember[]
@@ -1028,6 +1029,10 @@ model Invoice {
   totalVatCents   Int              @default(0)
   totalTtcCents   Int              @default(0)
   documentUrl     String?
+  superPdpInvoiceId Int? @unique
+  superPdpStatus  String?
+  superPdpError   String?
+  superPdpSentAt  DateTime?
   notes           String?
   lines           InvoiceLine[]
   createdAt       DateTime         @default(now())
@@ -1066,6 +1071,7 @@ model ExpenseClaim {
   submitter       User               @relation("ExpenseClaimSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
   label           String
   category        String             @default("autre")
+  analyticCode    String             @default("AUTRE")
   amountHtCents   Int
   amountVatCents  Int
   amountTtcCents  Int

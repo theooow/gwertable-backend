@@ -108,7 +108,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/uploads/expense-receipts", async (request, reply) => {
-    requireCan(request.userRole, "budget.write");
+    requireCan(request.userRole, "expenseClaim.create");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedReceiptTypes.has(parsed.contentType)) throw new ValidationError("Format de justificatif non supporte");
     const buffer = Buffer.from(parsed.data, "base64");

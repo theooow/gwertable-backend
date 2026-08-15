@@ -1,0 +1,2 @@
+ALTER TABLE "Workspace" ADD COLUMN "expenseClaimAnalytics" TEXT[] NOT NULL DEFAULT ARRAY['FEST', 'TRAJ', 'AUTRE'];
+ALTER TABLE "ExpenseClaim" ADD COLUMN "analyticCode" TEXT NOT NULL DEFAULT 'AUTRE';

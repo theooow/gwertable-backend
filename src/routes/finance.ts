@@ -5,10 +5,11 @@ import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
 import { sendInvoiceEmail } from "../lib/mailer.js";
 import { renderInvoicePdf } from "../services/invoice-pdf.service.js";
+import { decryptCredential } from "../lib/encrypted-credentials.js";
 
 const money = z.coerce.number().nonnegative().max(9_999_999).transform((value) => Math.round(value * 100));
 const date = z.string().datetime().optional().or(z.literal(""));
-const claimSchema = z.object({ label: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(80).default("autre"), amountHt: money, vatRateBasisPoints: z.coerce.number().int().min(0).max(10000).default(0), eventId: z.string().min(1).optional().or(z.literal("")), purchasedAt: date, receiptUrl: z.string().url().optional().or(z.literal("")), notes: z.string().trim().max(4000).optional().or(z.literal("")) });
+const claimSchema = z.object({ label: z.string().trim().min(1).max(200), category: z.string().trim().min(1).max(80).default("autre"), analyticCode: z.string().trim().min(1).max(50), amountHt: money, vatRateBasisPoints: z.coerce.number().int().min(0).max(10000).default(0), eventId: z.string().min(1).optional().or(z.literal("")), purchasedAt: date, receiptUrl: z.string().url().optional().or(z.literal("")), notes: z.string().trim().max(4000).optional().or(z.literal("")) });
 const invoiceSchema = z.object({ direction: z.enum(["OUTGOING", "INCOMING"]), status: z.enum(["DRAFT", "ISSUED", "RECEIVED", "PARTIALLY_PAID", "PAID", "CANCELLED"]).default("DRAFT"), number: z.string().trim().max(80).optional().or(z.literal("")), counterpartName: z.string().trim().min(1).max(200), counterpartEmail: z.string().email().optional().or(z.literal("")), counterpartSiren: z.string().regex(/^\d{9}$/).optional().or(z.literal("")), eventId: z.string().min(1).optional().or(z.literal("")), issuedAt: date, dueAt: date, notes: z.string().trim().max(4000).optional().or(z.literal("")), lines: z.array(z.object({ label: z.string().trim().min(1).max(200), quantity: z.coerce.number().positive().max(100000).default(1), unitPriceHt: money, vatRateBasisPoints: z.coerce.number().int().min(0).max(10000).default(0) })).min(1).max(100) });
 const idSchema = z.object({ id: z.string().min(1) });
 
@@ -35,14 +36,16 @@ export async function financeRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "expenseClaim.create");
     return prisma.event.findMany({ where: { workspaceId: request.workspaceId, status: { not: "ARCHIVED" } }, select: { id: true, name: true, startsAt: true }, orderBy: { startsAt: "desc" } });
   });
+  fastify.get("/api/finance/analytics", async (request) => { requireCan(request.userRole, "expenseClaim.create"); const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: request.workspaceId }, select: { expenseClaimAnalytics: true } }); return workspace.expenseClaimAnalytics; });
+  fastify.put("/api/finance/analytics", async (request) => { requireCan(request.userRole, "finance.write"); const values = z.object({ values: z.array(z.string().trim().min(1).max(50)).min(1).max(50) }).parse(request.body).values; return prisma.workspace.update({ where: { id: request.workspaceId }, data: { expenseClaimAnalytics: [...new Set(values)] }, select: { expenseClaimAnalytics: true } }); });
 
   fastify.get("/api/expense-claims/mine", async (request) => prisma.expenseClaim.findMany({ where: { workspaceId: request.workspaceId, submitterId: request.user!.id }, include: { event: { select: { id: true, name: true } }, expense: { select: { id: true, reimbursement: true } } }, orderBy: { createdAt: "desc" } }));
 
   fastify.post("/api/expense-claims", async (request, reply) => {
     requireCan(request.userRole, "expenseClaim.create");
-    const data = claimSchema.parse(request.body); const eventId = await ensureEvent(data.eventId || undefined, request.workspaceId);
+    const data = claimSchema.parse(request.body); const eventId = await ensureEvent(data.eventId || undefined, request.workspaceId); const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: request.workspaceId }, select: { expenseClaimAnalytics: true } }); if (!workspace.expenseClaimAnalytics.includes(data.analyticCode)) throw new ValidationError("Axe analytique invalide");
     const vat = Math.round(data.amountHt * data.vatRateBasisPoints / 10000);
-    const claim = await prisma.expenseClaim.create({ data: { workspaceId: request.workspaceId, submitterId: request.user!.id, eventId, label: data.label, category: data.category, amountHtCents: data.amountHt, amountVatCents: vat, amountTtcCents: data.amountHt + vat, vatRateBasisPoints: data.vatRateBasisPoints, purchasedAt: data.purchasedAt ? new Date(data.purchasedAt) : null, receiptUrl: data.receiptUrl || null, notes: data.notes || null } });
+    const claim = await prisma.expenseClaim.create({ data: { workspaceId: request.workspaceId, submitterId: request.user!.id, eventId, label: data.label, category: data.category, analyticCode: data.analyticCode, amountHtCents: data.amountHt, amountVatCents: vat, amountTtcCents: data.amountHt + vat, vatRateBasisPoints: data.vatRateBasisPoints, purchasedAt: data.purchasedAt ? new Date(data.purchasedAt) : null, receiptUrl: data.receiptUrl || null, notes: data.notes || null } });
     return reply.status(201).send(claim);
   });
 
@@ -52,7 +55,7 @@ export async function financeRoutes(fastify: FastifyInstance) {
     if (!claim) throw new NotFoundError("Note de frais introuvable"); if (claim.status !== "SUBMITTED") throw new ValidationError("Cette note de frais a déjà été traitée");
     return prisma.$transaction(async (tx) => {
       let personId = claim.submitter.personId;
-      if (!personId) { const person = await tx.person.create({ data: { workspaceId: request.workspaceId, fullName: claim.submitter.name || claim.submitter.email, email: claim.submitter.email, tags: [] } }); personId = person.id; await tx.user.update({ where: { id: claim.submitterId }, data: { personId } }); }
+      if (!personId) { const existingPerson = await tx.person.findUnique({ where: { workspaceId_email: { workspaceId: request.workspaceId, email: claim.submitter.email } }, select: { id: true } }); const person = existingPerson ?? await tx.person.create({ data: { workspaceId: request.workspaceId, fullName: claim.submitter.name || claim.submitter.email, email: claim.submitter.email, tags: [] } }); personId = person.id; await tx.user.update({ where: { id: claim.submitterId }, data: { personId } }); }
       const approved = await tx.expenseClaim.update({ where: { id }, data: { status: "APPROVED", reviewedAt: new Date() } });
       if (!claim.eventId) return approved;
       const expense = await tx.expense.create({ data: { eventId: claim.eventId, expenseClaimId: id, label: claim.label, amountCents: claim.amountTtcCents, phase: "ACTUAL", amountInputMode: "TTC", vatRateBasisPoints: claim.vatRateBasisPoints, amountHtCents: claim.amountHtCents, amountVatCents: claim.amountVatCents, amountTtcCents: claim.amountTtcCents, category: claim.category, paidById: personId, paidAt: claim.purchasedAt, reimbursement: "PENDING", receiptUrl: claim.receiptUrl, notes: claim.notes } });
@@ -75,5 +78,18 @@ export async function financeRoutes(fastify: FastifyInstance) {
     const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }); const issuedAt = invoice.issuedAt ?? new Date();
     const pdf = await renderInvoicePdf({ ...invoice, number, issuedAt }, legal?.legalName ?? "Abregi"); await sendInvoiceEmail({ email: invoice.counterpartEmail, customerName: invoice.counterpartName, number, pdf });
     return prisma.invoice.update({ where: { id }, data: { number, issuedAt, status: "ISSUED" } });
+  });
+
+  fastify.post("/api/finance/invoices/:id/transmit-super-pdp", async (request) => {
+    requireCan(request.userRole, "finance.write"); const { id } = idSchema.parse(request.params);
+    const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId, direction: "OUTGOING" }, include: { lines: { orderBy: { position: "asc" } } } });
+    if (!invoice) throw new NotFoundError("Facture introuvable"); if (!invoice.number) throw new ValidationError("Envoyez d'abord la facture pour lui attribuer un numéro"); if (!invoice.counterpartSiren) throw new ValidationError("Le SIREN du client est requis pour transmettre une facture B2B à Super PDP");
+    const [legal, connection] = await Promise.all([prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }), prisma.electronicInvoicingConnection.findUnique({ where: { workspaceId_provider: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } } })]);
+    if (!legal?.siren || !connection?.accessToken || connection.status !== "CONNECTED") throw new ValidationError("Connectez Super PDP et renseignez le SIREN de l'entité légale avant transmission");
+    const asAmount = (cents: number) => (cents / 100).toFixed(2); const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
+    const payload = { data: [{ direction: "out", invoice_id: invoice.superPdpInvoiceId ?? undefined, number: invoice.number, issue_date: dateOnly(invoice.issuedAt ?? new Date()), due_date: invoice.dueAt ? dateOnly(invoice.dueAt) : undefined, currency_code: invoice.currency, type_code: "380", seller: { company_id: legal.siren, company_id_scheme_id: "0002", country: legal.countryCode, tax_registration_id: legal.vatNumber ?? undefined }, buyer: { company_id: invoice.counterpartSiren, company_id_scheme_id: "0002", country: "FR" }, lines: invoice.lines.map((line) => ({ product_name: line.label, billed_quantity: String(line.quantity), billed_quantity_unit_code: "C62", price: { amount: asAmount(line.unitPriceHtCents) } })), tax_subtotals: [...new Map(invoice.lines.map((line) => [line.vatRateBasisPoints, line])).values()].map((line) => ({ taxable_amount: asAmount(invoice.totalHtCents), tax_amount: asAmount(invoice.totalVatCents), tax_category: { code: line.vatRateBasisPoints ? "S" : "E", percent: (line.vatRateBasisPoints / 100).toFixed(2) } })), total: { currency_code: invoice.currency, tax_exclusive_amount: asAmount(invoice.totalHtCents), tax_amount: asAmount(invoice.totalVatCents) } }] };
+    const response = await fetch("https://api.superpdp.tech/v1.beta/b2bint_invoices", { method: "POST", headers: { authorization: `Bearer ${decryptCredential(connection.accessToken)}`, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(payload) }); const body = await response.json().catch(() => null) as { data?: Array<{ id?: number }>; message?: string } | null;
+    if (!response.ok) { const error = body?.message ?? "Super PDP a refusé la transmission"; await prisma.invoice.update({ where: { id }, data: { superPdpStatus: "ERROR", superPdpError: error } }); throw new ValidationError(error); }
+    return prisma.invoice.update({ where: { id }, data: { superPdpInvoiceId: body?.data?.[0]?.id ?? null, superPdpStatus: "TRANSMITTED", superPdpError: null, superPdpSentAt: new Date() } });
   });
 }
