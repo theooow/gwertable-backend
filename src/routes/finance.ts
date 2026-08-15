@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
+import { sendInvoiceEmail } from "../lib/mailer.js";
+import { renderInvoicePdf } from "../services/invoice-pdf.service.js";
 
 const money = z.coerce.number().nonnegative().max(9_999_999).transform((value) => Math.round(value * 100));
 const date = z.string().datetime().optional().or(z.literal(""));
@@ -18,6 +20,8 @@ async function ensureEvent(eventId: string | undefined, workspaceId: string) {
 }
 
 export async function financeRoutes(fastify: FastifyInstance) {
+  fastify.get("/api/finance/invoices/:id", async (request) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); return invoice; });
+  fastify.get("/api/finance/invoices/:id/pdf", async (request, reply) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }); const pdf = await renderInvoicePdf(invoice, legal?.legalName ?? "Abregi"); return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename=${invoice.number ?? "facture"}.pdf`).send(pdf); });
   fastify.get("/api/finance/overview", async (request) => {
     requireCan(request.userRole, "finance.read");
     const [invoices, claims] = await Promise.all([
@@ -61,5 +65,15 @@ export async function financeRoutes(fastify: FastifyInstance) {
     const lines = data.lines.map((line, position) => { const ht = Math.round(line.unitPriceHt * line.quantity); const vat = Math.round(ht * line.vatRateBasisPoints / 10000); return { ...line, position, totalHtCents: ht, totalVatCents: vat, totalTtcCents: ht + vat, unitPriceHtCents: line.unitPriceHt }; });
     const invoice = await prisma.invoice.create({ data: { workspaceId: request.workspaceId, eventId, direction: data.direction, status: data.status, number: data.number || null, counterpartName: data.counterpartName, counterpartEmail: data.counterpartEmail || null, counterpartSiren: data.counterpartSiren || null, issuedAt: data.issuedAt ? new Date(data.issuedAt) : null, dueAt: data.dueAt ? new Date(data.dueAt) : null, notes: data.notes || null, totalHtCents: lines.reduce((sum, line) => sum + line.totalHtCents, 0), totalVatCents: lines.reduce((sum, line) => sum + line.totalVatCents, 0), totalTtcCents: lines.reduce((sum, line) => sum + line.totalTtcCents, 0), lines: { create: lines.map(({ label, quantity, unitPriceHtCents, vatRateBasisPoints, totalHtCents, totalVatCents, totalTtcCents, position }) => ({ label, quantity, unitPriceHtCents, vatRateBasisPoints, totalHtCents, totalVatCents, totalTtcCents, position })) } }, include: { lines: true } });
     return reply.status(201).send(invoice);
+  });
+
+  fastify.post("/api/finance/invoices/:id/send", async (request) => {
+    requireCan(request.userRole, "finance.write"); const { id } = idSchema.parse(request.params);
+    const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId, direction: "OUTGOING" }, include: { lines: { orderBy: { position: "asc" } } } });
+    if (!invoice) throw new NotFoundError("Facture introuvable"); if (!invoice.counterpartEmail) throw new ValidationError("Ajoutez l'email du client avant l'envoi");
+    const number = invoice.number ?? `FAC-${new Date().getFullYear()}-${String(await prisma.invoice.count({ where: { workspaceId: request.workspaceId, direction: "OUTGOING" } })).padStart(4, "0")}`;
+    const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }); const issuedAt = invoice.issuedAt ?? new Date();
+    const pdf = await renderInvoicePdf({ ...invoice, number, issuedAt }, legal?.legalName ?? "Abregi"); await sendInvoiceEmail({ email: invoice.counterpartEmail, customerName: invoice.counterpartName, number, pdf });
+    return prisma.invoice.update({ where: { id }, data: { number, issuedAt, status: "ISSUED" } });
   });
 }

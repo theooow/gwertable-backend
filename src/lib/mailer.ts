@@ -78,3 +78,9 @@ export async function sendMagicLinkEmail({
     throw new EmailDeliveryError("Impossible d'envoyer le lien de connexion par email");
   }
 }
+
+export async function sendInvoiceEmail({ email, customerName, number, pdf }: { email: string; customerName: string; number: string; pdf: Buffer }) {
+  if (env.MAIL_TRANSPORT === "log") { console.info({ email, number }, "Invoice email skipped"); return; }
+  try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject: `Facture ${number}`, text: `Bonjour ${customerName},\n\nVeuillez trouver votre facture ${number} en pièce jointe.`, attachments: [{ filename: `${number}.pdf`, content: pdf, contentType: "application/pdf" }] }); }
+  catch { throw new EmailDeliveryError("Impossible d'envoyer la facture par email"); }
+}
