@@ -277,6 +277,8 @@ model LegalEntity {
   siren          String?
   siret          String?
   vatNumber      String?
+  peppolEndpoint String?
+  peppolEndpointScheme String?
   addressLine1   String?
   addressLine2   String?
   postalCode     String?
@@ -1021,6 +1023,8 @@ model Invoice {
   counterpartName String
   counterpartEmail String?
   counterpartSiren String?
+  counterpartPeppolEndpoint String?
+  counterpartPeppolEndpointScheme String?
   issuedAt        DateTime?
   dueAt           DateTime?
   paidAt          DateTime?
