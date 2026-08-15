@@ -23,6 +23,7 @@ import { workspaceRoutes } from "./routes/workspace.js";
 import { equipmentRoutes } from "./routes/equipment.js";
 import { activityRoutes } from "./routes/activity.js";
 import { electronicInvoicingRoutes } from "./routes/electronic-invoicing.js";
+import { financeRoutes } from "./routes/finance.js";
 
 export async function buildApp() {
   const app = fastify({
@@ -57,6 +58,7 @@ export async function buildApp() {
   await app.register(equipmentRoutes);
   await app.register(activityRoutes);
   await app.register(electronicInvoicingRoutes);
+  await app.register(financeRoutes);
 
   return app;
 }

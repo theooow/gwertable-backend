@@ -46,6 +46,27 @@ enum ElectronicInvoicingConnectionStatus {
   ERROR
 }
 
+enum InvoiceDirection {
+  OUTGOING
+  INCOMING
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  RECEIVED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ExpenseClaimStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
 enum UserThemeMode {
   system
   light
@@ -211,6 +232,7 @@ model User {
   notifications         InAppNotification[]
   notificationPreferences ActivityNotificationPreference[]
   electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
+  submittedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimSubmitter")
 
   @@index([defaultWorkspaceId])
 }
@@ -240,6 +262,8 @@ model Workspace {
   legalEntity     LegalEntity?
   electronicInvoicingConnections ElectronicInvoicingConnection[]
   electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
+  invoices        Invoice[]
+  expenseClaims   ExpenseClaim[]
 }
 
 /// Legal issuer/recipient identity. A workspace has one entity in this first
@@ -598,6 +622,8 @@ model Event {
   runOfShowTracks RunOfShowTrack[]
   runOfShowSections RunOfShowSection[]
   expenses        Expense[]
+  invoices        Invoice[]
+  expenseClaims   ExpenseClaim[]
   incomes         Income[]
   shopping        ShoppingItem[]
   equipmentUsages EquipmentUsage[]
@@ -970,12 +996,93 @@ model Expense {
   notes            String?
   isEquipmentSync   Boolean @default(false)
   equipmentQuoteId  String?
+  expenseClaimId    String? @unique
+  expenseClaim      ExpenseClaim? @relation(fields: [expenseClaimId], references: [id], onDelete: SetNull)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([eventId, category])
   @@index([paidById])
+}
+
+/// Workspace-wide invoice register. OUTGOING documents are composed in Abregi;
+/// transmission through a PDP is deliberately tracked separately in a later step.
+model Invoice {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  eventId         String?
+  event           Event?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  direction       InvoiceDirection
+  status          InvoiceStatus    @default(DRAFT)
+  number          String?
+  counterpartName String
+  counterpartEmail String?
+  counterpartSiren String?
+  issuedAt        DateTime?
+  dueAt           DateTime?
+  paidAt          DateTime?
+  currency        String           @default("EUR")
+  totalHtCents    Int              @default(0)
+  totalVatCents   Int              @default(0)
+  totalTtcCents   Int              @default(0)
+  documentUrl     String?
+  notes           String?
+  lines           InvoiceLine[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([workspaceId, direction, status])
+  @@index([eventId])
+  @@unique([workspaceId, number])
+}
+
+model InvoiceLine {
+  id              String  @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  label           String
+  quantity        Decimal @default(1) @db.Decimal(10, 3)
+  unitPriceHtCents Int
+  vatRateBasisPoints Int @default(0)
+  totalHtCents    Int
+  totalVatCents   Int
+  totalTtcCents   Int
+  position        Int
+
+  @@index([invoiceId, position])
+}
+
+/// A member's purchase request. Approval creates exactly one linked actual
+/// event expense when an event was selected.
+model ExpenseClaim {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  eventId         String?
+  event           Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  submitterId     String
+  submitter       User               @relation("ExpenseClaimSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  label           String
+  category        String             @default("autre")
+  amountHtCents   Int
+  amountVatCents  Int
+  amountTtcCents  Int
+  vatRateBasisPoints Int              @default(0)
+  purchasedAt     DateTime?
+  receiptUrl      String?
+  notes           String?
+  status          ExpenseClaimStatus @default(SUBMITTED)
+  reviewerNote    String?
+  reviewedAt      DateTime?
+  expense         Expense?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([workspaceId, status])
+  @@index([eventId])
+  @@index([submitterId])
 }
 
 model Income {
