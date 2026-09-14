@@ -5,6 +5,7 @@ import { prisma } from "../prisma.js";
 import { encryptCredential } from "../lib/encrypted-credentials.js";
 import { ForbiddenError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
+import { getVerifiedCompany, workspaceAccessToken } from "../services/super-pdp.service.js";
 import { randomToken } from "../lib/token.js";
 
 const legalEntitySchema = z.object({
@@ -54,19 +55,35 @@ function connectionView(connection: {
 
 export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
   fastify.get("/api/workspace/electronic-invoicing", async (request) => {
-    requireCan(request.userRole, "user.manage");
+    requireCan(request.userRole, "finance.write");
     const [legalEntity, connection] = await Promise.all([
       prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }),
       prisma.electronicInvoicingConnection.findUnique({
         where: { workspaceId_provider: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } },
       }),
     ]);
-    return { legalEntity, superPdp: connectionView(connection) };
+    const view = connectionView(connection);
+    if (view?.status === "CONNECTED" && legalEntity?.siren) {
+      try {
+        const company = await getVerifiedCompany(await workspaceAccessToken(request.workspaceId), legalEntity.siren);
+        if (String(company.id) !== view.providerOrgId) throw new ValidationError("L'entreprise connectée a changé. Reconnectez Super PDP.");
+      } catch (error) {
+        view.status = "ERROR";
+        view.lastError = error instanceof ValidationError ? error.message : "Impossible de vérifier la connexion Super PDP. Réessayez plus tard.";
+      }
+    }
+    return { legalEntity, superPdp: view, connectionAvailable: Boolean(env.SUPER_PDP_CLIENT_ID && env.SUPER_PDP_CLIENT_SECRET && env.PDP_CREDENTIAL_ENCRYPTION_KEY) };
   });
 
   fastify.put("/api/workspace/electronic-invoicing/legal-entity", async (request) => {
-    requireCan(request.userRole, "user.manage");
+    requireCan(request.userRole, "finance.write");
     const data = legalEntitySchema.parse(request.body);
+    if (data.siret && data.siren && !data.siret.startsWith(data.siren)) throw new ValidationError("Le SIRET doit commencer par le SIREN de votre entreprise");
+    const current = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } });
+    if (current?.siren !== nullable(data.siren)) {
+      const connection = await prisma.electronicInvoicingConnection.findUnique({ where: { workspaceId_provider: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } } });
+      if (connection?.accessToken) throw new ValidationError("Déconnectez Super PDP avant de changer le SIREN de cet espace");
+    }
     return {
       legalEntity: await prisma.legalEntity.upsert({
         where: { workspaceId: request.workspaceId },
@@ -88,7 +105,7 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/workspace/electronic-invoicing/super-pdp/connect", async (request) => {
-    requireCan(request.userRole, "user.manage");
+    requireCan(request.userRole, "finance.write");
     requireSuperPdpOAuthConfig();
     const legalEntity = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } });
     if (!legalEntity?.siren) throw new ValidationError("Renseignez le SIREN de l'entité légale avant de connecter Super PDP");
@@ -105,8 +122,20 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
     url.searchParams.set("client_id", env.SUPER_PDP_CLIENT_ID!);
     url.searchParams.set("redirect_uri", env.SUPER_PDP_REDIRECT_URI);
     url.searchParams.set("state", state);
+    url.searchParams.set("superpdp_company_number", legalEntity.siren);
+    url.searchParams.set("superpdp_company_number_scheme", "fr_siren");
+    url.searchParams.set("login_hint", request.user!.email);
     if (env.SUPER_PDP_SCOPES) url.searchParams.set("scope", env.SUPER_PDP_SCOPES);
     return { authorizationUrl: url.toString() };
+  });
+
+  fastify.delete("/api/workspace/electronic-invoicing/super-pdp", async (request) => {
+    requireCan(request.userRole, "finance.write");
+    await prisma.$transaction([
+      prisma.electronicInvoicingConnection.deleteMany({ where: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } }),
+      prisma.electronicInvoicingOAuthState.updateMany({ where: { workspaceId: request.workspaceId, provider: "SUPER_PDP", consumedAt: null }, data: { consumedAt: new Date() } }),
+    ]);
+    return { ok: true };
   });
 
   // This endpoint is only called server-to-server by the public Next.js callback.
@@ -118,10 +147,11 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
     }
     if (oauthState.userId !== request.user!.id) throw new ForbiddenError("Cette connexion ne vous appartient pas");
     if (oauthState.workspaceId !== request.workspaceId) throw new ForbiddenError("La connexion ne correspond pas à l'espace actif");
-    requireCan(request.userRole, "user.manage");
+    requireCan(request.userRole, "finance.write");
     requireSuperPdpOAuthConfig();
 
-    await prisma.electronicInvoicingOAuthState.update({ where: { id: oauthState.id }, data: { consumedAt: new Date() } });
+    const consumed = await prisma.electronicInvoicingOAuthState.updateMany({ where: { id: oauthState.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
+    if (consumed.count !== 1) throw new ValidationError("Cette demande de connexion a déjà été utilisée");
     const response = await fetch(env.SUPER_PDP_TOKEN_URL, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
@@ -141,15 +171,14 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
       });
       throw new ValidationError("Super PDP a refusé l'autorisation");
     }
-    const company = await fetch("https://api.superpdp.tech/v1.beta/companies/me", {
-      headers: { authorization: `Bearer ${payload.access_token}`, accept: "application/json" },
-    }).then(async (companyResponse) => companyResponse.ok ? companyResponse.json() as Promise<{ id?: string | number }> : null)
-      .catch(() => null);
+    const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } });
+    if (!legal?.siren) throw new ValidationError("Renseignez le SIREN de cet espace");
+    const company = await getVerifiedCompany(payload.access_token, legal.siren);
     const tokenExpiresAt = payload.expires_in ? new Date(Date.now() + payload.expires_in * 1000) : null;
     await prisma.electronicInvoicingConnection.upsert({
       where: { workspaceId_provider: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } },
-      create: { workspaceId: request.workspaceId, provider: "SUPER_PDP", status: "CONNECTED", providerOrgId: company?.id ? String(company.id) : payload.organization_id ?? payload.org_id ?? null, accessToken: encryptCredential(payload.access_token), refreshToken: payload.refresh_token ? encryptCredential(payload.refresh_token) : null, tokenExpiresAt, connectedAt: new Date(), lastError: null },
-      update: { status: "CONNECTED", providerOrgId: company?.id ? String(company.id) : payload.organization_id ?? payload.org_id ?? null, accessToken: encryptCredential(payload.access_token), refreshToken: payload.refresh_token ? encryptCredential(payload.refresh_token) : null, tokenExpiresAt, connectedAt: new Date(), lastError: null },
+      create: { workspaceId: request.workspaceId, provider: "SUPER_PDP", status: "CONNECTED", providerOrgId: String(company.id), accessToken: encryptCredential(payload.access_token), refreshToken: payload.refresh_token ? encryptCredential(payload.refresh_token) : null, tokenExpiresAt, connectedAt: new Date(), lastError: null },
+      update: { status: "CONNECTED", providerOrgId: String(company.id), accessToken: encryptCredential(payload.access_token), refreshToken: payload.refresh_token ? encryptCredential(payload.refresh_token) : null, tokenExpiresAt, connectedAt: new Date(), lastError: null },
     });
     return { ok: true };
   });

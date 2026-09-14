@@ -1048,6 +1048,7 @@ model Invoice {
   counterpartSiren String?
   counterpartPeppolEndpoint String?
   counterpartPeppolEndpointScheme String?
+  issuerSnapshot Json?
   issuedAt        DateTime?
   dueAt           DateTime?
   paidAt          DateTime?
