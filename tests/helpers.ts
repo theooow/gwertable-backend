@@ -9,6 +9,7 @@ let app: FastifyInstance;
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "ApiLog",
       "Account",
       "Announcement",
       "Channel",

@@ -15,220 +15,68 @@ function assertAdmin(request: FastifyRequest) {
   }
 }
 
-function sum(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0);
-}
+const logFilters = z.object({
+  q: z.string().max(200).default(""),
+  userId: z.string().max(100).optional(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]).optional(),
+  status: z.enum(["errors", "server", "success"]).optional(),
+  activity: z.enum(["true"]).optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+  cursor: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 export async function adminRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/admin/overview", async (request) => {
+  fastify.addHook("preHandler", async (request, reply) => {
     assertAdmin(request);
+    reply.header("Cache-Control", "no-store");
+  });
 
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    const [
-      totalUsers,
-      verifiedUsers,
-      usersWithPassword,
-      activeSessions,
-      totalWorkspaces,
-      totalEvents,
-      upcomingEvents,
-      recentUsers,
-      recentWorkspaces,
-      recentEvents,
-      eventsByStatus,
-      expenseTotals,
-      incomeTotals,
-      ticketTiers,
-      workspaces,
-      nextEvents,
-      users,
-    ] = await Promise.all([
-      prisma.user.count({ where: { archivedAt: null } }),
-      prisma.user.count({ where: { archivedAt: null, emailVerified: { not: null } } }),
-      prisma.user.count({ where: { archivedAt: null, passwordHash: { not: null } } }),
-      prisma.session.count({ where: { expires: { gt: now } } }),
-      prisma.workspace.count(),
-      prisma.event.count(),
-      prisma.event.count({ where: { startsAt: { gte: now } } }),
-      prisma.user.count({ where: { archivedAt: null, createdAt: { gte: thirtyDaysAgo } } }),
-      prisma.workspace.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-      prisma.event.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-      prisma.event.groupBy({
-        by: ["status"],
-        _count: { _all: true },
-      }),
-      prisma.expense.aggregate({
-        _sum: { amountTtcCents: true, amountCents: true },
-      }),
-      prisma.income.aggregate({
-        _sum: { amountTtcCents: true, amountCents: true },
-      }),
-      prisma.ticketTier.findMany({
-        where: { archivedAt: null },
-        select: { organizerRevenueCents: true, quantity: true, sold: true },
-      }),
-      prisma.workspace.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          name: true,
-          createdAt: true,
-          _count: {
-            select: {
-              members: true,
-              events: true,
-              persons: true,
-              equipmentItems: true,
-            },
-          },
-          events: {
-            select: {
-              startsAt: true,
-              status: true,
-              expenses: { select: { amountTtcCents: true, amountCents: true } },
-              incomes: { select: { amountTtcCents: true, amountCents: true } },
-            },
-          },
-        },
-      }),
-      prisma.event.findMany({
-        where: { startsAt: { gte: now } },
-        orderBy: { startsAt: "asc" },
-        take: 8,
-        select: {
-          id: true,
-          name: true,
-          startsAt: true,
-          status: true,
-          workspace: { select: { name: true } },
-          _count: { select: { participants: true, tasks: true } },
-          ticketTiers: {
-            where: { archivedAt: null },
-            select: { sold: true, quantity: true, organizerRevenueCents: true },
-          },
-        },
-      }),
-      prisma.user.findMany({
-        where: { archivedAt: null },
-        orderBy: { createdAt: "desc" },
-        take: 30,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          usagePlan: true,
-          emailVerified: true,
-          createdAt: true,
-          defaultWorkspace: { select: { id: true, name: true } },
-          workspaceMemberships: {
-            select: { role: true, workspace: { select: { id: true, name: true } } },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-      }),
-    ]);
-
-    const ticketingRevenueCents = sum(
-      ticketTiers.map((tier) => tier.organizerRevenueCents * tier.sold),
-    );
-    const ticketingCapacity = sum(ticketTiers.map((tier) => tier.quantity));
-    const ticketsSold = sum(ticketTiers.map((tier) => tier.sold));
-
-    return {
-      generatedAt: now.toISOString(),
-      kpis: {
-        totalUsers,
-        verifiedUsers,
-        usersWithPassword,
-        activeSessions,
-        totalWorkspaces,
-        totalEvents,
-        upcomingEvents,
-        recentUsers,
-        recentWorkspaces,
-        recentEvents,
-        totalExpenseCents: expenseTotals._sum.amountTtcCents ?? expenseTotals._sum.amountCents ?? 0,
-        totalIncomeCents: incomeTotals._sum.amountTtcCents ?? incomeTotals._sum.amountCents ?? 0,
-        ticketingRevenueCents,
-        ticketsSold,
-        ticketingCapacity,
-      },
-      eventsByStatus: eventsByStatus.map((entry) => ({
-        status: entry.status,
-        count: entry._count._all,
-      })),
-      workspaces: workspaces.map((workspace) => {
-        const totalExpenseCents = sum(
-          workspace.events.flatMap((event) =>
-            event.expenses.map((expense) => expense.amountTtcCents || expense.amountCents),
-          ),
-        );
-        const totalIncomeCents = sum(
-          workspace.events.flatMap((event) =>
-            event.incomes.map((income) => income.amountTtcCents || income.amountCents),
-          ),
-        );
-        const lastEventAt = workspace.events
-          .map((event) => event.startsAt)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-
-        return {
-          id: workspace.id,
-          name: workspace.name,
-          createdAt: workspace.createdAt.toISOString(),
-          membersCount: workspace._count.members,
-          eventsCount: workspace._count.events,
-          contactsCount: workspace._count.persons,
-          equipmentCount: workspace._count.equipmentItems,
-          upcomingEventsCount: workspace.events.filter((event) => event.startsAt >= now).length,
-          doneEventsCount: workspace.events.filter((event) => event.status === "DONE").length,
-          totalExpenseCents,
-          totalIncomeCents,
-          lastEventAt: lastEventAt?.toISOString() ?? null,
-        };
-      }),
-      nextEvents: nextEvents.map((event) => {
-        const sold = sum(event.ticketTiers.map((tier) => tier.sold));
-        const capacity = sum(event.ticketTiers.map((tier) => tier.quantity));
-        const revenueCents = sum(
-          event.ticketTiers.map((tier) => tier.organizerRevenueCents * tier.sold),
-        );
-
-        return {
-          id: event.id,
-          name: event.name,
-          workspaceName: event.workspace.name,
-          startsAt: event.startsAt.toISOString(),
-          status: event.status,
-          participantsCount: event._count.participants,
-          tasksCount: event._count.tasks,
-          ticketsSold: sold,
-          ticketingCapacity: capacity,
-          ticketingRevenueCents: revenueCents,
-        };
-      }),
-      users: users.map((user) => ({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        usagePlan: user.usagePlan,
-        emailVerified: user.emailVerified?.toISOString() ?? null,
-        createdAt: user.createdAt.toISOString(),
-        defaultWorkspace: user.defaultWorkspace
-          ? { id: user.defaultWorkspace.id, name: user.defaultWorkspace.name }
-          : null,
-        workspaces: user.workspaceMemberships.map((membership) => ({
-          id: membership.workspace.id,
-          name: membership.workspace.name,
-          role: membership.role,
-        })),
-      })),
+  fastify.get("/api/admin/logs", async (request) => {
+    const filters = logFilters.parse(request.query);
+    const where = {
+      createdAt: { gte: filters.from ? new Date(filters.from) : new Date(Date.now() - 30 * 86400000), ...(filters.to ? { lte: new Date(filters.to) } : {}) },
+      ...(filters.userId ? { userId: filters.userId } : {}),
+      ...(filters.method ? { method: filters.method } : {}),
+      ...(filters.activity ? { action: { not: null } } : {}),
+      ...(filters.status === "errors" ? { statusCode: { gte: 400 } } : filters.status === "server" ? { statusCode: { gte: 500 } } : filters.status === "success" ? { statusCode: { lt: 400 } } : {}),
+      ...(filters.q ? { OR: ["route", "userEmail", "requestId", "action", "workspaceId"].map((field) => ({ [field]: { contains: filters.q, mode: "insensitive" as const } })) } : {}),
     };
+    const rows = await prisma.apiLog.findMany({
+      where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: filters.limit + 1,
+      ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+      select: { id: true, createdAt: true, requestId: true, method: true, path: true, route: true, statusCode: true, durationMs: true, userId: true, userEmail: true, workspaceId: true, action: true },
+    });
+    const hasMore = rows.length > filters.limit;
+    const logs = rows.slice(0, filters.limit);
+    return { logs, nextCursor: hasMore ? logs.at(-1)?.id : null, retentionDays: 30 };
+  });
+
+  fastify.get("/api/admin/logs/:id", async (request) => {
+    const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
+    const log = await prisma.apiLog.findUnique({ where: { id } });
+    if (!log) throw new NotFoundError("Log introuvable");
+    return log;
+  });
+
+  fastify.get("/api/admin/overview", async () => {
+    const since = new Date(Date.now() - 86400000);
+    const where = { createdAt: { gte: since }, NOT: { route: { startsWith: "/api/admin" } } };
+    const [totalUsers, totalWorkspaces, totalEvents, activeSessions, requests, errors, serverErrors, latency, slowRequests, users] = await Promise.all([
+      prisma.user.count({ where: { archivedAt: null } }), prisma.workspace.count(), prisma.event.count(),
+      prisma.session.count({ where: { expires: { gt: new Date() } } }),
+      prisma.apiLog.count({ where }),
+      prisma.apiLog.count({ where: { ...where, statusCode: { gte: 400 } } }),
+      prisma.apiLog.count({ where: { ...where, statusCode: { gte: 500 } } }),
+      prisma.apiLog.aggregate({ where, _avg: { durationMs: true } }),
+      prisma.apiLog.count({ where: { ...where, durationMs: { gte: 1000 } } }),
+      prisma.user.findMany({ where: { archivedAt: null }, orderBy: { createdAt: "desc" }, take: 100,
+        select: { id: true, email: true, name: true, usagePlan: true, emailVerified: true, createdAt: true,
+          defaultWorkspace: { select: { id: true, name: true } } } }),
+    ]);
+    return { generatedAt: new Date().toISOString(), kpis: { totalUsers, totalWorkspaces, totalEvents, activeSessions,
+      requests, errors, serverErrors, averageDurationMs: Math.round(latency._avg.durationMs ?? 0), slowRequests }, users };
   });
 
   fastify.patch("/api/admin/users/:userId/plan", async (request) => {

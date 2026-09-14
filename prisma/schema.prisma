@@ -18,6 +18,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ApiLog {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  requestId    String
+  method       String
+  path         String
+  route        String
+  statusCode   Int
+  durationMs   Int
+  userId       String?
+  userEmail    String?
+  workspaceId  String?
+  action       String?
+  requestBody  Json
+  responseBody Json
+  query        Json
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([action, createdAt])
+}
+
 // ============================================================
 // ENUMS
 // ============================================================

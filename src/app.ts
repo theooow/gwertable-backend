@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import { apiLogsPlugin } from "./plugins/api-logs.js";
 import fastify from "fastify";
 import { env } from "./env.js";
 import { authPlugin } from "./plugins/auth.js";
@@ -32,6 +33,7 @@ export async function buildApp() {
     },
   });
 
+  await app.register(apiLogsPlugin);
   await app.register(cors, {
     origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN,
     credentials: true,
