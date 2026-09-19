@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { setTimeout as delay } from "node:timers/promises";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../prisma.js";
 import { requireCan } from "../lib/permissions.js";
@@ -12,7 +13,13 @@ async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>):
   for (let attempt = 0; ; attempt++) {
     try { return await prisma.$transaction(fn, { isolationLevel: "Serializable" }); }
     catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2034", "P2002"].includes(error.code) && attempt < 3) continue;
+      // Prisma can surface the same error through different runtime classes.
+      // Back off so the competing transaction has time to commit before retrying.
+      if (error instanceof Error && "code" in error && (error.code === "P2034" || error.code === "P2002")) {
+        if (attempt >= 4) throw new ConflictError("Une modification concurrente est en cours. Réessayez dans un instant.");
+        await delay(25 * 2 ** attempt + Math.floor(Math.random() * 25));
+        continue;
+      }
       throw error;
     }
   }
