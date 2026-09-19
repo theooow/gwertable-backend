@@ -9,6 +9,7 @@ export const apiLogsPlugin = fp(async (app) => {
     reply.header("x-request-id", request.id);
     const path = request.url.split("?")[0];
     const isAdmin = path.startsWith("/api/admin") && request.method === "GET" && reply.statusCode < 400;
+    const isVolunteer = path.includes("/volunteers");
     let parsed: unknown;
     // Never read streams, binary downloads or admin log responses (recursive logging).
     if (!isAdmin && String(reply.getHeader("content-type")).includes("application/json") && typeof payload === "string") {
@@ -17,7 +18,7 @@ export const apiLogsPlugin = fp(async (app) => {
     const authUser = path.startsWith("/api/auth/") && reply.statusCode < 400
       ? (parsed as { user?: { id?: string; email?: string } } | undefined)?.user : undefined;
     responses.set(request, {
-      body: isAdmin ? "[réponse administration omise]" : sanitizeLog(parsed),
+      body: isVolunteer ? "[données bénévoles omises]" : isAdmin ? "[réponse administration omise]" : sanitizeLog(parsed),
       userId: authUser?.id, email: authUser?.email,
     });
     return payload;
@@ -36,7 +37,7 @@ export const apiLogsPlugin = fp(async (app) => {
         workspaceId: request.workspaceId || null,
         action: logAction(request.method, route, reply.statusCode),
         query: sanitizeLog({ query: request.query, params: request.params }),
-        requestBody: sanitizeLog(request.body), responseBody: response?.body ?? "[réponse sans corps]",
+        requestBody: route.includes("/volunteers") ? "[données bénévoles omises]" : sanitizeLog(request.body), responseBody: response?.body ?? "[réponse sans corps]",
       } });
     } catch {
       app.log.error({ requestId: request.id }, "API journal persistence failed");

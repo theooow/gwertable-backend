@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import { volunteerRoutes } from "./routes/event-modules/volunteers.js";
 import { apiLogsPlugin } from "./plugins/api-logs.js";
 import fastify from "fastify";
 import { env } from "./env.js";
@@ -47,6 +48,7 @@ export async function buildApp() {
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);
   await app.register(participantRoutes);
+  await app.register(volunteerRoutes);
   await app.register(taskRoutes);
   await app.register(runOfShowRoutes);
   await app.register(notificationRoutes);

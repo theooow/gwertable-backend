@@ -479,6 +479,7 @@ model Person {
   runOfShowResponsible RunOfShowItem[] @relation("RunOfShowResponsible")
   documents            PersonDocument[]
   historyNotes         PersonHistoryNote[]
+  volunteerApplications VolunteerApplication[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -641,6 +642,9 @@ model Event {
   sacemBase          SacemBase @default(TICKETING)
 
   participants    EventParticipant[]
+  volunteerForm   VolunteerForm?
+  volunteerApplications VolunteerApplication[]
+  cateringServices CateringService[]
   tasks           Task[]
   taskCategories  TaskCategory[]
   shifts          Shift[]
@@ -911,6 +915,7 @@ model Shift {
   eventId    String
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   position   String   // "Bar 1", "Accueil", "Régie son"
+  team       String?
   startsAt   DateTime
   endsAt     DateTime
   assigneeId String?
@@ -920,6 +925,82 @@ model Shift {
 
   @@index([eventId, startsAt])
   @@index([assigneeId])
+}
+
+enum VolunteerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model VolunteerForm {
+  id          String @id @default(cuid())
+  eventId     String @unique
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  token       String @unique
+  published   Boolean @default(false)
+  title       String @default("Devenir bénévole")
+  description String @default("")
+  confirmationMessage String @default("Votre candidature a été reçue. L’organisation doit encore la valider.")
+  closesAt    DateTime?
+  collectPhone Boolean @default(true)
+  collectDietary Boolean @default(true)
+  teams       String[] @default([])
+  questions   Json @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model VolunteerApplication {
+  id          String @id @default(cuid())
+  eventId     String
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId    String
+  person      Person @relation(fields: [personId], references: [id])
+  email       String
+  fullName    String
+  phone       String @default("")
+  status      VolunteerStatus @default(PENDING)
+  preferredTeams String[] @default([])
+  team        String @default("")
+  availability Json @default("[]")
+  dietary     String @default("")
+  answers     Json @default("[]")
+  notes       String @default("")
+  internalNotes String @default("")
+  consentAt   DateTime @default(now())
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  meals       CateringBooking[]
+
+  @@unique([eventId, email])
+  @@unique([eventId, personId])
+  @@index([eventId, status])
+  @@index([personId])
+}
+
+model CateringService {
+  id          String @id @default(cuid())
+  eventId     String
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  label       String
+  startsAt    DateTime
+  capacity    Int?
+  bookings    CateringBooking[]
+  @@index([eventId, startsAt])
+}
+
+model CateringBooking {
+  id            String @id @default(cuid())
+  serviceId     String
+  service       CateringService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  servedAt      DateTime?
+  @@unique([serviceId, applicationId])
+  @@index([applicationId])
 }
 
 model RunOfShowTrack {
