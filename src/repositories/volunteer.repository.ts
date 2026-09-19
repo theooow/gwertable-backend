@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../prisma.js";
@@ -9,9 +9,9 @@ import { questionSchema, intervalSchema, type ApplicationInput, type FormInput, 
 
 // Serializable transactions prevent concurrent approvals or assignments from
 // exceeding meal capacities, duplicating contacts, or double-booking a person.
-async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+export async function volunteerTransaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>, db: PrismaClient = prisma): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    try { return await prisma.$transaction(fn, { isolationLevel: "Serializable" }); }
+    try { return await db.$transaction(fn, { isolationLevel: "Serializable" }); }
     catch (error) {
       // Prisma can surface the same error through different runtime classes.
       // Back off so the competing transaction has time to commit before retrying.
@@ -24,6 +24,7 @@ async function transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>):
     }
   }
 }
+const transaction = volunteerTransaction;
 
 export class VolunteerRepository {
   async authorize(request: FastifyRequest, eventId: string) {
@@ -42,11 +43,13 @@ export class VolunteerRepository {
   async overview(eventId: string) {
     const [form, applications, shifts, services] = await Promise.all([
       prisma.volunteerForm.findUnique({ where: { eventId } }),
-      prisma.volunteerApplication.findMany({ where: { eventId }, orderBy: { createdAt: "desc" }, include: { meals: true } }),
+      prisma.volunteerApplication.findMany({ where: { eventId }, orderBy: { createdAt: "desc" }, include: { meals: true, person: { select: { fullName: true, email: true, phone: true } } } }),
       prisma.shift.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { assignee: { select: { id: true, fullName: true } } } }),
       prisma.cateringService.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { bookings: true } }),
     ]);
-    return { form, applications, shifts, services };
+    return { form, applications: applications.map(({ person, ...application }) => ({
+      ...application, fullName: person.fullName, email: person.email ?? application.email ?? "", phone: person.phone ?? application.phone,
+    })), shifts, services };
   }
 
   saveForm(eventId: string, data: FormInput) {
@@ -109,8 +112,32 @@ export class VolunteerRepository {
     });
   }
 
+  async syncParticipant(tx: Prisma.TransactionClient, participant: { eventId: string; personId: string; roles: string[]; dietary: string | null }) {
+    const { eventId, personId, dietary } = participant;
+    let application = await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId, personId } } });
+    if (!participant.roles.includes("VOLUNTEER")) {
+      if (application?.status === "APPROVED") await this.reviewInTransaction(tx, eventId, application.id, {
+        status: "CANCELLED", team: application.team, internalNotes: application.internalNotes,
+      });
+      return;
+    }
+    if (!application) {
+      const person = await tx.person.findUniqueOrThrow({ where: { id: personId } });
+      application = await tx.volunteerApplication.create({ data: {
+        eventId, personId, email: null, fullName: person.fullName, phone: person.phone ?? "", consentAt: null,
+        dietary: dietary ?? "",
+      } });
+    }
+    await this.reviewInTransaction(tx, eventId, application.id, {
+      status: "APPROVED", team: application.team, internalNotes: application.internalNotes, dietary: dietary ?? "",
+    });
+  }
+
   async review(eventId: string, id: string, data: ReviewInput) {
-    return transaction(async (tx) => {
+    return transaction((tx) => this.reviewInTransaction(tx, eventId, id, data));
+  }
+
+  private async reviewInTransaction(tx: Prisma.TransactionClient, eventId: string, id: string, data: ReviewInput) {
       const app = await tx.volunteerApplication.findFirst({ where: { id, eventId }, include: { meals: { include: { service: true } } } });
       if (!app) throw new NotFoundError("Candidature introuvable");
       if (data.availability && data.status === "APPROVED") {
@@ -137,7 +164,6 @@ export class VolunteerRepository {
         }
       }
       return tx.volunteerApplication.update({ where: { id }, data: { ...data, reviewedAt: data.status === "PENDING" ? null : new Date() } });
-    });
   }
 
   private async checkCapacity(tx: Prisma.TransactionClient, service: { id: string; capacity: number | null }, applicationId: string) {

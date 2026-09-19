@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { json, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
 import { prisma } from "../src/prisma.js";
@@ -19,6 +20,90 @@ async function context() {
 }
 
 describe("volunteer management", () => {
+  it("backfills existing volunteers without duplicating applications or changing assignments", async () => {
+    const c = await context();
+    await prisma.eventParticipant.create({ data: { eventId: c.event.id, personId: c.person.id, roles: ["ARTIST", "VOLUNTEER"], dietary: "Sans gluten" } });
+    const assigned = await prisma.shift.create({ data: { ...shift, eventId: c.event.id, assigneeId: c.person.id } });
+    const migration = await readFile(new URL("../prisma/migrations/20260919140000_link_volunteer_participants/migration.sql", import.meta.url), "utf8");
+    const backfill = migration.slice(migration.indexOf('INSERT INTO'));
+    await prisma.$executeRawUnsafe(backfill);
+    await prisma.$executeRawUnsafe(backfill);
+    assert.equal(await prisma.volunteerApplication.count(), 1);
+    const application = await prisma.volunteerApplication.findFirstOrThrow();
+    assert.equal(application.status, "APPROVED");
+    assert.equal(application.dietary, "Sans gluten");
+    assert.equal(application.consentAt, null);
+    assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: assigned.id } })).assigneeId, c.person.id);
+    await prisma.person.update({ where: { id: c.person.id }, data: { fullName: "Alice actualisée" } });
+    const overview = await request("GET", c.base, c.authorization);
+    assert.equal(json<{ applications: { fullName: string }[] }>(overview).applications[0]!.fullName, "Alice actualisée");
+  });
+
+  it("links participants without email to volunteers and synchronizes roles, dietary and shifts", async () => {
+    const c = await context();
+    const person = await prisma.person.create({ data: { workspaceId: c.workspace.id, fullName: "Sans email" } });
+    const payload = { personId: person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "Sans gluten" };
+    const created = await request("POST", `/api/events/${c.event.id}/participants`, c.authorization, payload);
+    assert.equal(created.statusCode, 201, created.body);
+    const participant = json<{ id: string }>(created);
+    let application = await prisma.volunteerApplication.findFirstOrThrow({ where: { personId: person.id } });
+    assert.equal(application.status, "APPROVED");
+    assert.equal(application.dietary, "Sans gluten");
+    assert.equal(application.email, null);
+    assert.equal(application.consentAt, null);
+    assert.deepEqual(application.availability, []);
+    assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: person.id })).statusCode, 409);
+    await request("PATCH", `${c.base}/applications/${application.id}`, c.authorization, { ...review, availability: submission.availability });
+    assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: person.id })).statusCode, 201);
+    const updated = await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, dietary: "Végétarien" });
+    assert.equal(updated.statusCode, 200, updated.body);
+    application = await prisma.volunteerApplication.findUniqueOrThrow({ where: { id: application.id } });
+    assert.equal(application.dietary, "Végétarien");
+    assert.equal(await prisma.volunteerApplication.count({ where: { personId: person.id } }), 1);
+    const removedRole = await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, roles: ["GUEST"] });
+    assert.equal(removedRole.statusCode, 200, removedRole.body);
+    assert.deepEqual((await prisma.eventParticipant.findUniqueOrThrow({ where: { id: participant.id } })).roles, ["GUEST"]);
+    assert.equal((await prisma.volunteerApplication.findUniqueOrThrow({ where: { id: application.id } })).status, "CANCELLED");
+    assert.equal(await prisma.shift.count({ where: { assigneeId: person.id } }), 0);
+    assert.equal((await request("PUT", `/api/participants/${participant.id}`, c.authorization, payload)).statusCode, 200);
+    assert.equal((await prisma.volunteerApplication.findUniqueOrThrow({ where: { id: application.id } })).status, "APPROVED");
+    assert.equal((await request("DELETE", `/api/participants/${participant.id}`, c.authorization)).statusCode, 200);
+    assert.equal((await prisma.volunteerApplication.findUniqueOrThrow({ where: { id: application.id } })).status, "CANCELLED");
+  });
+
+  it("reuses a public application when granting the volunteer role and protects served meals", async () => {
+    const c = await context();
+    await request("POST", c.publicPath, undefined, submission);
+    const payload = { personId: c.person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "Végétarien" };
+    const created = await request("POST", `/api/events/${c.event.id}/participants`, c.authorization, payload);
+    assert.equal(created.statusCode, 201, created.body);
+    const participant = json<{ id: string }>(created);
+    const application = await prisma.volunteerApplication.findFirstOrThrow();
+    assert.equal(application.status, "APPROVED");
+    assert.equal(await prisma.volunteerApplication.count(), 1);
+    assert.ok(application.consentAt);
+    const service = await prisma.cateringService.create({ data: { eventId: c.event.id, label: "Dîner", startsAt: new Date(shift.startsAt) } });
+    const booking = await prisma.cateringBooking.create({ data: { serviceId: service.id, applicationId: application.id, servedAt: new Date() } });
+    assert.equal((await request("DELETE", `/api/participants/${participant.id}`, c.authorization)).statusCode, 409);
+    assert.equal((await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, roles: ["GUEST"] })).statusCode, 409);
+    assert.deepEqual((await prisma.eventParticipant.findUniqueOrThrow({ where: { id: participant.id } })).roles, payload.roles);
+    await prisma.cateringBooking.update({ where: { id: booking.id }, data: { servedAt: null } });
+    assert.equal((await request("DELETE", `/api/participants/${participant.id}`, c.authorization)).statusCode, 200);
+    assert.equal((await prisma.volunteerApplication.findFirstOrThrow()).status, "CANCELLED");
+  });
+
+  it("enforces meal capacity when approval comes from the participants screen", async () => {
+    const c = await context();
+    const service = await prisma.cateringService.create({ data: { eventId: c.event.id, label: "Dîner", startsAt: new Date(shift.startsAt), capacity: 1 } });
+    await request("POST", c.publicPath, undefined, { ...submission, mealIds: [service.id] });
+    await request("POST", c.publicPath, undefined, { ...submission, email: "bob@example.test", mealIds: [service.id] });
+    const applications = await prisma.volunteerApplication.findMany();
+    const responses = await Promise.all(applications.map((application) => request("POST", `/api/events/${c.event.id}/participants`, c.authorization, { personId: application.personId, roles: ["VOLUNTEER"] })));
+    assert.deepEqual(responses.map((response) => response.statusCode).sort(), [201, 409]);
+    assert.equal(await prisma.eventParticipant.count(), 1);
+    assert.equal(await prisma.volunteerApplication.count({ where: { status: "APPROVED" } }), 1);
+  });
+
   it("accepts anonymous registrations, reuses contacts, preserves data and validates into participants", async () => {
     const c = await context();
     const publicForm = await request("GET", c.publicPath);

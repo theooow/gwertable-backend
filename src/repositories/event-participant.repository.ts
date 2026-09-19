@@ -3,6 +3,7 @@ import type { ParticipantInput } from "../schemas/participant.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EventParticipantDao } from "../dao/event-participant.dao.js";
 import { ActivityRepository } from "./activity.repository.js";
+import { VolunteerRepository, volunteerTransaction } from "./volunteer.repository.js";
 
 /**
  * Calcule le montant de cachet normalisé pour un participant.
@@ -81,6 +82,7 @@ async function syncArtistExpense(
  */
 export class EventParticipantRepository {
   private readonly activityRepository: ActivityRepository;
+  private readonly volunteers = new VolunteerRepository();
 
   constructor(
     private readonly participantDao: EventParticipantDao,
@@ -150,7 +152,7 @@ export class EventParticipantRepository {
     if (existing) throw new ConflictError("Cette personne est deja participante de cet evenement");
 
     const fee = normalizeFee(data.fee, data.roles);
-    const participant = await this.prisma.$transaction(async (tx) => {
+    const participant = await volunteerTransaction(async (tx) => {
       const created = await tx.eventParticipant.create({
         data: {
           eventId,
@@ -168,8 +170,9 @@ export class EventParticipantRepository {
         include: { person: { select: { id: true, fullName: true } } },
       });
       await syncArtistExpense(tx, created);
+      await this.volunteers.syncParticipant(tx, created);
       return created;
-    });
+    }, this.prisma);
 
     await this.activityRepository.record({
       workspaceId,
@@ -202,7 +205,7 @@ export class EventParticipantRepository {
     await this.assertPersonInWorkspace(data.personId, workspaceId);
 
     const fee = normalizeFee(data.fee, data.roles);
-    const participant = await this.prisma.$transaction(async (tx) => {
+    const participant = await volunteerTransaction(async (tx) => {
       const updated = await tx.eventParticipant.update({
         where: { id },
         data: {
@@ -219,8 +222,9 @@ export class EventParticipantRepository {
         include: { person: { select: { id: true, fullName: true } } },
       });
       await syncArtistExpense(tx, updated);
+      await this.volunteers.syncParticipant(tx, updated);
       return updated;
-    });
+    }, this.prisma);
 
     await this.activityRepository.record({
       workspaceId,
@@ -249,7 +253,12 @@ export class EventParticipantRepository {
       include: { person: { select: { fullName: true } } },
     });
     if (!participant) throw new NotFoundError("Participant introuvable");
-    const deleted = await this.participantDao.delete(id);
+    const deleted = await volunteerTransaction(async (tx) => {
+      // Delete first so volunteer cancellation cannot delete the same participant twice.
+      const deleted = await tx.eventParticipant.delete({ where: { id } });
+      await this.volunteers.syncParticipant(tx, { ...deleted, roles: [] });
+      return deleted;
+    }, this.prisma);
 
     await this.activityRepository.record({
       workspaceId,

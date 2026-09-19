@@ -2,7 +2,7 @@
 
 ## Parcours
 
-1. Dans un événement, ouvrir **Bénévoles → Formulaire public**. Définir le titre, la présentation, les équipes, les questions, les informations collectées et une éventuelle clôture.
+1. Dans un événement, ouvrir **Participants → Bénévoles → Formulaire public**. Définir le titre, la présentation, les équipes, les questions, les informations collectées et une éventuelle clôture.
 2. Créer les repas dans **Catering** : ils apparaissent automatiquement dans le formulaire.
 3. Enregistrer le formulaire avec les inscriptions ouvertes, puis copier le lien public. Un formulaire fermé, expiré ou appartenant à un événement terminé/archivé n’accepte aucune inscription. Le remplacement du lien invalide immédiatement l’ancien.
 4. Les candidatures arrivent **À valider**. Le contact est créé dans le carnet ou réutilisé par email dans le même espace, sans écraser une fiche existante. Une répétition de la même inscription ne modifie pas la candidature initiale.
@@ -13,6 +13,8 @@
 Les candidatures, créneaux et repas disposent d’exports CSV. Le carnet propose aussi une vue tableur avec tri, choix des colonnes, édition des cellules et export de la vue filtrée. Les disponibilités et besoins alimentaires peuvent être corrigés dans les détails d’une candidature ; une correction incompatible avec un créneau déjà affecté est refusée.
 
 ## API
+
+Le rôle bénévole d’un participant crée ou réutilise sa candidature validée, même sans email. Les coordonnées affichées viennent de son contact commun ; les besoins alimentaires sont synchronisés dans les deux sens. Retirer ce rôle ou supprimer le participant annule sa candidature et libère ses créneaux, avec les mêmes contrôles sur les repas servis. Les participants bénévoles existants sont repris par la migration. Pour un ajout interne, renseigner les disponibilités dans **Détails** avant une affectation ; aucun consentement public n’est enregistré à leur place.
 
 - Public : `GET` / `POST /api/public/volunteers/:token`.
 - Gestion (organisateurs uniquement) : `GET /api/events/:eventId/volunteers`, `PUT .../form`, `POST .../form/rotate`, `PATCH .../applications/:id`.

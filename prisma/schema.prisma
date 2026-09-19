@@ -958,7 +958,7 @@ model VolunteerApplication {
   event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   personId    String
   person      Person @relation(fields: [personId], references: [id])
-  email       String
+  email       String?
   fullName    String
   phone       String @default("")
   status      VolunteerStatus @default(PENDING)
@@ -969,7 +969,7 @@ model VolunteerApplication {
   answers     Json @default("[]")
   notes       String @default("")
   internalNotes String @default("")
-  consentAt   DateTime @default(now())
+  consentAt   DateTime? @default(now())
   reviewedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
