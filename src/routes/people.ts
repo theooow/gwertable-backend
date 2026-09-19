@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { personSchema } from "../schemas/person.js";
+import { personSchema, personCellSchema } from "../schemas/person.js";
 import { PersonDao } from "../dao/person.dao.js";
 import { PersonRepository } from "../repositories/person.repository.js";
 import { PersonService } from "../services/person.service.js";
 import { toPersonDTO, toPersonDetailDTO } from "../dto/person.dto.js";
 import { requireCan } from "../lib/permissions.js";
-import { NotFoundError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError } from "../lib/errors.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const workspaceIdParamsSchema = z.object({ workspaceId: z.string().min(1) });
@@ -103,6 +103,13 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const data = personSchema.parse(request.body);
     const person = await service.update(id, request.workspaceId, request.userRole, data);
     return toPersonDTO(person);
+  });
+
+  fastify.patch("/api/people/:id", async (request) => {
+    requireCan(request.userRole, "person.write");
+    if (request.eventScoped) throw new ForbiddenError("La modification du carnet nécessite un accès à l’espace de travail");
+    const { id } = idParamsSchema.parse(request.params);
+    return toPersonDTO(await dao.updateCells(id, request.workspaceId, personCellSchema.parse(request.body)));
   });
 
   fastify.post("/api/people/:id/archive", async (request) => {

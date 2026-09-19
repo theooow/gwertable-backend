@@ -1,7 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import type { PersonInput } from "../schemas/person.js";
+import type { PersonInput, PersonCellInput } from "../schemas/person.js";
 import { BaseDao } from "./base.dao.js";
-import { NotFoundError } from "../lib/errors.js";
+import { NotFoundError, ConflictError } from "../lib/errors.js";
+import { Prisma as PrismaErrors } from "@prisma/client";
 
 export type PersonFilters = {
   search?: string;
@@ -126,6 +127,18 @@ export class PersonDao extends BaseDao {
       where: { id, workspaceId },
       data: { archivedAt: date },
     });
+  }
+
+  async updateCells(id: string, workspaceId: string, data: PersonCellInput) {
+    await this.findByIdOrThrow(id, workspaceId);
+    try {
+      return await this.prisma.person.update({ where: { id, workspaceId }, data: {
+        ...data, ...(data.email !== undefined ? { email: data.email.toLowerCase() || null } : {}),
+      } });
+    } catch (error) {
+      if (error instanceof PrismaErrors.PrismaClientKnownRequestError && error.code === "P2002") throw new ConflictError("Cette adresse email est déjà utilisée dans le carnet");
+      throw error;
+    }
   }
 
   async createDocument(personId: string, data: { label: string; url: string; isUpload: boolean; category: string }) {

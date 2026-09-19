@@ -26,3 +26,14 @@ export const personSchema = z.object({
 });
 
 export type PersonInput = z.infer<typeof personSchema>;
+
+export const personCellSchema = z.object({
+  fullName: z.string().trim().min(1).max(200).optional(),
+  email: z.union([z.email().max(254), z.literal("")]).optional(),
+  phone: z.string().trim().max(40).optional(),
+  contactType: z.enum(["CONTACT", "ARTIST", "SUPPLIER", "VENDOR", "VENUE"]).optional(),
+  tags: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  notes: z.string().trim().max(4000).optional(),
+  availability: z.string().trim().max(4000).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Aucun champ à modifier");
+export type PersonCellInput = z.infer<typeof personCellSchema>;
