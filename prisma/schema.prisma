@@ -974,11 +974,28 @@ model VolunteerApplication {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   meals       CateringBooking[]
+  accessToken String? @unique
+  badgeToken  String? @unique
+  checkedInAt DateTime?
+  swaps       VolunteerSwap[]
 
   @@unique([eventId, email])
   @@unique([eventId, personId])
   @@index([eventId, status])
   @@index([personId])
+}
+
+model VolunteerSwap {
+  id String @id @default(cuid())
+  applicationId String
+  application VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  sourceShiftId String
+  targetShiftId String
+  targetPersonId String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([applicationId, status])
+  @@index([targetPersonId, status])
 }
 
 model CateringService {

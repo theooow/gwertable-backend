@@ -6,6 +6,7 @@ import { prisma } from "../prisma.js";
 import { requireCan } from "../lib/permissions.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
+import { suggestVolunteerAssignments } from "../services/volunteer-planning.service.js";
 
 // Serializable transactions prevent concurrent approvals or assignments from
 // exceeding meal capacities, duplicating contacts, or double-booking a person.
@@ -41,15 +42,16 @@ export class VolunteerRepository {
   }
 
   async overview(eventId: string) {
-    const [form, applications, shifts, services] = await Promise.all([
+    const [form, applications, shifts, services, event] = await Promise.all([
       prisma.volunteerForm.findUnique({ where: { eventId } }),
       prisma.volunteerApplication.findMany({ where: { eventId }, orderBy: { createdAt: "desc" }, include: { meals: true, person: { select: { fullName: true, email: true, phone: true } } } }),
       prisma.shift.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { assignee: { select: { id: true, fullName: true } } } }),
       prisma.cateringService.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { bookings: true } }),
+      prisma.event.findUniqueOrThrow({ where: { id: eventId }, select: { name: true, startsAt: true, endsAt: true } }),
     ]);
     return { form, applications: applications.map(({ person, ...application }) => ({
       ...application, fullName: person.fullName, email: person.email ?? application.email ?? "", phone: person.phone ?? application.phone,
-    })), shifts, services };
+    })), shifts, services, event };
   }
 
   saveForm(eventId: string, data: FormInput) {
@@ -163,7 +165,9 @@ export class VolunteerRepository {
           else await tx.eventParticipant.delete({ where: { id: participant.id } });
         }
       }
-      return tx.volunteerApplication.update({ where: { id }, data: { ...data, reviewedAt: data.status === "PENDING" ? null : new Date() } });
+      return tx.volunteerApplication.update({ where: { id }, data: { ...data, reviewedAt: data.status === "PENDING" ? null : new Date(),
+        ...(data.status !== "APPROVED" ? { accessToken: null, badgeToken: null, checkedInAt: null } : {}),
+      } });
   }
 
   private async checkCapacity(tx: Prisma.TransactionClient, service: { id: string; capacity: number | null }, applicationId: string) {
@@ -183,6 +187,122 @@ export class VolunteerRepository {
         if (await tx.shift.findFirst({ where: { id: id ? { not: id } : undefined, assigneeId: data.assigneeId, startsAt: { lt: new Date(data.endsAt) }, endsAt: { gt: new Date(data.startsAt) } } })) throw new ConflictError("Ce bénévole est déjà affecté sur ces horaires");
       }
       return id ? tx.shift.update({ where: { id }, data: { ...data, reminderSentAt: null } }) : tx.shift.create({ data: { ...data, eventId } });
+    });
+  }
+  createShifts(eventId: string, data: ShiftInput, count: number) {
+    return transaction(async (tx) => {
+      if (data.assigneeId) throw new ValidationError("Créez les postes à pourvoir avant de les affecter");
+      return tx.shift.createMany({ data: Array.from({ length: count }, () => ({ ...data, eventId })) });
+    });
+  }
+
+  private async checkAssignment(tx: Prisma.TransactionClient, eventId: string, shift: { startsAt: Date; endsAt: Date }, personId: string, excluded: string[] = []) {
+    const application = await tx.volunteerApplication.findFirst({ where: { eventId, personId, status: "APPROVED", person: { archivedAt: null } } });
+    if (!application) throw new ConflictError("Le bénévole doit être validé");
+    if (!intervalSchema.array().parse(application.availability).some((v) => new Date(v.startsAt) <= shift.startsAt && new Date(v.endsAt) >= shift.endsAt)) throw new ConflictError("Créneau hors des disponibilités du bénévole");
+    if (await tx.shift.findFirst({ where: { id: { notIn: excluded }, assigneeId: personId, startsAt: { lt: shift.endsAt }, endsAt: { gt: shift.startsAt } } })) throw new ConflictError("Ce bénévole est déjà affecté sur ces horaires");
+  }
+
+  async previewAssignments(eventId: string) {
+    const applications = await prisma.volunteerApplication.findMany({ where: { eventId, status: "APPROVED", person: { archivedAt: null } } });
+    const shifts = await prisma.shift.findMany({ where: { eventId, assigneeId: null }, orderBy: { startsAt: "asc" } });
+    if (shifts.length > 200) throw new ValidationError("L’IA prend en charge 200 créneaux à pourvoir maximum par proposition");
+    if (!shifts.length) return { assignments: [], unfilled: 0 };
+    const occupied = await prisma.shift.findMany({ where: { assigneeId: { in: applications.map((a) => a.personId) } } });
+    const candidates = shifts.map((s) => ({ shiftId: s.id, position: s.position, team: s.team, startsAt: s.startsAt, endsAt: s.endsAt,
+      candidates: applications.filter((a) => intervalSchema.array().parse(a.availability).some((v) => new Date(v.startsAt) <= s.startsAt && new Date(v.endsAt) >= s.endsAt)
+        && !occupied.some((o) => o.assigneeId === a.personId && o.startsAt < s.endsAt && o.endsAt > s.startsAt))
+        .map((a) => ({ personId: a.personId, preferred: !!s.team && (a.team === s.team || a.preferredTeams.includes(s.team)), hours: occupied.filter((o) => o.assigneeId === a.personId).reduce((n, o) => n + (o.endsAt.getTime() - o.startsAt.getTime()) / 3600000, 0) })) }));
+    if (candidates.every((s) => !s.candidates.length)) return { assignments: [], unfilled: shifts.length };
+    const suggestions = await suggestVolunteerAssignments(candidates);
+    const assignments: typeof suggestions = [];
+    for (const proposal of suggestions) {
+      const slot = candidates.find((s) => s.shiftId === proposal.shiftId);
+      if (!slot?.candidates.some((a) => a.personId === proposal.personId)) continue;
+      if (assignments.some((a) => { const other = candidates.find((s) => s.shiftId === a.shiftId)!; return a.personId === proposal.personId && other.startsAt < slot.endsAt && other.endsAt > slot.startsAt; })) continue;
+      assignments.push(proposal);
+    }
+    return { assignments, unfilled: shifts.length - assignments.length };
+  }
+
+  applyAssignments(eventId: string, assignments: { shiftId: string; personId: string }[]) {
+    return transaction(async (tx) => {
+      for (const assignment of assignments) {
+        const shift = await tx.shift.findFirst({ where: { id: assignment.shiftId, eventId, assigneeId: null } });
+        if (!shift) throw new ConflictError("Le planning a changé. Générez une nouvelle proposition.");
+        await this.checkAssignment(tx, eventId, shift, assignment.personId);
+        await tx.shift.update({ where: { id: shift.id }, data: { assigneeId: assignment.personId, reminderSentAt: null } });
+      }
+      return { count: assignments.length };
+    });
+  }
+
+  issueBadge(eventId: string, id: string, rotate = false) {
+    return transaction(async (tx) => {
+      const application = await tx.volunteerApplication.findFirst({ where: { id, eventId, status: "APPROVED", person: { archivedAt: null } } });
+      if (!application) throw new NotFoundError("Bénévole validé introuvable");
+      return tx.volunteerApplication.update({ where: { id }, data: {
+        accessToken: !rotate && application.accessToken || randomBytes(32).toString("base64url"),
+        badgeToken: !rotate && application.badgeToken || randomBytes(32).toString("base64url"),
+      }, select: { accessToken: true, badgeToken: true } });
+    });
+  }
+
+  checkIn(eventId: string, badgeToken: string, present: boolean) {
+    return transaction(async (tx) => {
+      const application = await tx.volunteerApplication.findFirst({ where: { eventId, badgeToken, status: "APPROVED", person: { archivedAt: null } }, include: { person: true } });
+      if (!application) throw new NotFoundError("Badge invalide pour cet événement");
+      const updated = await tx.volunteerApplication.update({ where: { id: application.id }, data: { checkedInAt: present ? application.checkedInAt ?? new Date() : null } });
+      return { fullName: application.person.fullName, checkedInAt: updated.checkedInAt };
+    });
+  }
+
+  private async portalApplication(token: string, tx: Prisma.TransactionClient = prisma) {
+    const application = await tx.volunteerApplication.findFirst({ where: { accessToken: token, status: "APPROVED", person: { archivedAt: null }, event: { status: { notIn: ["DONE", "ARCHIVED"] } } }, include: { person: true, event: true } });
+    if (!application) throw new NotFoundError("Ce lien personnel est indisponible");
+    return application;
+  }
+
+  async portal(token: string) {
+    const application = await this.portalApplication(token);
+    const shifts = await prisma.shift.findMany({ where: { eventId: application.eventId, assigneeId: application.personId }, orderBy: { startsAt: "asc" } });
+    const alternatives = await prisma.shift.findMany({ where: { eventId: application.eventId, assigneeId: { not: application.personId }, startsAt: { gt: new Date() }, assignee: { volunteerApplications: { some: { eventId: application.eventId, status: "APPROVED" } } } }, select: { id: true, position: true, team: true, startsAt: true, endsAt: true } });
+    const swaps = await prisma.volunteerSwap.findMany({ where: { application: { eventId: application.eventId }, OR: [{ applicationId: application.id }, { targetPersonId: application.personId }] }, orderBy: { createdAt: "desc" }, take: 100 });
+    const related = await prisma.shift.findMany({ where: { eventId: application.eventId, id: { in: swaps.flatMap((s) => [s.sourceShiftId, s.targetShiftId]) } }, select: { id: true, position: true, startsAt: true, endsAt: true } });
+    return { fullName: application.person.fullName, team: application.team, badgeToken: application.badgeToken, checkedInAt: application.checkedInAt, eventName: application.event.name,
+      shifts: shifts.map(({ id, position, team, startsAt, endsAt, notes }) => ({ id, position, team, startsAt, endsAt, notes })), alternatives,
+      swaps: swaps.map((s) => ({ id: s.id, status: s.status, incoming: s.targetPersonId === application.personId, source: related.find((v) => v.id === s.sourceShiftId), target: related.find((v) => v.id === s.targetShiftId) })),
+    };
+  }
+
+  requestSwap(token: string, sourceShiftId: string, targetShiftId: string) {
+    return transaction(async (tx) => {
+      const application = await this.portalApplication(token, tx);
+      const source = await tx.shift.findFirst({ where: { id: sourceShiftId, eventId: application.eventId, assigneeId: application.personId, startsAt: { gt: new Date() } } });
+      const target = await tx.shift.findFirst({ where: { id: targetShiftId, eventId: application.eventId, startsAt: { gt: new Date() } } });
+      if (!source || !target?.assigneeId || target.assigneeId === application.personId) throw new ConflictError("Choisissez deux créneaux futurs affectés à des bénévoles différents");
+      await this.checkAssignment(tx, application.eventId, target, application.personId, [source.id]);
+      await this.checkAssignment(tx, application.eventId, source, target.assigneeId, [target.id]);
+      if (await tx.volunteerSwap.findFirst({ where: { status: "PENDING", OR: [{ sourceShiftId: { in: [source.id, target.id] } }, { targetShiftId: { in: [source.id, target.id] } }] } })) throw new ConflictError("Une demande est déjà en attente pour l’un de ces créneaux");
+      return tx.volunteerSwap.create({ data: { applicationId: application.id, sourceShiftId, targetShiftId, targetPersonId: target.assigneeId } });
+    });
+  }
+
+  respondSwap(token: string, id: string, accept: boolean) {
+    return transaction(async (tx) => {
+      const application = await this.portalApplication(token, tx);
+      const swap = await tx.volunteerSwap.findFirst({ where: { id, status: "PENDING", application: { eventId: application.eventId } }, include: { application: true } });
+      if (!swap || (swap.targetPersonId !== application.personId && (accept || swap.applicationId !== application.id))) throw new NotFoundError("Demande introuvable");
+      if (accept) {
+        const source = await tx.shift.findFirst({ where: { id: swap.sourceShiftId, eventId: application.eventId, assigneeId: swap.application.personId, startsAt: { gt: new Date() } } });
+        const target = await tx.shift.findFirst({ where: { id: swap.targetShiftId, eventId: application.eventId, assigneeId: application.personId, startsAt: { gt: new Date() } } });
+        if (!source || !target) throw new ConflictError("Le planning a changé. Refusez cette demande puis créez-en une nouvelle.");
+        await this.checkAssignment(tx, application.eventId, target, swap.application.personId, [source.id]);
+        await this.checkAssignment(tx, application.eventId, source, application.personId, [target.id]);
+        await tx.shift.update({ where: { id: source.id }, data: { assigneeId: application.personId, reminderSentAt: null } });
+        await tx.shift.update({ where: { id: target.id }, data: { assigneeId: swap.application.personId, reminderSentAt: null } });
+      }
+      return tx.volunteerSwap.update({ where: { id }, data: { status: accept ? "ACCEPTED" : "DECLINED" } });
     });
   }
   async deleteShift(eventId: string, id: string) {

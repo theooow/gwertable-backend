@@ -1,5 +1,17 @@
 # Gestion des bénévoles
 
+## Planning, badges et espace personnel
+
+Le parcours guidé propose la prochaine étape : inscriptions, candidatures, planning, puis badges et accueil. Le planning permet de créer jusqu’à 100 postes identiques en une fois et signale les bénévoles indisponibles lors d’une affectation manuelle.
+
+**Proposer une affectation IA** utilise le fournisseur déjà configuré (`DOCUMENT_AI_PROVIDER`, OpenAI ou Ollama). Seuls les identifiants, horaires, préférences d’équipe et charges horaires sont transmis. Les coordonnées, réponses, notes et besoins alimentaires sont exclus. Les propositions sont filtrées puis présentées à l’organisateur ; leur application est atomique et revérifie les disponibilités, les autres événements et les affectations concurrentes. Les créneaux déjà affectés sont conservés.
+
+Dans **Badges et accueil**, préparer les badges, les imprimer et copier le lien personnel de chaque bénévole pour le lui transmettre. Le scanner caméra nécessite HTTPS et l’autorisation caméra ; la saisie du code et la recherche par nom restent disponibles. Un second scan conserve l’heure d’arrivée initiale. Un QR contient uniquement un jeton de pointage : il ne donne pas accès à l’espace personnel. Renouveler le badge invalide aussi l’ancien lien personnel. Le retrait de validation révoque les deux jetons.
+
+L’espace personnel `/volunteers/portal/:token` présente le badge, les créneaux et les demandes d’échange. Le bénévole propose deux créneaux futurs, puis le destinataire accepte ou refuse dans son propre espace. Aucun échange n’est appliqué avant son acceptation. L’acceptation vérifie à nouveau les deux affectations et les conflits entre événements, dans une transaction unique. Le demandeur peut annuler une demande en attente. Les demandes sont visibles dans l’espace personnel, sans envoi automatique d’email ; le bouton Actualiser recharge les réponses.
+
+La migration `20260919160000_volunteer_operations` est additive. Les badges et liens sont créés à la demande pour les candidatures validées existantes. Déployer le backend avant le frontend.
+
 ## Parcours
 
 1. Dans un événement, ouvrir **Participants → Bénévoles → Formulaire public**. Définir le titre, la présentation, les équipes, les questions, les informations collectées et une éventuelle clôture.

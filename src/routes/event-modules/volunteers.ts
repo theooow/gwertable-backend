@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { VolunteerRepository } from "../../repositories/volunteer.repository.js";
 import { applicationSchema, cateringSchema, reviewSchema, shiftSchema, volunteerFormSchema } from "../../schemas/volunteer.js";
+import { assignmentsSchema } from "../../services/volunteer-planning.service.js";
 
 const repository = new VolunteerRepository();
 const params = z.object({ eventId: z.string().min(1), id: z.string().min(1).optional() });
@@ -12,6 +13,20 @@ export async function volunteerRoutes(app: FastifyInstance) {
   const timer = setInterval(() => { for (const [key, value] of submissions) if (value.until <= Date.now()) submissions.delete(key); }, 60000);
   timer.unref();
   app.addHook("onClose", async () => clearInterval(timer));
+  app.get("/api/public/volunteers/portal/:token", async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    return repository.portal(tokenParams.parse(req.params).token);
+  });
+  app.post("/api/public/volunteers/portal/:token/swaps", async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const body = z.object({ sourceShiftId: z.string().min(1), targetShiftId: z.string().min(1) }).parse(req.body);
+    return repository.requestSwap(tokenParams.parse(req.params).token, body.sourceShiftId, body.targetShiftId);
+  });
+  app.patch("/api/public/volunteers/portal/:token/swaps/:id", async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const { token, id } = tokenParams.extend({ id: z.string().min(1) }).parse(req.params);
+    return repository.respondSwap(token, id, z.object({ accept: z.boolean() }).parse(req.body).accept);
+  });
   app.get("/api/public/volunteers/:token", async (req, reply) => {
     reply.header("Cache-Control", "no-store");
     return repository.publicForm(tokenParams.parse(req.params).token);
@@ -30,6 +45,20 @@ export async function volunteerRoutes(app: FastifyInstance) {
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook("preHandler", async (req) => { await repository.authorize(req, params.parse(req.params).eventId); });
     protectedRoutes.get("/api/events/:eventId/volunteers", async (req) => repository.overview(params.parse(req.params).eventId));
+    protectedRoutes.post("/api/events/:eventId/volunteers/shifts/batch", async (req, reply) => {
+      const { shift, count } = z.object({ shift: shiftSchema, count: z.number().int().min(1).max(100) }).parse(req.body);
+      return reply.code(201).send(await repository.createShifts(params.parse(req.params).eventId, shift, count));
+    });
+    protectedRoutes.post("/api/events/:eventId/volunteers/assignments/preview", async (req) => repository.previewAssignments(params.parse(req.params).eventId));
+    protectedRoutes.post("/api/events/:eventId/volunteers/assignments/apply", async (req) => repository.applyAssignments(params.parse(req.params).eventId, assignmentsSchema.parse(req.body)));
+    protectedRoutes.post("/api/events/:eventId/volunteers/applications/:id/badge", async (req) => {
+      const { eventId, id } = params.parse(req.params);
+      return repository.issueBadge(eventId, id!, z.object({ rotate: z.boolean().default(false) }).parse(req.body ?? {}).rotate);
+    });
+    protectedRoutes.post("/api/events/:eventId/volunteers/check-in", async (req) => {
+      const body = z.object({ badgeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/), present: z.boolean().default(true) }).parse(req.body);
+      return repository.checkIn(params.parse(req.params).eventId, body.badgeToken, body.present);
+    });
     protectedRoutes.put("/api/events/:eventId/volunteers/form", async (req) => repository.saveForm(params.parse(req.params).eventId, volunteerFormSchema.parse(req.body)));
     protectedRoutes.post("/api/events/:eventId/volunteers/form/rotate", async (req) => repository.rotateToken(params.parse(req.params).eventId));
     protectedRoutes.patch("/api/events/:eventId/volunteers/applications/:id", async (req) => {

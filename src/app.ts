@@ -31,6 +31,11 @@ export async function buildApp() {
   const app = fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug",
+      serializers: {
+        req(request) {
+          return { method: request.method, url: request.url?.replace(/(\/api\/public\/volunteers\/(?:portal\/)?)[^/?]+/, "$1[redacted]").split("?")[0], host: request.hostname, remoteAddress: request.ip };
+        },
+      },
     },
   });
 
