@@ -4,7 +4,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { equipmentItemSchema } from "../schemas/equipment.js";
+import { equipmentCellSchema, equipmentItemSchema } from "../schemas/equipment.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
 import { ExpenseDao } from "../dao/expense.dao.js";
 import { BudgetRepository } from "../repositories/budget.repository.js";
@@ -76,6 +76,13 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = equipmentItemSchema.parse(request.body);
     const item = await service.update(id, request.workspaceId, request.userRole, data);
+    return toEquipmentItemDTO(item);
+  });
+
+  fastify.patch("/api/equipment/:id", async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = equipmentCellSchema.parse(request.body);
+    const item = await service.updateCells(id, request.workspaceId, request.userRole, data);
     return toEquipmentItemDTO(item);
   });
 

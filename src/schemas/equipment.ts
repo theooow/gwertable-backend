@@ -17,6 +17,21 @@ export const equipmentItemSchema = z.object({
   notes: optionalText("Les notes", LIMITS.longText),
 });
 
+export const equipmentCellSchema = equipmentItemSchema
+  .omit({ ownerId: true, photoUrl: true })
+  .extend({
+    unitPriceCents: equipmentItemSchema.shape.unitPriceCents.removeDefault(),
+    amountInputMode: equipmentItemSchema.shape.amountInputMode.removeDefault(),
+    vatRateBasisPoints: equipmentItemSchema.shape.vatRateBasisPoints.removeDefault(),
+    rentalCoef: equipmentItemSchema.shape.rentalCoef.removeDefault(),
+    quantity: equipmentItemSchema.shape.quantity.removeDefault(),
+  })
+  .partial()
+  .strict()
+  .refine((data) => Object.values(data).some((value) => value !== undefined), "Une cellule est requise");
+
+export type EquipmentCellInput = z.infer<typeof equipmentCellSchema>;
+
 export const equipmentUsageSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("library"),

@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { EquipmentItemInput } from "../schemas/equipment.js";
+import type { EquipmentCellInput, EquipmentItemInput } from "../schemas/equipment.js";
 import { BaseDao } from "./base.dao.js";
 
 const personSelect = { id: true, fullName: true } as const;
@@ -75,6 +75,14 @@ export class EquipmentItemDao extends BaseDao {
         quantity: data.quantity,
         notes: data.notes || null,
       },
+      include: defaultInclude,
+    });
+  }
+
+  async updateCells(id: string, workspaceId: string, data: EquipmentCellInput) {
+    return this.prisma.equipmentItem.update({
+      where: { id, workspaceId },
+      data,
       include: defaultInclude,
     });
   }

@@ -1,5 +1,5 @@
 import type { AmountInputMode, PrismaClient } from "@prisma/client";
-import type { EquipmentBulkImportInput, EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
+import type { EquipmentBulkImportInput, EquipmentCellInput, EquipmentItemInput, EquipmentUsageUpdateInput } from "../schemas/equipment.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EquipmentItemDao } from "../dao/equipment-item.dao.js";
 import { BudgetRepository } from "./budget.repository.js";
@@ -156,6 +156,18 @@ export class EquipmentRepository {
   async update(id: string, workspaceId: string, data: EquipmentItemInput) {
     await this.findOrThrow(id, workspaceId);
     return this.equipmentItemDao.update(id, data);
+  }
+
+  async updateCells(id: string, workspaceId: string, data: EquipmentCellInput) {
+    await this.findOrThrow(id, workspaceId);
+    if (data.supplierId) {
+      const supplier = await this.prisma.person.findFirst({
+        where: { id: data.supplierId, workspaceId, archivedAt: null, contactType: "VENDOR" },
+        select: { id: true },
+      });
+      if (!supplier) throw new NotFoundError("Fournisseur introuvable");
+    }
+    return this.equipmentItemDao.updateCells(id, workspaceId, data);
   }
 
   /**

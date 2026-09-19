@@ -2,6 +2,7 @@ import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type {
   EquipmentBulkImportInput,
+  EquipmentCellInput,
   EquipmentImportConfirmInput,
   EquipmentImportPreviewInput,
   EquipmentItemInput,
@@ -61,6 +62,11 @@ export class EquipmentService {
   async update(id: string, workspaceId: string, role: UserRole, data: EquipmentItemInput) {
     requireCan(role, "equipment.write");
     return this.equipmentRepository.update(id, workspaceId, data);
+  }
+
+  async updateCells(id: string, workspaceId: string, role: UserRole, data: EquipmentCellInput) {
+    requireCan(role, "equipment.write");
+    return this.equipmentRepository.updateCells(id, workspaceId, data);
   }
 
   /**
