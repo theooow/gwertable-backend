@@ -15,7 +15,7 @@ export async function suggestVolunteerAssignments(input: unknown) {
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST", signal: AbortSignal.timeout(45000),
         headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4.1-mini", instructions, input: JSON.stringify(input), store: false, text: { format: { type: "json_object" } } }),
+        body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4.1-mini", instructions, input: `Propose les affectations en JSON pour ces créneaux :\n${JSON.stringify(input)}`, store: false, text: { format: { type: "json_object" } } }),
       });
       if (!response.ok) throw new Error("provider");
       const data = await response.json() as { output_text?: string; output?: { content?: { text?: string }[] }[] };
