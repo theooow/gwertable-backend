@@ -49,9 +49,13 @@ export class VolunteerRepository {
       prisma.cateringService.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { bookings: true } }),
       prisma.event.findUniqueOrThrow({ where: { id: eventId }, select: { name: true, startsAt: true, endsAt: true } }),
     ]);
+    const busySlots = await prisma.shift.findMany({
+      where: { eventId: { not: eventId }, assigneeId: { in: [...new Set([...applications.map((a) => a.personId), ...shifts.flatMap((s) => s.assigneeId ? [s.assigneeId] : [])])] } },
+      select: { assigneeId: true, startsAt: true, endsAt: true },
+    });
     return { form, applications: applications.map(({ person, ...application }) => ({
       ...application, fullName: person.fullName, email: person.email ?? application.email ?? "", phone: person.phone ?? application.phone,
-    })), shifts, services, event };
+    })), shifts, services, event, busySlots };
   }
 
   saveForm(eventId: string, data: FormInput) {

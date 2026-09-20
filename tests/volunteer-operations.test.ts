@@ -25,6 +25,24 @@ async function badges(c: Awaited<ReturnType<typeof context>>) {
 }
 
 describe("volunteer operations", () => {
+  it("exposes only busy intervals of this event's volunteers for calendar conflicts", async () => {
+    const c = await context();
+    const other = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Private event", startsAt } });
+    const stranger = await prisma.person.create({ data: { workspaceId: c.workspace.id, fullName: "Stranger" } });
+    await prisma.shift.createMany({ data: [
+      { ...c.shift, assigneeId: c.person.id },
+      { ...c.shift, eventId: other.id, assigneeId: c.person.id, notes: "Private notes" },
+      { ...c.shift, eventId: other.id, assigneeId: stranger.id },
+    ] });
+    const response = await request("GET", c.base, c.authorization);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(json<{ busySlots: unknown[] }>(response).busySlots, [
+      { assigneeId: c.person.id, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() },
+    ]);
+    assert.equal(response.body.includes("Private"), false);
+    assert.equal(response.body.includes(stranger.id), false);
+  });
+
   it("creates several open positions atomically and rejects assigned batches", async () => {
     const c = await context();
     const shift = { ...c.shift, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), assigneeId: null };
