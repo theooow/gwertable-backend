@@ -36,7 +36,21 @@ Le rôle bénévole d’un participant crée ou réutilise sa candidature valid�
 
 L’accès des collaborateurs est contrôlé pour l’événement demandé. Les données de candidature, réponses et besoins alimentaires sont omises du journal API. Le formulaire public utilise une projection dédiée qui n’expose ni contact, ni candidature, ni notes internes. Les soumissions sont limitées à 60/minute par token/IP et par processus, avec un champ piège et une limite de corps de 64 Ko. En déploiement multi-instance, compléter cette limite avec celle du proxy.
 
-Les transactions sérialisables avec reprise protègent les doublons, les affectations et les capacités lors d’actions concurrentes. Les réponses personnalisées conservent leur libellé au moment de la soumission. Une candidature n’accorde aucun accès utilisateur à l’application et n’envoie pas automatiquement d’email.
+Les transactions sérialisables avec reprise protègent les doublons, les affectations et les capacités lors d’actions concurrentes. Les réponses personnalisées conservent leur libellé au moment de la soumission. Une candidature n’accorde aucun accès utilisateur à l’application.
+
+## Mails et confirmation des créneaux
+
+Dans les paramètres du workspace, un administrateur peut importer le logo de l’association (PNG, JPEG ou GIF, 2 Mo maximum). Il apparaît dans les trois templates email, avec le nom du workspace et de l’événement.
+
+- Une nouvelle inscription publique déclenche un accusé de réception. Une soumission répétée n’envoie pas de doublon.
+- La validation d’une candidature crée son lien personnel et son badge, puis envoie le lien par mail. Cela fonctionne aussi lors d’un ajout depuis les participants.
+- Dans le planning, **Envoyer les créneaux par mail** invite chaque bénévole concerné à accepter ou refuser ses créneaux futurs. Un planning inchangé n’est pas renvoyé ; les personnes sans email sont signalées.
+
+L’espace personnel permet de répondre à chaque créneau. Un refus libère le poste et affiche « Refusé · à réaffecter » dans le planning de l’organisation. Modifier les horaires, le poste, l’équipe ou la personne remet la confirmation en attente. Une réponse portant sur une ancienne version est refusée. Les échanges réinitialisent aussi les confirmations.
+
+Les envois sont inscrits dans `VolunteerEmail` dans la même transaction que l’action. Le serveur traite cette file toutes les 15 secondes, indépendamment des rappels Discord/WhatsApp, avec reprise SMTP et verrou temporaire entre workers. Configurer `MAIL_TRANSPORT=smtp`, `MAIL_FROM`, `SMTP_*` et `FRONTEND_URL` ; le mode `log` n’expédie aucun mail. Le lien et le logo utilisent l’URL publique du frontend. Le transport garantit une reprise après incident ; un crash immédiatement après acceptation SMTP peut exceptionnellement produire un doublon.
+
+API : `POST /api/events/:eventId/volunteers/assignments/notify` retourne `{ count, missingEmail }`. `PATCH /api/public/volunteers/portal/:token/shifts/:id` attend `{ accept, version }`. Le logo se gère via `POST` / `DELETE /api/workspace/logo` et sa lecture publique via `/uploads/association-logos/:fileName`.
 
 ## Déploiement et validation
 

@@ -17,6 +17,12 @@ export async function volunteerRoutes(app: FastifyInstance) {
     reply.header("Cache-Control", "no-store");
     return repository.portal(tokenParams.parse(req.params).token);
   });
+  app.patch("/api/public/volunteers/portal/:token/shifts/:id", async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const { token, id } = tokenParams.extend({ id: z.string().min(1) }).parse(req.params);
+    const { accept, version } = z.object({ accept: z.boolean(), version: z.number().int().nonnegative() }).parse(req.body);
+    return repository.respondShift(token, id, accept, version);
+  });
   app.post("/api/public/volunteers/portal/:token/swaps", async (req, reply) => {
     reply.header("Cache-Control", "no-store");
     const body = z.object({ sourceShiftId: z.string().min(1), targetShiftId: z.string().min(1) }).parse(req.body);
@@ -50,6 +56,7 @@ export async function volunteerRoutes(app: FastifyInstance) {
       return reply.code(201).send(await repository.createShifts(params.parse(req.params).eventId, shift, count));
     });
     protectedRoutes.post("/api/events/:eventId/volunteers/assignments/preview", async (req) => repository.previewAssignments(params.parse(req.params).eventId));
+    protectedRoutes.post("/api/events/:eventId/volunteers/assignments/notify", async (req) => repository.notifyPlanning(params.parse(req.params).eventId));
     protectedRoutes.post("/api/events/:eventId/volunteers/assignments/apply", async (req) => repository.applyAssignments(params.parse(req.params).eventId, assignmentsSchema.parse(req.body)));
     protectedRoutes.post("/api/events/:eventId/volunteers/applications/:id/badge", async (req) => {
       const { eventId, id } = params.parse(req.params);

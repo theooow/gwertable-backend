@@ -912,6 +912,8 @@ model TaskAssignee {
 }
 
 model Shift {
+  confirmationStatus String @default("PENDING")
+  confirmationVersion Int @default(0)
   id         String   @id @default(cuid())
   eventId    String
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -954,6 +956,7 @@ model VolunteerForm {
 }
 
 model VolunteerApplication {
+  emails      VolunteerEmail[]
   id          String @id @default(cuid())
   eventId     String
   event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -984,6 +987,19 @@ model VolunteerApplication {
   @@unique([eventId, personId])
   @@index([eventId, status])
   @@index([personId])
+}
+
+model VolunteerEmail {
+  id String @id @default(cuid())
+  applicationId String
+  application VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  kind String
+  dedupeKey String @unique
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([sentAt, availableAt])
 }
 
 model VolunteerSwap {
