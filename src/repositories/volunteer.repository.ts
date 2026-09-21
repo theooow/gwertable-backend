@@ -28,6 +28,11 @@ export async function volunteerTransaction<T>(fn: (tx: Prisma.TransactionClient)
 const transaction = volunteerTransaction;
 
 export class VolunteerRepository {
+  private async queueShiftEmail(tx: Prisma.TransactionClient, eventId: string, personId: string, shiftId: string, version: number) {
+    const app = await tx.volunteerApplication.findFirst({ where: { eventId, personId, status: "APPROVED" } });
+    if (!app) return;
+    await tx.volunteerEmail.createMany({ data: [{ applicationId: app.id, kind: "SHIFT_UPDATE", dedupeKey: `shift:${shiftId}:${version}` }], skipDuplicates: true });
+  }
   async authorize(request: FastifyRequest, eventId: string) {
     const event = await prisma.event.findFirst({ where: { id: eventId, workspaceId: request.workspaceId } });
     if (!event) throw new NotFoundError("Événement introuvable");
@@ -199,7 +204,14 @@ export class VolunteerRepository {
       }
       const changed = current && (current.assigneeId !== data.assigneeId || current.startsAt.toISOString() !== data.startsAt || current.endsAt.toISOString() !== data.endsAt || current.position !== data.position || (current.team ?? "") !== data.team);
       if (changed || (current && data.swapAllowed === false)) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: id }, { targetShiftId: id }] }, data: { status: "DECLINED" } });
-      return id ? tx.shift.update({ where: { id }, data: { ...data, reminderSentAt: null, ...(changed ? { confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } : {}) } }) : tx.shift.create({ data: { ...data, eventId } });
+      if (id) {
+        const updated = await tx.shift.update({ where: { id }, data: { ...data, reminderSentAt: null, ...(changed ? { confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } : {}) } });
+        if (updated.assigneeId && changed) await this.queueShiftEmail(tx, eventId, updated.assigneeId, updated.id, updated.confirmationVersion);
+        return updated;
+      }
+      const created = await tx.shift.create({ data: { ...data, eventId } });
+      if (created.assigneeId) await this.queueShiftEmail(tx, eventId, created.assigneeId, created.id, created.confirmationVersion);
+      return created;
     });
   }
   createShifts(eventId: string, data: ShiftInput, count: number) {
@@ -244,7 +256,8 @@ export class VolunteerRepository {
         const shift = await tx.shift.findFirst({ where: { id: assignment.shiftId, eventId, assigneeId: null } });
         if (!shift) throw new ConflictError("Le planning a changé. Générez une nouvelle proposition.");
         await this.checkAssignment(tx, eventId, shift, assignment.personId);
-        await tx.shift.update({ where: { id: shift.id }, data: { assigneeId: assignment.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
+        const updated = await tx.shift.update({ where: { id: shift.id }, data: { assigneeId: assignment.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
+        await this.queueShiftEmail(tx, eventId, assignment.personId, updated.id, updated.confirmationVersion);
       }
       return { count: assignments.length };
     });
@@ -352,8 +365,10 @@ export class VolunteerRepository {
         if (!source.swapAllowed || !target.swapAllowed) throw new ConflictError("L’organisation a interdit les échanges pour l’un de ces créneaux");
         await this.checkAssignment(tx, application.eventId, target, swap.application.personId, [source.id]);
         await this.checkAssignment(tx, application.eventId, source, application.personId, [target.id]);
-        await tx.shift.update({ where: { id: source.id }, data: { assigneeId: application.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
-        await tx.shift.update({ where: { id: target.id }, data: { assigneeId: swap.application.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
+        const sourceUpdated = await tx.shift.update({ where: { id: source.id }, data: { assigneeId: application.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
+        const targetUpdated = await tx.shift.update({ where: { id: target.id }, data: { assigneeId: swap.application.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
+        await this.queueShiftEmail(tx, application.eventId, application.personId, sourceUpdated.id, sourceUpdated.confirmationVersion);
+        await this.queueShiftEmail(tx, application.eventId, swap.application.personId, targetUpdated.id, targetUpdated.confirmationVersion);
       }
       return tx.volunteerSwap.update({ where: { id }, data: { status: accept ? "ACCEPTED" : "DECLINED" } });
     });

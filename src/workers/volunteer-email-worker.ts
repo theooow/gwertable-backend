@@ -13,10 +13,10 @@ export async function deliverVolunteerEmails(db: PrismaClient, logger: Pick<Fast
     try {
       const app = await db.volunteerApplication.findUnique({ where: { id: job.applicationId }, include: { person: true, event: { include: { workspace: true, volunteerForm: true } } } });
       const email = app && (app.email || app.person.email);
-      const pendingPlanning = job.kind !== "PLANNING" || (app && await db.shift.count({ where: { eventId: app.eventId, assigneeId: app.personId, confirmationStatus: "PENDING", startsAt: { gt: new Date() } } }) > 0);
+      const pendingPlanning = job.kind !== "PLANNING" && job.kind !== "SHIFT_UPDATE" || (app && await db.shift.count({ where: { eventId: app.eventId, assigneeId: app.personId, confirmationStatus: "PENDING", startsAt: { gt: new Date() } } }) > 0);
       if (app && email && pendingPlanning && !app.person.archivedAt && (job.kind === "REGISTERED" || (app.status === "APPROVED" && app.accessToken && !["DONE", "ARCHIVED"].includes(app.event.status)))) {
         await send(email, {
-          kind: job.kind as "REGISTERED" | "APPROVED" | "PLANNING", fullName: app.person.fullName,
+          kind: job.kind as "REGISTERED" | "APPROVED" | "PLANNING" | "SHIFT_UPDATE", fullName: app.person.fullName,
           eventName: app.event.name, associationName: app.event.workspace.name,
           logoUrl: app.event.workspace.logoUrl ? new URL(app.event.workspace.logoUrl, env.FRONTEND_URL).href : null,
           portalUrl: app.accessToken ? new URL(`/volunteers/portal/${app.accessToken}`, env.FRONTEND_URL).href : undefined,
