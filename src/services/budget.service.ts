@@ -1,3 +1,4 @@
+import type { ExpenseCellInput, IncomeCellInput } from "../schemas/budget-cell.js";
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
 import type { z } from "zod";
@@ -29,6 +30,11 @@ export class BudgetService {
     return this.budgetRepository.createExpense(eventId, workspaceId, userId, data);
   }
 
+  async updateExpenseCell(id: string, workspaceId: string, role: UserRole, userId: string, data: ExpenseCellInput) {
+    requireCan(role, "budget.write");
+    return this.budgetRepository.updateExpenseCell(id, workspaceId, userId, data);
+  }
+
   async updateExpense(id: string, workspaceId: string, role: UserRole, userId: string, data: ExpenseInput) {
     requireCan(role, "budget.write");
     return this.budgetRepository.updateExpense(id, workspaceId, userId, data);
@@ -52,6 +58,11 @@ export class BudgetService {
   async createIncome(eventId: string, workspaceId: string, role: UserRole, userId: string, data: IncomeInput) {
     requireCan(role, "budget.write");
     return this.budgetRepository.createIncome(eventId, workspaceId, userId, data);
+  }
+
+  async updateIncomeCell(id: string, workspaceId: string, role: UserRole, userId: string, data: IncomeCellInput) {
+    requireCan(role, "budget.write");
+    return this.budgetRepository.updateIncomeCell(id, workspaceId, userId, data);
   }
 
   async updateIncome(id: string, workspaceId: string, role: UserRole, userId: string, data: IncomeInput) {

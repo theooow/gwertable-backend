@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
+import { expenseCellSchema, incomeCellSchema } from "../../schemas/budget-cell.js";
 import { expenseSchema } from "../../schemas/expense.js";
 import { incomeSchema } from "../../schemas/income.js";
 import { ticketTierSchema } from "../../schemas/ticket-tier.js";
@@ -38,6 +39,11 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     return service.updateExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
+  fastify.patch("/api/expenses/:id", async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    return service.updateExpenseCell(id, request.workspaceId, request.userRole, request.user!.id, expenseCellSchema.parse(request.body));
+  });
+
   fastify.put("/api/expenses/:id", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
@@ -71,6 +77,11 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     const data = incomeSchema.parse(request.body);
     const income = await service.createIncome(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(income);
+  });
+
+  fastify.patch("/api/incomes/:id", async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    return service.updateIncomeCell(id, request.workspaceId, request.userRole, request.user!.id, incomeCellSchema.parse(request.body));
   });
 
   fastify.put("/api/incomes/:id", async (request) => {

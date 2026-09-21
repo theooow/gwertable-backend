@@ -7,6 +7,7 @@ import type {
   AmountInputMode,
   VatMode,
 } from "@prisma/client";
+import type { ExpenseCellInput, IncomeCellInput } from "../schemas/budget-cell.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { parseEuros } from "../lib/money.js";
 import {
@@ -255,6 +256,40 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si la dépense est introuvable
    */
+
+  async updateExpenseCell(id: string, workspaceId: string, userId: string, data: ExpenseCellInput) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.expense.findFirst({ where: { id, event: { workspaceId } }, include: { event: { select: { vatMode: true } } } });
+      if (!current) throw new NotFoundError("Ligne introuvable");
+      if (current.isEquipmentSync) throw new ValidationError("Cette dépense est gérée depuis le matériel");
+      await this.assertPersonIfProvided(data.paidById, workspaceId);
+      const { amount, paidAt, ...fields } = data;
+      const patch: Prisma.ExpenseUncheckedUpdateInput = { ...fields };
+      if (data.paidById !== undefined) patch.paidById = data.paidById || null;
+      if (data.notes !== undefined) patch.notes = data.notes || null;
+      if (paidAt !== undefined) patch.paidAt = paidAt ? new Date(paidAt) : null;
+      const financial = amount !== undefined || data.amountInputMode !== undefined || data.vatRateBasisPoints !== undefined;
+      if (financial) {
+        const original = current.amountInputMode === "HT" ? current.amountHtCents : current.amountTtcCents;
+        Object.assign(patch, computeBudgetAmounts(
+          amount ?? (original / 100).toFixed(2),
+          data.amountInputMode ?? current.amountInputMode,
+          data.vatRateBasisPoints ?? current.vatRateBasisPoints,
+          current.event.vatMode,
+        ));
+      }
+      const updated = await tx.expense.update({ where: { id }, data: patch, include: { paidBy: { select: { id: true, fullName: true } } } });
+      if (financial) await syncParticipantFee(tx, updated);
+      return updated;
+    }, { isolationLevel: "Serializable" });
+    await this.activityRepository.record({
+      workspaceId, eventId: updated.eventId, actorId: userId,
+      type: "EXPENSE_UPDATED", title: `Budget modifié : ${updated.label}`,
+      entityType: "EXPENSE", entityId: updated.id,
+    });
+    return updated;
+  }
+
   async updateExpense(id: string, workspaceId: string, userId: string, data: ExpenseInput) {
     const existingExpense = await this.expenseDao.findByIdOrThrow(id, workspaceId);
     await this.assertPersonIfProvided(data.paidById, workspaceId);
@@ -412,6 +447,36 @@ export class BudgetRepository {
    * @param data - Données de mise à jour
    * @throws {NotFoundError} Si le revenu est introuvable
    */
+
+  async updateIncomeCell(id: string, workspaceId: string, userId: string, data: IncomeCellInput) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.income.findFirst({ where: { id, event: { workspaceId } }, include: { event: { select: { vatMode: true } } } });
+      if (!current) throw new NotFoundError("Ligne introuvable");
+      const { amount, receivedAt, ...fields } = data;
+      const patch: Prisma.IncomeUncheckedUpdateInput = { ...fields };
+      if (receivedAt !== undefined) patch.receivedAt = receivedAt ? new Date(receivedAt) : null;
+      const financial = amount !== undefined || data.amountInputMode !== undefined || data.vatRateBasisPoints !== undefined;
+      if (financial) {
+        const original = current.amountInputMode === "HT" ? current.amountHtCents : current.amountTtcCents;
+        Object.assign(patch, computeBudgetAmounts(
+          amount ?? (original / 100).toFixed(2),
+          data.amountInputMode ?? current.amountInputMode,
+          data.vatRateBasisPoints ?? current.vatRateBasisPoints,
+          current.event.vatMode,
+        ));
+      }
+      const updated = await tx.income.update({ where: { id }, data: patch });
+
+      return updated;
+    }, { isolationLevel: "Serializable" });
+    await this.activityRepository.record({
+      workspaceId, eventId: updated.eventId, actorId: userId,
+      type: "INCOME_UPDATED", title: `Budget modifié : ${updated.label}`,
+      entityType: "INCOME", entityId: updated.id,
+    });
+    return updated;
+  }
+
   async updateIncome(id: string, workspaceId: string, userId: string, data: IncomeInput) {
     const existing = await this.prisma.income.findFirst({
       where: { id, event: { workspaceId } },
