@@ -4,7 +4,8 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireCan } from "../../lib/permissions.js";
-import { NotFoundError, ValidationError } from "../../lib/errors.js";
+import { prisma } from "../../prisma.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../lib/errors.js";
 
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 const allowedReceiptTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -69,6 +70,35 @@ function contentTypeForExtension(ext: string): string {
  * Couvre les justificatifs de dépenses, bannières d'événements et devis équipement.
  */
 export async function uploadRoutes(fastify: FastifyInstance) {
+  fastify.get("/uploads/association-logos/:fileName", async (request, reply) => {
+    const { fileName } = z.object({ fileName: z.string().regex(/^[a-zA-Z0-9_-]+\.(png|jpg|gif)$/) }).parse(request.params);
+    const data = await readFile(path.join(uploadRoot, "association-logos", fileName)).catch(() => null);
+    if (!data) throw new NotFoundError("Logo introuvable");
+    return reply.header("X-Content-Type-Options", "nosniff").type(contentTypeForExtension(path.extname(fileName))).send(data);
+  });
+  fastify.post("/api/workspace/logo", { bodyLimit: 3 * 1024 * 1024 }, async (request, reply) => {
+    requireCan(request.userRole, "user.manage");
+    if (request.eventScoped) throw new ForbiddenError("Réservé aux administrateurs du workspace");
+    const parsed = receiptUploadSchema.parse(request.body);
+    const buffer = Buffer.from(parsed.data, "base64");
+    const valid = (parsed.contentType === "image/png" && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
+      || (parsed.contentType === "image/jpeg" && buffer.subarray(0, 3).equals(Buffer.from([255, 216, 255])))
+      || (parsed.contentType === "image/gif" && ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString()));
+    if (!valid || buffer.byteLength > 2 * 1024 * 1024) throw new ValidationError("Choisissez un logo PNG, JPEG ou GIF de 2 Mo maximum");
+    const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
+    const directory = path.join(uploadRoot, "association-logos");
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, fileName), buffer);
+    const logoUrl = `/api/uploads/association-logos/${fileName}`;
+    await prisma.workspace.update({ where: { id: request.workspaceId }, data: { logoUrl } });
+    return reply.code(201).send({ logoUrl });
+  });
+  fastify.delete("/api/workspace/logo", async (request) => {
+    requireCan(request.userRole, "user.manage");
+    if (request.eventScoped) throw new ForbiddenError("Réservé aux administrateurs du workspace");
+    await prisma.workspace.update({ where: { id: request.workspaceId }, data: { logoUrl: null } });
+    return { logoUrl: null };
+  });
   fastify.get("/uploads/receipts/:fileName", async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) throw new NotFoundError("Justificatif introuvable");

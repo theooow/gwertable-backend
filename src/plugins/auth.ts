@@ -78,6 +78,7 @@ function isPublicRoute(url: string): boolean {
     url.startsWith("/documentation") ||
     url.startsWith("/uploads/receipts/") ||
     url.startsWith("/uploads/event-banners/") ||
+    url.startsWith("/uploads/association-logos/") ||
     url.startsWith("/uploads/profile-images/") ||
     url.startsWith("/uploads/equipment-quotes/") ||
     url.startsWith("/uploads/equipment-photos/") ||

@@ -261,6 +261,7 @@ model User {
 }
 
 model Workspace {
+  logoUrl            String?
   id        String   @id @default(cuid())
   name      String
   shotgunOrganizerId String?
