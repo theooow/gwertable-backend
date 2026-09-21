@@ -42,12 +42,12 @@ describe("volunteer operations", () => {
     assert.equal((await request("PATCH", path, undefined, { accept: false, shifts })).statusCode, 409);
     assert.equal(await prisma.shift.count({ where: { assigneeId: c.person.id } }), 4);
     shifts.push({ id: added.id, version: 0 });
-    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts })).statusCode, 200);
-    assert.equal(await prisma.shift.count({ where: { confirmationStatus: "DECLINED", assigneeId: null } }), 3);
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts })).statusCode, 409);
+    assert.equal(await prisma.shift.count({ where: { assigneeId: c.person.id } }), 4);
     assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: past.id } })).assigneeId, c.person.id);
     const overview = json<{ applications: { id: string; planningResponse: string; planningRespondedAt: string }[] }>(await request("GET", c.base, c.authorization));
     const reply = overview.applications.find((a) => a.id === c.applications[0]!.id)!;
-    assert.equal(reply.planningResponse, "DECLINED"); assert.ok(reply.planningRespondedAt);
+    assert.equal(reply.planningResponse, "ACCEPTED"); assert.ok(reply.planningRespondedAt);
   });
 
   it("blocks exchanges on either locked shift and rechecks when accepting an existing request", async () => {

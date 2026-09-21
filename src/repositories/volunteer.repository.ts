@@ -328,6 +328,7 @@ export class VolunteerRepository {
       if (!shifts.length || submitted.size !== versions.length || shifts.length !== versions.length || shifts.some((s) => submitted.get(s.id) !== s.confirmationVersion)) {
         throw new ConflictError("Le planning a changé. Actualisez puis répondez à l’ensemble de vos horaires à venir.");
       }
+      if (!accept && shifts.some((shift) => shift.confirmationStatus === "ACCEPTED")) throw new ConflictError("Vous avez déjà accepté votre planning. Contactez l’organisation si vous devez modifier vos disponibilités.");
       if (accept) for (const shift of shifts) await this.checkAssignment(tx, app.eventId, shift, app.personId, [shift.id]);
       const ids = shifts.map((s) => s.id);
       if (!accept) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: { in: ids } }, { targetShiftId: { in: ids } }] }, data: { status: "DECLINED" } });
