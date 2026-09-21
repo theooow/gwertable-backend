@@ -1,5 +1,5 @@
 export type VolunteerEmailContent = {
-  kind: "REGISTERED" | "APPROVED" | "PLANNING" | "SHIFT_UPDATE";
+  kind: "REGISTERED" | "APPROVED" | "PLANNING" | "SHIFT_UPDATE" | "SWAP_REQUEST";
   fullName: string; eventName: string; associationName: string; logoUrl: string | null;
   portalUrl?: string; confirmationMessage?: string;
   primaryColor?: string | null;
@@ -16,14 +16,15 @@ export function renderVolunteerEmail(data: VolunteerEmailContent) {
   const buttonTextColor = luminance > 0.179 ? "#000000" : "#ffffff";
   // Keep text readable on white even when the workspace chooses a very light accent.
   const linkColor = luminance <= 0.183 ? primaryColor : "#172033";
-  const title = { REGISTERED: "Inscription bien reçue", APPROVED: "Bienvenue dans l’équipe !", PLANNING: "Votre planning vous attend", SHIFT_UPDATE: "Votre planning a été modifié" }[data.kind];
+  const title = { REGISTERED: "Inscription bien reçue", APPROVED: "Bienvenue dans l’équipe !", PLANNING: "Votre planning vous attend", SHIFT_UPDATE: "Votre planning a été modifié", SWAP_REQUEST: "Une demande d’échange vous attend" }[data.kind];
   const message = data.kind === "REGISTERED"
     ? data.confirmationMessage || "Votre candidature a bien été reçue. Nous vous écrirons dès qu’elle sera validée."
     : data.kind === "APPROVED"
       ? "Votre candidature est validée. Retrouvez votre planning et votre badge dans votre espace personnel."
       : data.kind === "SHIFT_UPDATE" ? "Un de vos postes vient d’être affecté ou modifié. Retrouvez les nouveaux horaires dans votre espace personnel."
+      : data.kind === "SWAP_REQUEST" ? "Un autre bénévole vous propose d’échanger un créneau. Consultez votre espace personnel pour accepter ou refuser cette demande."
       : "Vos créneaux sont prêts. Rendez-vous dans votre espace personnel pour accepter ou refuser l’ensemble de vos horaires à venir.";
-  const cta = data.kind === "PLANNING" ? "Valider mes créneaux" : "Accéder à mon espace";
+  const cta = data.kind === "PLANNING" ? "Valider mes créneaux" : data.kind === "SWAP_REQUEST" ? "Répondre à la demande" : "Accéder à mon espace";
   const url = data.kind === "REGISTERED" ? undefined : data.portalUrl;
   const subject = `${data.associationName} · ${title} · ${data.eventName}`;
   const text = [`${data.associationName} · ${data.eventName}`, "", `Bonjour ${data.fullName},`, "", message,

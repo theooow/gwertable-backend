@@ -8,7 +8,7 @@ const content: VolunteerEmailContent = {
 };
 
 it("puts the organization first for every volunteer email, including registration without a link", () => {
-  for (const kind of ["REGISTERED", "APPROVED", "PLANNING", "SHIFT_UPDATE"] as const) {
+  for (const kind of ["REGISTERED", "APPROVED", "PLANNING", "SHIFT_UPDATE", "SWAP_REQUEST"] as const) {
     const result = renderVolunteerEmail({ ...content, kind, primaryColor: "#7c3aed" });
     assert.ok(result.subject.startsWith("Mon orga · "));
     assert.ok(result.subject.endsWith(" · Festival"));

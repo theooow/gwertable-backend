@@ -64,6 +64,8 @@ describe("volunteer operations", () => {
     assert.equal(portal.alternatives.some((s) => s.id === target.id), false);
     await prisma.shift.update({ where: { id: target.id }, data: { swapAllowed: true } });
     const swap = json<{ id: string }>(await request("POST", path, undefined, body));
+    const email = await prisma.volunteerEmail.findFirstOrThrow({ where: { applicationId: c.applications[1]!.id, kind: "SWAP_REQUEST" } });
+    assert.equal(email.dedupeKey, `swap:${swap.id}`);
     await prisma.shift.update({ where: { id: source.id }, data: { swapAllowed: false } });
     assert.equal((await request("PATCH", `/api/public/volunteers/portal/${tokens[1]!.accessToken}/swaps/${swap.id}`, undefined, { accept: true })).statusCode, 409);
     assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: source.id } })).assigneeId, c.person.id);

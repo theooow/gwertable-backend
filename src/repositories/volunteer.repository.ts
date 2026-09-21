@@ -349,7 +349,12 @@ export class VolunteerRepository {
       await this.checkAssignment(tx, application.eventId, target, application.personId, [source.id]);
       await this.checkAssignment(tx, application.eventId, source, target.assigneeId, [target.id]);
       if (await tx.volunteerSwap.findFirst({ where: { status: "PENDING", OR: [{ sourceShiftId: { in: [source.id, target.id] } }, { targetShiftId: { in: [source.id, target.id] } }] } })) throw new ConflictError("Une demande est déjà en attente pour l’un de ces créneaux");
-      return tx.volunteerSwap.create({ data: { applicationId: application.id, sourceShiftId, targetShiftId, targetPersonId: target.assigneeId } });
+      const targetApplication = await tx.volunteerApplication.findFirstOrThrow({ where: { eventId: application.eventId, personId: target.assigneeId, status: "APPROVED" } });
+      const targetAccessToken = targetApplication.accessToken || randomBytes(32).toString("base64url");
+      if (!targetApplication.accessToken) await tx.volunteerApplication.update({ where: { id: targetApplication.id }, data: { accessToken: targetAccessToken, badgeToken: targetApplication.badgeToken || randomBytes(32).toString("base64url") } });
+      const swap = await tx.volunteerSwap.create({ data: { applicationId: application.id, sourceShiftId, targetShiftId, targetPersonId: target.assigneeId } });
+      await tx.volunteerEmail.create({ data: { applicationId: targetApplication.id, kind: "SWAP_REQUEST", dedupeKey: `swap:${swap.id}` } });
+      return swap;
     });
   }
 
