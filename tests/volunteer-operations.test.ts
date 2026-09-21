@@ -25,6 +25,54 @@ async function badges(c: Awaited<ReturnType<typeof context>>) {
 }
 
 describe("volunteer operations", () => {
+  it("accepts or refuses the whole future planning atomically and exposes the reply to organizers", async () => {
+    const c = await context(); const [token] = await badges(c);
+    const first = await prisma.shift.create({ data: { ...c.shift, assigneeId: c.person.id } });
+    const second = await prisma.shift.create({ data: { ...c.shift, startsAt: endsAt, endsAt: new Date(endsAt.getTime() + 3600000), assigneeId: c.person.id } });
+    const past = await prisma.shift.create({ data: { ...c.shift, startsAt: new Date(Date.now() - 7200000), endsAt: new Date(Date.now() - 3600000), assigneeId: c.person.id } });
+    const path = `/api/public/volunteers/portal/${token!.accessToken}/planning`;
+    const shifts = [first, second].map((s) => ({ id: s.id, version: s.confirmationVersion }));
+    assert.equal((await request("PATCH", path, undefined, { accept: true, shifts: [shifts[0]] })).statusCode, 409);
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts: [shifts[0], shifts[0]] })).statusCode, 409);
+    assert.equal((await request("PATCH", `/api/public/volunteers/portal/${token!.accessToken}/shifts/${first.id}`, undefined, { accept: true, version: 0 })).statusCode, 404);
+    assert.equal(await prisma.shift.count({ where: { confirmationStatus: "ACCEPTED" } }), 0);
+    assert.equal((await request("PATCH", path, undefined, { accept: true, shifts })).statusCode, 200);
+    assert.equal(await prisma.shift.count({ where: { confirmationStatus: "ACCEPTED" } }), 2);
+    const added = await prisma.shift.create({ data: { ...c.shift, startsAt: new Date(endsAt.getTime() + 3600000), endsAt: new Date(endsAt.getTime() + 7200000), assigneeId: c.person.id } });
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts })).statusCode, 409);
+    assert.equal(await prisma.shift.count({ where: { assigneeId: c.person.id } }), 4);
+    shifts.push({ id: added.id, version: 0 });
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts })).statusCode, 200);
+    assert.equal(await prisma.shift.count({ where: { confirmationStatus: "DECLINED", assigneeId: null } }), 3);
+    assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: past.id } })).assigneeId, c.person.id);
+    const overview = json<{ applications: { id: string; planningResponse: string; planningRespondedAt: string }[] }>(await request("GET", c.base, c.authorization));
+    const reply = overview.applications.find((a) => a.id === c.applications[0]!.id)!;
+    assert.equal(reply.planningResponse, "DECLINED"); assert.ok(reply.planningRespondedAt);
+  });
+
+  it("blocks exchanges on either locked shift and rechecks when accepting an existing request", async () => {
+    const c = await context(); const tokens = await badges(c);
+    const source = await prisma.shift.create({ data: { ...c.shift, assigneeId: c.person.id, swapAllowed: false } });
+    const target = await prisma.shift.create({ data: { ...c.shift, startsAt: endsAt, endsAt: new Date(endsAt.getTime() + 3600000), assigneeId: c.bob.id } });
+    const path = `/api/public/volunteers/portal/${tokens[0]!.accessToken}/swaps`;
+    const body = { sourceShiftId: source.id, targetShiftId: target.id };
+    assert.equal((await request("POST", path, undefined, body)).statusCode, 409);
+    await prisma.shift.update({ where: { id: source.id }, data: { swapAllowed: true } });
+    await prisma.shift.update({ where: { id: target.id }, data: { swapAllowed: false } });
+    assert.equal((await request("POST", path, undefined, body)).statusCode, 409);
+    const portal = json<{ alternatives: { id: string }[] }>(await request("GET", `/api/public/volunteers/portal/${tokens[0]!.accessToken}`));
+    assert.equal(portal.alternatives.some((s) => s.id === target.id), false);
+    await prisma.shift.update({ where: { id: target.id }, data: { swapAllowed: true } });
+    const swap = json<{ id: string }>(await request("POST", path, undefined, body));
+    await prisma.shift.update({ where: { id: source.id }, data: { swapAllowed: false } });
+    assert.equal((await request("PATCH", `/api/public/volunteers/portal/${tokens[1]!.accessToken}/swaps/${swap.id}`, undefined, { accept: true })).statusCode, 409);
+    assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: source.id } })).assigneeId, c.person.id);
+    const save = await request("PUT", `${c.base}/shifts/${target.id}`, c.authorization, { position: target.position, team: target.team, startsAt: target.startsAt.toISOString(), endsAt: target.endsAt.toISOString(), assigneeId: c.bob.id, swapAllowed: false });
+    assert.equal(save.statusCode, 200, save.body);
+    assert.equal((await prisma.volunteerSwap.findUniqueOrThrow({ where: { id: swap.id } })).status, "DECLINED");
+    assert.equal((await request("POST", `${c.base}/shifts/batch`, c.authorization, { shift: { position: "Formation", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), assigneeId: null, swapAllowed: false }, count: 2 })).statusCode, 201);
+    assert.equal(await prisma.shift.count({ where: { position: "Formation", swapAllowed: false } }), 2);
+  });
   it("exposes only busy intervals of this event's volunteers for calendar conflicts", async () => {
     const c = await context();
     const other = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Private event", startsAt } });

@@ -60,22 +60,22 @@ describe("volunteer email and confirmation flow", () => {
       assert.equal(json<{ count: number }>(r).count, count);
     }
     assert.equal((await request("POST", `${c.base}/assignments/notify`)).statusCode, 401);
-    const path = `/api/public/volunteers/portal/${accessToken}/shifts/${shift.id}`;
-    assert.equal((await request("PATCH", path, undefined, { accept: true, version: 0 })).statusCode, 200);
+    const path = `/api/public/volunteers/portal/${accessToken}/planning`;
+    assert.equal((await request("PATCH", path, undefined, { accept: true, shifts: [{ id: shift.id, version: 0 }] })).statusCode, 200);
     assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: shift.id } })).confirmationStatus, "ACCEPTED");
     const edit = await request("PUT", `${c.base}/shifts/${shift.id}`, c.authorization, { ...shiftData, position: "Bar" });
     assert.equal(edit.statusCode, 200, edit.body);
-    assert.equal((await request("PATCH", path, undefined, { accept: false, version: 0 })).statusCode, 409);
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts: [{ id: shift.id, version: 0 }] })).statusCode, 409);
     const other = await prisma.person.create({ data: { workspaceId: c.workspace.id, fullName: "Other" } });
     await prisma.volunteerApplication.create({ data: { eventId: c.event.id, personId: other.id, fullName: "Other", status: "APPROVED", accessToken: "o".repeat(43) } });
-    assert.equal((await request("PATCH", path.replace(accessToken, "o".repeat(43)), undefined, { accept: false, version: 1 })).statusCode, 404);
+    assert.equal((await request("PATCH", path.replace(accessToken, "o".repeat(43)), undefined, { accept: false, shifts: [{ id: shift.id, version: 1 }] })).statusCode, 409);
     assert.equal((await request("POST", `${c.base}/assignments/notify`, c.authorization, {})).statusCode, 200);
     assert.equal(await prisma.volunteerEmail.count({ where: { kind: "PLANNING" } }), 2);
-    assert.equal((await request("PATCH", path, undefined, { accept: false, version: 1 })).statusCode, 200);
+    assert.equal((await request("PATCH", path, undefined, { accept: false, shifts: [{ id: shift.id, version: 1 }] })).statusCode, 200);
     const refused = await prisma.shift.findUniqueOrThrow({ where: { id: shift.id } });
     assert.equal(refused.assigneeId, null);
     assert.equal(refused.confirmationStatus, "DECLINED");
-    assert.equal((await request("PATCH", path, undefined, { accept: true, version: 1 })).statusCode, 404);
+    assert.equal((await request("PATCH", path, undefined, { accept: true, shifts: [{ id: shift.id, version: 1 }] })).statusCode, 409);
   });
 
   it("retries SMTP failures and builds branded emails using the current portal token", async () => {

@@ -46,11 +46,13 @@ Dans les paramètres du workspace, un administrateur peut importer le logo de l�
 - La validation d’une candidature crée son lien personnel et son badge, puis envoie le lien par mail. Cela fonctionne aussi lors d’un ajout depuis les participants.
 - Dans le planning, **Envoyer les créneaux par mail** invite chaque bénévole concerné à accepter ou refuser ses créneaux futurs. Un planning inchangé n’est pas renvoyé ; les personnes sans email sont signalées.
 
-L’espace personnel permet de répondre à chaque créneau. Un refus libère le poste et affiche « Refusé · à réaffecter » dans le planning de l’organisation. Modifier les horaires, le poste, l’équipe ou la personne remet la confirmation en attente. Une réponse portant sur une ancienne version est refusée. Les échanges réinitialisent aussi les confirmations.
+L’espace personnel impose une réponse globale : accepter ou refuser tous les horaires à venir. Une liste incomplète ou une ancienne version est refusée sans modification. Un refus libère tous les postes concernés. La dernière réponse et sa date apparaissent en haut de la gestion des bénévoles, actualisée toutes les 30 secondes. Les créneaux déjà commencés ne sont pas modifiés. Modifier les horaires, le poste, l’équipe ou la personne remet la confirmation en attente. Les échanges réinitialisent aussi les confirmations.
+
+À la création ou modification d’un poste, `swapAllowed` permet d’interdire les échanges (par défaut autorisés pour les postes existants). Les deux postes doivent les autoriser, lors de la demande et de son acceptation. Interdire les échanges annule les demandes en attente pour ce poste. L’organisation conserve la possibilité de réaffecter elle-même le poste.
 
 Les envois sont inscrits dans `VolunteerEmail` dans la même transaction que l’action. Le serveur traite cette file toutes les 15 secondes, indépendamment des rappels Discord/WhatsApp, avec reprise SMTP et verrou temporaire entre workers. Configurer `MAIL_TRANSPORT=smtp`, `MAIL_FROM`, `SMTP_*` et `FRONTEND_URL` ; le mode `log` n’expédie aucun mail. Le lien et le logo utilisent l’URL publique du frontend. Le transport garantit une reprise après incident ; un crash immédiatement après acceptation SMTP peut exceptionnellement produire un doublon.
 
-API : `POST /api/events/:eventId/volunteers/assignments/notify` retourne `{ count, missingEmail }`. `PATCH /api/public/volunteers/portal/:token/shifts/:id` attend `{ accept, version }`. Le logo se gère via `POST` / `DELETE /api/workspace/logo` et sa lecture publique via `/uploads/association-logos/:fileName`.
+API : `POST /api/events/:eventId/volunteers/assignments/notify` retourne `{ count, missingEmail }`. `PATCH /api/public/volunteers/portal/:token/planning` attend `{ accept, shifts: [{ id, version }] }` avec tous les créneaux à venir. L’ancienne route de réponse individuelle est supprimée. Le logo se gère via `POST` / `DELETE /api/workspace/logo` et sa lecture publique via `/uploads/association-logos/:fileName`.
 
 ## Déploiement et validation
 

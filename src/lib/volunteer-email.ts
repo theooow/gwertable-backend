@@ -11,7 +11,7 @@ export function renderVolunteerEmail(data: VolunteerEmailContent) {
     ? data.confirmationMessage || "Votre candidature a bien été reçue. Nous vous écrirons dès qu’elle sera validée."
     : data.kind === "APPROVED"
       ? "Votre candidature est validée. Retrouvez votre planning et votre badge dans votre espace personnel."
-      : "Vos créneaux sont prêts. Rendez-vous dans votre espace personnel pour accepter ou refuser chaque créneau proposé.";
+      : "Vos créneaux sont prêts. Rendez-vous dans votre espace personnel pour accepter ou refuser l’ensemble de vos horaires à venir.";
   const cta = data.kind === "PLANNING" ? "Valider mes créneaux" : "Accéder à mon espace";
   const url = data.kind === "REGISTERED" ? undefined : data.portalUrl;
   const subject = `${title} · ${data.eventName}`;

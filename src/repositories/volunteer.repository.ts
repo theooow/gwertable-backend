@@ -198,7 +198,7 @@ export class VolunteerRepository {
         if (await tx.shift.findFirst({ where: { id: id ? { not: id } : undefined, assigneeId: data.assigneeId, startsAt: { lt: new Date(data.endsAt) }, endsAt: { gt: new Date(data.startsAt) } } })) throw new ConflictError("Ce bénévole est déjà affecté sur ces horaires");
       }
       const changed = current && (current.assigneeId !== data.assigneeId || current.startsAt.toISOString() !== data.startsAt || current.endsAt.toISOString() !== data.endsAt || current.position !== data.position || (current.team ?? "") !== data.team);
-      if (changed) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: id }, { targetShiftId: id }] }, data: { status: "DECLINED" } });
+      if (changed || (current && data.swapAllowed === false)) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: id }, { targetShiftId: id }] }, data: { status: "DECLINED" } });
       return id ? tx.shift.update({ where: { id }, data: { ...data, reminderSentAt: null, ...(changed ? { confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } : {}) } }) : tx.shift.create({ data: { ...data, eventId } });
     });
   }
@@ -279,11 +279,12 @@ export class VolunteerRepository {
   async portal(token: string) {
     const application = await this.portalApplication(token);
     const shifts = await prisma.shift.findMany({ where: { eventId: application.eventId, assigneeId: application.personId }, orderBy: { startsAt: "asc" } });
-    const alternatives = await prisma.shift.findMany({ where: { eventId: application.eventId, assigneeId: { not: application.personId }, startsAt: { gt: new Date() }, assignee: { volunteerApplications: { some: { eventId: application.eventId, status: "APPROVED" } } } }, select: { id: true, position: true, team: true, startsAt: true, endsAt: true } });
+    const alternatives = await prisma.shift.findMany({ where: { eventId: application.eventId, swapAllowed: true, assigneeId: { not: application.personId }, startsAt: { gt: new Date() }, assignee: { volunteerApplications: { some: { eventId: application.eventId, status: "APPROVED" } } } }, select: { id: true, position: true, team: true, startsAt: true, endsAt: true } });
     const swaps = await prisma.volunteerSwap.findMany({ where: { application: { eventId: application.eventId }, OR: [{ applicationId: application.id }, { targetPersonId: application.personId }] }, orderBy: { createdAt: "desc" }, take: 100 });
     const related = await prisma.shift.findMany({ where: { eventId: application.eventId, id: { in: swaps.flatMap((s) => [s.sourceShiftId, s.targetShiftId]) } }, select: { id: true, position: true, startsAt: true, endsAt: true } });
     return { fullName: application.person.fullName, team: application.team, badgeToken: application.badgeToken, checkedInAt: application.checkedInAt, eventName: application.event.name,
-      shifts: shifts.map(({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion }) => ({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion })), alternatives,
+      planningResponse: application.planningResponse, planningRespondedAt: application.planningRespondedAt,
+      shifts: shifts.map(({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed }) => ({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed })), alternatives,
       swaps: swaps.map((s) => ({ id: s.id, status: s.status, incoming: s.targetPersonId === application.personId, source: related.find((v) => v.id === s.sourceShiftId), target: related.find((v) => v.id === s.targetShiftId) })),
     };
   }
@@ -306,17 +307,21 @@ export class VolunteerRepository {
     });
   }
 
-  respondShift(token: string, id: string, accept: boolean, version: number) {
+  respondPlanning(token: string, accept: boolean, versions: { id: string; version: number }[]) {
     return transaction(async (tx) => {
       const app = await this.portalApplication(token, tx);
-      const shift = await tx.shift.findFirst({ where: { id, eventId: app.eventId, assigneeId: app.personId, startsAt: { gt: new Date() } } });
-      if (!shift) throw new NotFoundError("Créneau indisponible");
-      if (shift.confirmationVersion !== version) throw new ConflictError("Ce créneau a changé. Actualisez votre planning avant de répondre.");
-      if (accept) await this.checkAssignment(tx, app.eventId, shift, app.personId, [id]);
-      if (!accept) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: id }, { targetShiftId: id }] }, data: { status: "DECLINED" } });
-      await tx.shift.update({ where: { id }, data: { confirmationStatus: accept ? "ACCEPTED" : "DECLINED",
+      const shifts = await tx.shift.findMany({ where: { eventId: app.eventId, assigneeId: app.personId, startsAt: { gt: new Date() } } });
+      const submitted = new Map(versions.map((v) => [v.id, v.version]));
+      if (!shifts.length || submitted.size !== versions.length || shifts.length !== versions.length || shifts.some((s) => submitted.get(s.id) !== s.confirmationVersion)) {
+        throw new ConflictError("Le planning a changé. Actualisez puis répondez à l’ensemble de vos horaires à venir.");
+      }
+      if (accept) for (const shift of shifts) await this.checkAssignment(tx, app.eventId, shift, app.personId, [shift.id]);
+      const ids = shifts.map((s) => s.id);
+      if (!accept) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: { in: ids } }, { targetShiftId: { in: ids } }] }, data: { status: "DECLINED" } });
+      await tx.shift.updateMany({ where: { id: { in: ids } }, data: { confirmationStatus: accept ? "ACCEPTED" : "DECLINED",
         ...(!accept ? { assigneeId: null, reminderSentAt: null, confirmationVersion: { increment: 1 } } : {}),
       } });
+      await tx.volunteerApplication.update({ where: { id: app.id }, data: { planningResponse: accept ? "ACCEPTED" : "DECLINED", planningRespondedAt: new Date() } });
       return { ok: true };
     });
   }
@@ -327,6 +332,7 @@ export class VolunteerRepository {
       const source = await tx.shift.findFirst({ where: { id: sourceShiftId, eventId: application.eventId, assigneeId: application.personId, startsAt: { gt: new Date() } } });
       const target = await tx.shift.findFirst({ where: { id: targetShiftId, eventId: application.eventId, startsAt: { gt: new Date() } } });
       if (!source || !target?.assigneeId || target.assigneeId === application.personId) throw new ConflictError("Choisissez deux créneaux futurs affectés à des bénévoles différents");
+      if (!source.swapAllowed || !target.swapAllowed) throw new ConflictError("L’organisation a interdit les échanges pour l’un de ces créneaux");
       await this.checkAssignment(tx, application.eventId, target, application.personId, [source.id]);
       await this.checkAssignment(tx, application.eventId, source, target.assigneeId, [target.id]);
       if (await tx.volunteerSwap.findFirst({ where: { status: "PENDING", OR: [{ sourceShiftId: { in: [source.id, target.id] } }, { targetShiftId: { in: [source.id, target.id] } }] } })) throw new ConflictError("Une demande est déjà en attente pour l’un de ces créneaux");
@@ -343,6 +349,7 @@ export class VolunteerRepository {
         const source = await tx.shift.findFirst({ where: { id: swap.sourceShiftId, eventId: application.eventId, assigneeId: swap.application.personId, startsAt: { gt: new Date() } } });
         const target = await tx.shift.findFirst({ where: { id: swap.targetShiftId, eventId: application.eventId, assigneeId: application.personId, startsAt: { gt: new Date() } } });
         if (!source || !target) throw new ConflictError("Le planning a changé. Refusez cette demande puis créez-en une nouvelle.");
+        if (!source.swapAllowed || !target.swapAllowed) throw new ConflictError("L’organisation a interdit les échanges pour l’un de ces créneaux");
         await this.checkAssignment(tx, application.eventId, target, swap.application.personId, [source.id]);
         await this.checkAssignment(tx, application.eventId, source, application.personId, [target.id]);
         await tx.shift.update({ where: { id: source.id }, data: { assigneeId: application.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });

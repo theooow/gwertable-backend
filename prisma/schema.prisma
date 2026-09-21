@@ -912,6 +912,7 @@ model TaskAssignee {
 }
 
 model Shift {
+  swapAllowed Boolean @default(true)
   confirmationStatus String @default("PENDING")
   confirmationVersion Int @default(0)
   id         String   @id @default(cuid())
@@ -956,6 +957,8 @@ model VolunteerForm {
 }
 
 model VolunteerApplication {
+  planningResponse String?
+  planningRespondedAt DateTime?
   emails      VolunteerEmail[]
   id          String @id @default(cuid())
   eventId     String

@@ -34,6 +34,7 @@ export const reviewSchema = z.object({
   dietary: text.optional(),
 });
 export const shiftSchema = z.object({
+  swapAllowed: z.boolean().optional(),
   position: name, team: z.string().trim().max(200).default(""),
   startsAt: date, endsAt: date,
   assigneeId: z.string().min(1).nullable(), notes: text.default(""),
