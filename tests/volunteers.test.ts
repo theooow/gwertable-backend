@@ -5,7 +5,7 @@ import { json, request, seedAdminSession, seedEventContext, setupTestApp } from 
 import { prisma } from "../src/prisma.js";
 
 setupTestApp();
-const formInput = { title: "Rejoignez l’équipe", description: "Présentation", confirmationMessage: "Merci !", published: true, closesAt: null, collectPhone: true, collectDietary: true, teams: ["Bar"], questions: [{ id: "experience", label: "Expérience", type: "select", required: true, options: ["Oui", "Non"] }] };
+const formInput = { availabilityPeriods: [{ id: "night", label: "Exploitation", startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], title: "Rejoignez l’équipe", description: "Présentation", confirmationMessage: "Merci !", published: true, closesAt: null, collectPhone: true, collectDietary: true, teams: ["Bar"], questions: [{ id: "experience", label: "Expérience", type: "select", required: true, options: ["Oui", "Non"] }] };
 const submission = { fullName: "Alice publique", email: "alice@abregi.test", phone: "0611111111", preferredTeams: ["Bar"], availability: [{ startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], dietary: "Végétarien", answers: { experience: "Oui" }, consent: true, mealIds: [] };
 const review = { status: "APPROVED", team: "Bar", internalNotes: "À accueillir" };
 const shift = { position: "Bar 1", startsAt: "2026-06-01T20:00:00Z", endsAt: "2026-06-01T22:00:00Z", assigneeId: null };
@@ -20,6 +20,20 @@ async function context() {
 }
 
 describe("volunteer management", () => {
+  it("requires valid fixed periods and exposes only public workspace branding", async () => {
+    const c = await context();
+    for (const availabilityPeriods of [[], [{ ...formInput.availabilityPeriods[0], endsAt: "2026-06-01T17:00:00Z" }], [formInput.availabilityPeriods[0], formInput.availabilityPeriods[0]]]) {
+      const result = await request("PUT", `${c.base}/form`, c.authorization, { ...formInput, availabilityPeriods });
+      assert.equal(result.statusCode, 400, result.body);
+    }
+    await prisma.workspace.update({ where: { id: c.workspace.id }, data: { logoUrl: "/api/uploads/association-logos/test.png", emailPrimaryColor: "#123456" } });
+    const result = await request("GET", c.publicPath);
+    const body = json<{ availabilityPeriods: { label: string }[]; organization: { logoUrl: string; emailPrimaryColor: string } }>(result);
+    assert.equal(body.availabilityPeriods[0]?.label, "Exploitation");
+    assert.equal(body.organization.emailPrimaryColor, "#123456");
+    assert.deepEqual(Object.keys(body.organization).sort(), ["emailPrimaryColor", "logoUrl", "name"]);
+  });
+
   it("backfills existing volunteers without duplicating applications or changing assignments", async () => {
     const c = await context();
     await prisma.eventParticipant.create({ data: { eventId: c.event.id, personId: c.person.id, roles: ["ARTIST", "VOLUNTEER"], dietary: "Sans gluten" } });
@@ -125,7 +139,7 @@ describe("volunteer management", () => {
 
   it("rejects invalid answers, closed forms, unknown meals and missing consent", async () => {
     const c = await context();
-    for (const body of [{ ...submission, consent: false }, { ...submission, answers: {} }, { ...submission, preferredTeams: ["Unknown"] }, { ...submission, mealIds: ["unknown"] }, { ...submission, answers: { experience: "Other" } }, { ...submission, availability: [{ startsAt: "2026-06-02T03:00:00Z", endsAt: "2026-06-01T18:00:00Z" }] }]) {
+    for (const body of [{ ...submission, availability: [{ startsAt: "2026-06-01T19:00:00Z", endsAt: "2026-06-02T03:00:00Z" }] }, { ...submission, consent: false }, { ...submission, answers: {} }, { ...submission, preferredTeams: ["Unknown"] }, { ...submission, mealIds: ["unknown"] }, { ...submission, answers: { experience: "Other" } }, { ...submission, availability: [{ startsAt: "2026-06-02T03:00:00Z", endsAt: "2026-06-01T18:00:00Z" }] }]) {
       assert.equal((await request("POST", c.publicPath, undefined, body)).statusCode, 400);
     }
     assert.equal(await prisma.volunteerApplication.count(), 0);

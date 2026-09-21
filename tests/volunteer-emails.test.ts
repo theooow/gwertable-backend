@@ -27,7 +27,7 @@ async function approve(c: Awaited<ReturnType<typeof context>>) {
 describe("volunteer email and confirmation flow", () => {
   it("queues registration once without exposing the personal link", async () => {
     const c = await context();
-    const form = await prisma.volunteerForm.create({ data: { eventId: c.event.id, token: "f".repeat(43), published: true } });
+    const form = await prisma.volunteerForm.create({ data: { eventId: c.event.id, token: "f".repeat(43), published: true, availabilityPeriods: [{ id: "period", label: "Accueil", startsAt, endsAt }] } });
     const body = { fullName: "Nouveau bénévole", email: "new@example.test", availability, consent: true };
     for (let i = 0; i < 2; i++) {
       const response = await request("POST", `/api/public/volunteers/${form.token}`, undefined, body);

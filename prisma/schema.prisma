@@ -953,6 +953,7 @@ model VolunteerForm {
   collectDietary Boolean @default(true)
   teams       String[] @default([])
   questions   Json @default("[]")
+  availabilityPeriods Json @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

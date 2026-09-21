@@ -5,7 +5,7 @@ import type { FastifyRequest } from "fastify";
 import { prisma } from "../prisma.js";
 import { requireCan } from "../lib/permissions.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
-import { questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
+import { availabilityPeriodSchema, questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
 import { suggestVolunteerAssignments } from "../services/volunteer-planning.service.js";
 
 // Serializable transactions prevent concurrent approvals or assignments from
@@ -73,7 +73,7 @@ export class VolunteerRepository {
 
   private async openForm(token: string, db: Prisma.TransactionClient = prisma) {
     const form = await db.volunteerForm.findUnique({ where: { token }, include: {
-      event: { select: { id: true, name: true, startsAt: true, endsAt: true, workspaceId: true, status: true } },
+      event: { select: { id: true, name: true, startsAt: true, endsAt: true, workspaceId: true, status: true, workspace: { select: { name: true, logoUrl: true, emailPrimaryColor: true } } } },
     } });
     if (!form || !form.published || (form.closesAt && form.closesAt <= new Date()) || ["DONE", "ARCHIVED"].includes(form.event.status)) {
       throw new NotFoundError("Ce formulaire est fermé ou indisponible");
@@ -85,6 +85,7 @@ export class VolunteerRepository {
     const form = await this.openForm(token);
     const services = await prisma.cateringService.findMany({ where: { eventId: form.eventId }, orderBy: { startsAt: "asc" }, select: { id: true, label: true, startsAt: true } });
     return { title: form.title, description: form.description, collectPhone: form.collectPhone,
+      availabilityPeriods: form.availabilityPeriods, organization: form.event.workspace,
       collectDietary: form.collectDietary, teams: form.teams, questions: form.questions,
       closesAt: form.closesAt, event: { name: form.event.name, startsAt: form.event.startsAt, endsAt: form.event.endsAt }, services };
   }
@@ -92,6 +93,11 @@ export class VolunteerRepository {
   async submit(token: string, data: ApplicationInput) {
     return transaction(async (tx) => {
       const form = await this.openForm(token, tx);
+      const periods = availabilityPeriodSchema.array().parse(form.availabilityPeriods);
+      if (data.availability.some((v) => !periods.some((p) => p.startsAt === v.startsAt && p.endsAt === v.endsAt))) {
+        throw new ValidationError("Sélectionnez les périodes proposées par l’organisation. Actualisez le formulaire si elles ont changé.");
+      }
+      const availability = periods.filter((p) => data.availability.some((v) => v.startsAt === p.startsAt && v.endsAt === p.endsAt)).map(({ startsAt, endsAt }) => ({ startsAt, endsAt }));
       const questions = questionSchema.array().parse(form.questions);
       const answers = questions.map((q) => {
         const value = data.answers[q.id] ?? (q.type === "checkbox" ? false : "");
@@ -116,7 +122,7 @@ export class VolunteerRepository {
       const application = await tx.volunteerApplication.create({ data: {
         eventId: form.eventId, personId: person.id, email: data.email, fullName: data.fullName,
         phone: form.collectPhone ? data.phone : "", dietary: form.collectDietary ? data.dietary : "",
-        preferredTeams: [...new Set(data.preferredTeams)], availability: data.availability, answers, notes: data.notes,
+        preferredTeams: [...new Set(data.preferredTeams)], availability, answers, notes: data.notes,
         meals: { create: mealIds.map((serviceId) => ({ serviceId })) },
       } });
       await tx.volunteerEmail.create({ data: { applicationId: application.id, kind: "REGISTERED", dedupeKey: `registered:${application.id}` } });

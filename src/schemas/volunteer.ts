@@ -5,6 +5,7 @@ const name = z.string().trim().min(1).max(200);
 const date = z.iso.datetime().transform((v) => new Date(v).toISOString());
 export const intervalSchema = z.object({ startsAt: date, endsAt: date })
   .refine((v) => v.endsAt > v.startsAt, "La fin doit suivre le début");
+export const availabilityPeriodSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,60}$/), label: name, startsAt: date, endsAt: date }).refine((v) => v.endsAt > v.startsAt, "La fin doit suivre le début");
 export const questionSchema = z.object({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,60}$/), label: name,
   type: z.enum(["text", "select", "checkbox"]), required: z.boolean(),
@@ -14,8 +15,11 @@ export const volunteerFormSchema = z.object({
   title: name, description: text, confirmationMessage: name,
   published: z.boolean(), closesAt: z.iso.datetime().nullable(),
   collectPhone: z.boolean(), collectDietary: z.boolean(),
+  availabilityPeriods: z.array(availabilityPeriodSchema).max(50).default([]),
   teams: z.array(name).max(50), questions: z.array(questionSchema).max(30),
-}).refine((v) => new Set(v.questions.map((q) => q.id)).size === v.questions.length, "Identifiants de questions dupliqués");
+}).refine((v) => !v.published || v.availabilityPeriods.length > 0, "Ajoutez au moins une période avant de publier")
+.refine((v) => new Set(v.availabilityPeriods.map((p) => p.id)).size === v.availabilityPeriods.length, "Identifiants de périodes dupliqués")
+.refine((v) => new Set(v.questions.map((q) => q.id)).size === v.questions.length, "Identifiants de questions dupliqués");
 export const applicationSchema = z.object({
   fullName: name, email: z.email().max(254).transform((v) => v.toLowerCase()),
   phone: z.string().trim().max(40).default(""),
