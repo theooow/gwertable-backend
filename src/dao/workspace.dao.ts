@@ -27,6 +27,8 @@ export class WorkspaceDao extends BaseDao {
         updatedAt: true,
         shotgunOrganizerId: true,
         shotgunApiToken: true,
+        logoUrl: true,
+        emailPrimaryColor: true,
       },
     });
   }
@@ -72,6 +74,7 @@ export class WorkspaceDao extends BaseDao {
       name: string;
       shotgunOrganizerId: string | null;
       shotgunApiToken: string | undefined;
+      emailPrimaryColor?: string | null;
     },
   ) {
     return this.prisma.workspace.update({
@@ -84,6 +87,8 @@ export class WorkspaceDao extends BaseDao {
         updatedAt: true,
         shotgunOrganizerId: true,
         shotgunApiToken: true,
+        logoUrl: true,
+        emailPrimaryColor: true,
       },
     });
   }

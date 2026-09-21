@@ -18,6 +18,7 @@ export async function deliverVolunteerEmails(db: PrismaClient, logger: Pick<Fast
         await send(email, {
           kind: job.kind as "REGISTERED" | "APPROVED" | "PLANNING" | "SHIFT_UPDATE", fullName: app.person.fullName,
           eventName: app.event.name, associationName: app.event.workspace.name,
+          primaryColor: app.event.workspace.emailPrimaryColor,
           logoUrl: app.event.workspace.logoUrl ? new URL(app.event.workspace.logoUrl, env.FRONTEND_URL).href : null,
           portalUrl: app.accessToken ? new URL(`/volunteers/portal/${app.accessToken}`, env.FRONTEND_URL).href : undefined,
           confirmationMessage: app.event.volunteerForm?.confirmationMessage,

@@ -117,6 +117,7 @@ export class WorkspaceRepository {
     name: string,
     shotgunOrganizerId: string | undefined,
     shotgunApiToken: string | undefined,
+    emailPrimaryColor?: string | null,
   ) {
     const current = await this.workspaceDao.findByIdOrThrow(workspaceId);
     const resolvedToken =
@@ -126,6 +127,7 @@ export class WorkspaceRepository {
       name,
       shotgunOrganizerId: shotgunOrganizerId?.trim() || null,
       shotgunApiToken: resolvedToken,
+      emailPrimaryColor,
     });
 
     return {

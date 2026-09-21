@@ -262,6 +262,7 @@ model User {
 
 model Workspace {
   logoUrl            String?
+  emailPrimaryColor  String?
   id        String   @id @default(cuid())
   name      String
   shotgunOrganizerId String?

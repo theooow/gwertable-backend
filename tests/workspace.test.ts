@@ -6,6 +6,20 @@ import { json, request, seedAdminSession, setupTestApp } from "./helpers.js";
 setupTestApp();
 
 describe("workspace routes", () => {
+  it("persists email color, preserves omitted values, validates and restricts changes to admins", async () => {
+    const { authorization, workspace } = await seedAdminSession();
+    const save = (color?: string) => request("PUT", "/api/workspace", authorization, { name: workspace.name, ...(color !== undefined ? { emailPrimaryColor: color } : {}) });
+    assert.equal((await save("#7c3aed")).statusCode, 200);
+    assert.equal((await save()).statusCode, 200);
+    const response = await request("GET", "/api/workspace", authorization);
+    assert.equal(json<{ workspace: { emailPrimaryColor: string } }>(response).workspace.emailPrimaryColor, "#7c3aed");
+    assert.equal((await save('red;"')).statusCode, 400);
+    assert.equal((await save("")).statusCode, 200);
+    assert.equal((await prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).emailPrimaryColor, null);
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: workspace.id }, data: { role: "ORGANIZER" } });
+    assert.equal((await save("#ffffff")).statusCode, 403);
+  });
+
   it("lists members and creates pending invitations", async () => {
     const { authorization, workspace } = await seedAdminSession();
 

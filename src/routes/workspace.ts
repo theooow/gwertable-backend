@@ -63,6 +63,7 @@ const profileImageUploadSchema = z.object({
   data: z.string().min(1),
 });
 const updateWorkspaceSchema = z.object({
+  emailPrimaryColor: hexColor,
   name: z.string().trim().min(1, "Le nom de l'espace est requis").max(120),
   shotgunOrganizerId: z.string().trim().max(120).optional().or(z.literal("")),
   shotgunApiToken: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -264,6 +265,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         parsed.name,
         parsed.shotgunOrganizerId || undefined,
         parsed.shotgunApiToken || undefined,
+        nullableString(parsed.emailPrimaryColor),
       ),
     };
   });

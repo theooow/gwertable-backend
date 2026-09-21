@@ -34,6 +34,7 @@ export class WorkspaceService {
     name: string,
     shotgunOrganizerId: string | undefined,
     shotgunApiToken: string | undefined,
+    emailPrimaryColor?: string | null,
   ) {
     requireCan(role, "user.manage");
     return this.workspaceRepository.updateWorkspace(
@@ -41,6 +42,7 @@ export class WorkspaceService {
       name,
       shotgunOrganizerId,
       shotgunApiToken,
+      emailPrimaryColor,
     );
   }
 

@@ -81,7 +81,7 @@ describe("volunteer email and confirmation flow", () => {
   it("retries SMTP failures and builds branded emails using the current portal token", async () => {
     const c = await context();
     const { accessToken } = await approve(c);
-    await prisma.workspace.update({ where: { id: c.workspace.id }, data: { logoUrl: "/api/uploads/association-logos/logo.png" } });
+    await prisma.workspace.update({ where: { id: c.workspace.id }, data: { logoUrl: "/api/uploads/association-logos/logo.png", emailPrimaryColor: "#7c3aed" } });
     const warnings: unknown[] = [];
     const logger = { warn: (...args: unknown[]) => { warnings.push(args); } };
     await prisma.volunteerEmail.updateMany({ data: { availableAt: new Date(0) } });
@@ -98,6 +98,8 @@ describe("volunteer email and confirmation flow", () => {
     assert.equal(sent.length, 1);
     assert.ok(sent[0]!.portalUrl?.endsWith(accessToken));
     assert.ok(sent[0]!.logoUrl?.startsWith("http"));
+    assert.equal(sent[0]!.primaryColor, "#7c3aed");
+    assert.ok(renderVolunteerEmail(sent[0]!).subject.startsWith(`${c.workspace.name} · `));
     assert.ok((await prisma.volunteerEmail.findUniqueOrThrow({ where: { id: job.id } })).sentAt);
     let duplicates = 0;
     await deliverVolunteerEmails(prisma, logger, async () => { duplicates++; });
