@@ -5,6 +5,7 @@ import { routeDocs } from "../openapi/schemas.js";
 import { additionalDocs } from "../openapi/additional.js";
 import { inputSchema } from "../openapi/contracts.js";
 import { isPublicRoute } from "./auth.js";
+import { formsCss, formsScript } from "../openapi/forms.js";
 
 /**
  * Plugin Swagger — expose la documentation OpenAPI 3.0 sur `/docs`.
@@ -103,7 +104,15 @@ export const swaggerPlugin = fp(async (fastify) => {
 
   await fastify.register(swaggerUi, {
     routePrefix: "/docs",
+    theme: {
+      title: "Abregi — API",
+      js: [{ filename: "forms.js", content: formsScript }],
+      css: [{ filename: "forms.css", content: formsCss }],
+    },
     uiConfig: {
+      plugins: [function (system: unknown) {
+        return (globalThis as unknown as { AbregiForms: (system: unknown) => object }).AbregiForms(system);
+      }],
       docExpansion: "list",
       deepLinking: true,
       displayRequestDuration: true,
@@ -116,5 +125,7 @@ export const swaggerPlugin = fp(async (fastify) => {
       syntaxHighlight: { activate: true, theme: "monokai" },
     },
     staticCSP: true,
+    // Swagger UI itself uses inline styles for controls and expanding sections.
+    transformStaticCSP: (header) => header.replace(/style-src ([^;]+)/, "style-src $1 'unsafe-inline'"),
   });
 });

@@ -194,8 +194,15 @@ La documentation OpenAPI 3.0 est générée automatiquement et disponible à deu
 | Interface Swagger UI | `http://localhost:4000/docs` |
 | Spécification JSON | `http://localhost:4000/docs/json` |
 
-**76 endpoints** sont documentés, regroupés en 15 domaines :
-Système, Auth, Compte, Workspace, Membres, Personnes, Événements, Shotgun, Participants, Tâches, Conducteur, Budget, Courses, Matériel, Fichiers.
+Toutes les routes applicatives sont documentées (218 opérations), avec leurs paramètres, leur authentification et les schémas de saisie issus des validateurs Zod.
+
+Les corps de requête se remplissent dans des formulaires : listes de choix, nombres, dates, objets imbriqués et tableaux avec ajout/suppression de lignes. Cochez les champs facultatifs à envoyer ; les autres sont omis. Les uploads disposent d'un sélecteur de fichier qui prépare automatiquement le contenu base64 attendu par l'API.
+
+Les essais utilisent le serveur qui héberge Swagger. Connectez-vous dans la rubrique Auth pour obtenir une session navigateur, ou utilisez **Authorize** avec un token Bearer. Les opérations exécutées ont leurs effets réels (emails, factures, suppressions).
+
+Pour documenter une nouvelle route, ajoutez son titre et son domaine dans `src/openapi/schemas.ts` ou `additional.ts`, puis référencez les mêmes validateurs que son handler dans `config.documentation` (`body`, `params`, `querystring`). Ces métadonnées ne modifient pas la validation ni la sérialisation de l'API. Les tests de couverture détectent les routes ou entrées manquantes.
+
+Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/swagger.test.ts`, puis `npm run test:swagger-ui` pour les essais navigateur sans base de données ni actions métier. Définissez `CHROME_PATH` si vous souhaitez utiliser un navigateur déjà installé.
 
 ---
 
