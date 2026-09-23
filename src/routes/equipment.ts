@@ -61,37 +61,37 @@ const service = new EquipmentService(
 );
 
 export async function equipmentRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/equipment", async (request) => {
+  fastify.get("/api/equipment", { config: { documentation: {  } } }, async (request) => {
     const items = await service.list(request.workspaceId, request.userRole);
     return items.map(toEquipmentItemDTO);
   });
 
-  fastify.post("/api/equipment", async (request, reply) => {
+  fastify.post("/api/equipment", { config: { documentation: { body: equipmentItemSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = equipmentItemSchema.parse(request.body);
     const item = await service.create(request.workspaceId, request.userRole, data);
     return reply.status(201).send(toEquipmentItemDTO(item));
   });
 
-  fastify.put("/api/equipment/:id", async (request) => {
+  fastify.put("/api/equipment/:id", { config: { documentation: { params: idParamsSchema, body: equipmentItemSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = equipmentItemSchema.parse(request.body);
     const item = await service.update(id, request.workspaceId, request.userRole, data);
     return toEquipmentItemDTO(item);
   });
 
-  fastify.patch("/api/equipment/:id", async (request) => {
+  fastify.patch("/api/equipment/:id", { config: { documentation: { params: idParamsSchema, body: equipmentCellSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = equipmentCellSchema.parse(request.body);
     const item = await service.updateCells(id, request.workspaceId, request.userRole, data);
     return toEquipmentItemDTO(item);
   });
 
-  fastify.delete("/api/equipment/:id", async (request) => {
+  fastify.delete("/api/equipment/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.archive(id, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/equipment/photo", async (request, reply) => {
+  fastify.post("/api/equipment/photo", { config: { documentation: { body: photoUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = photoUploadSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");
     const ext = photoExtension(parsed.contentType);
@@ -102,7 +102,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: `/api/uploads/equipment-photos/${fileName}` });
   });
 
-  fastify.get("/api/workspaces/:workspaceId/equipment", async (request) => {
+  fastify.get("/api/workspaces/:workspaceId/equipment", { config: { documentation: { params: z.object({ workspaceId: z.string().min(1) }) } } }, async (request) => {
     const { workspaceId: sourceId } = z.object({ workspaceId: z.string().min(1) }).parse(request.params);
     const membership = await prisma.workspaceMember.findFirst({
       where: { workspaceId: sourceId, userId: request.user!.id },
@@ -115,7 +115,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
 
   // ── Equipment Groups ──────────────────────────────────────────────────────────
 
-  fastify.get("/api/equipment/groups", async (request) => {
+  fastify.get("/api/equipment/groups", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "equipment.read");
     return prisma.equipmentGroup.findMany({
       where: { workspaceId: request.workspaceId },
@@ -124,7 +124,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/api/equipment/groups", async (request, reply) => {
+  fastify.post("/api/equipment/groups", { config: { documentation: { body: groupBodySchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "equipment.write");
     const { name } = groupBodySchema.parse(request.body);
     const group = await prisma.equipmentGroup.create({
@@ -134,7 +134,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(group);
   });
 
-  fastify.put("/api/equipment/groups/:id", async (request) => {
+  fastify.put("/api/equipment/groups/:id", { config: { documentation: { params: idParamsSchema, body: groupBodySchema } } }, async (request) => {
     requireCan(request.userRole, "equipment.write");
     const { id } = idParamsSchema.parse(request.params);
     const { name } = groupBodySchema.parse(request.body);
@@ -143,14 +143,14 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return prisma.equipmentGroup.update({ where: { id }, data: { name }, select: groupSelect });
   });
 
-  fastify.delete("/api/equipment/groups/:id", async (request) => {
+  fastify.delete("/api/equipment/groups/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     requireCan(request.userRole, "equipment.write");
     const { id } = idParamsSchema.parse(request.params);
     await prisma.equipmentGroup.deleteMany({ where: { id, workspaceId: request.workspaceId } });
     return { ok: true };
   });
 
-  fastify.post("/api/equipment/groups/:id/items", async (request, reply) => {
+  fastify.post("/api/equipment/groups/:id/items", { config: { documentation: { params: idParamsSchema, body: groupItemBodySchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "equipment.write");
     const { id: groupId } = idParamsSchema.parse(request.params);
     const { itemId, quantity } = groupItemBodySchema.parse(request.body);
@@ -165,7 +165,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(updated);
   });
 
-  fastify.patch("/api/equipment/groups/:id/items/:itemId", async (request) => {
+  fastify.patch("/api/equipment/groups/:id/items/:itemId", { config: { documentation: { params: groupItemParamsSchema, body: z.object({ quantity: z.number().int().min(1) }) } } }, async (request) => {
     requireCan(request.userRole, "equipment.write");
     const { id: groupId, itemId } = groupItemParamsSchema.parse(request.params);
     const { quantity } = z.object({ quantity: z.number().int().min(1) }).parse(request.body);
@@ -176,7 +176,7 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     return prisma.equipmentGroup.findUniqueOrThrow({ where: { id: groupId }, select: groupSelect });
   });
 
-  fastify.delete("/api/equipment/groups/:id/items/:itemId", async (request) => {
+  fastify.delete("/api/equipment/groups/:id/items/:itemId", { config: { documentation: { params: groupItemParamsSchema } } }, async (request) => {
     requireCan(request.userRole, "equipment.write");
     const { id: groupId, itemId } = groupItemParamsSchema.parse(request.params);
     await prisma.equipmentGroupItem.deleteMany({
@@ -187,7 +187,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
 
   // ── Workspace import ──────────────────────────────────────────────────────────
 
-  fastify.post("/api/equipment/import", async (request, reply) => {
+  fastify.post("/api/equipment/import", { config: { documentation: { body: z.object({
+      sourceWorkspaceId: z.string().min(1),
+      itemIds: z.array(z.string().min(1)).min(1).max(200),
+    }), statusCodes: [201] } } }, async (request, reply) => {
     const { sourceWorkspaceId, itemIds } = z.object({
       sourceWorkspaceId: z.string().min(1),
       itemIds: z.array(z.string().min(1)).min(1).max(200),

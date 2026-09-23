@@ -8,7 +8,7 @@ const shotgunEventsQuerySchema = z.object({
 });
 
 export async function shotgunRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/shotgun/events", async (request) => {
+  fastify.get("/api/shotgun/events", { config: { documentation: { querystring: shotgunEventsQuerySchema } } }, async (request) => {
     requireCan(request.userRole, "event.read");
     const query = shotgunEventsQuerySchema.parse(request.query);
     const config = await getShotgunWorkspaceConfig(request.workspaceId);

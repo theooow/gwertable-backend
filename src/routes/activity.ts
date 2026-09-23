@@ -10,17 +10,17 @@ const querySchema = z.object({ eventId: z.string().min(1).optional() });
 const service = new ActivityService(new ActivityRepository(prisma));
 
 export async function activityRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/activity", async (request) => {
+  fastify.get("/api/activity", { config: { documentation: { querystring: querySchema } } }, async (request) => {
     const { eventId } = querySchema.parse(request.query);
     return service.list(request.workspaceId, request.user!.id, request.userRole, eventId);
   });
 
-  fastify.put("/api/activity/preferences", async (request) => {
+  fastify.put("/api/activity/preferences", { config: { documentation: { body: activityPreferencesSchema } } }, async (request) => {
     const data = activityPreferencesSchema.parse(request.body);
     return service.updatePreferences(request.workspaceId, request.user!.id, request.userRole, data);
   });
 
-  fastify.post("/api/activity/mark-read", async (request) => {
+  fastify.post("/api/activity/mark-read", { config: { documentation: {  } } }, async (request) => {
     return service.markAllRead(request.workspaceId, request.user!.id, request.userRole);
   });
 }

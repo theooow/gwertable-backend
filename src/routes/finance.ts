@@ -23,9 +23,9 @@ async function ensureEvent(eventId: string | undefined, workspaceId: string) {
 }
 
 export async function financeRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/finance/invoices/:id", async (request) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); return invoice; });
-  fastify.get("/api/finance/invoices/:id/pdf", async (request, reply) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }); const pdf = await renderInvoicePdf(invoice, invoiceIssuer(invoice.issuerSnapshot, legal)); return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename=${invoice.number ?? "facture"}.pdf`).send(pdf); });
-  fastify.get("/api/finance/overview", async (request) => {
+  fastify.get("/api/finance/invoices/:id", { config: { documentation: { params: idSchema } } }, async (request) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); return invoice; });
+  fastify.get("/api/finance/invoices/:id/pdf", { config: { documentation: { params: idSchema } } }, async (request, reply) => { requireCan(request.userRole, "finance.read"); const { id } = idSchema.parse(request.params); const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { lines: { orderBy: { position: "asc" } } } }); if (!invoice) throw new NotFoundError("Facture introuvable"); const legal = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }); const pdf = await renderInvoicePdf(invoice, invoiceIssuer(invoice.issuerSnapshot, legal)); return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename=${invoice.number ?? "facture"}.pdf`).send(pdf); });
+  fastify.get("/api/finance/overview", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "finance.read");
     const [invoices, claims] = await Promise.all([
       prisma.invoice.findMany({ where: { workspaceId: request.workspaceId }, include: { event: { select: { id: true, name: true } }, lines: true }, orderBy: { updatedAt: "desc" } }),
@@ -34,16 +34,16 @@ export async function financeRoutes(fastify: FastifyInstance) {
     return { invoices, claims };
   });
 
-  fastify.get("/api/finance/events", async (request) => {
+  fastify.get("/api/finance/events", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "expenseClaim.create");
     return prisma.event.findMany({ where: { workspaceId: request.workspaceId, status: { not: "ARCHIVED" } }, select: { id: true, name: true, startsAt: true }, orderBy: { startsAt: "desc" } });
   });
-  fastify.get("/api/finance/analytics", async (request) => { requireCan(request.userRole, "expenseClaim.create"); const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: request.workspaceId }, select: { expenseClaimAnalytics: true } }); return workspace.expenseClaimAnalytics; });
-  fastify.put("/api/finance/analytics", async (request) => { requireCan(request.userRole, "finance.write"); const values = z.object({ values: z.array(z.string().trim().min(1).max(50)).min(1).max(50) }).parse(request.body).values; return prisma.workspace.update({ where: { id: request.workspaceId }, data: { expenseClaimAnalytics: [...new Set(values)] }, select: { expenseClaimAnalytics: true } }); });
+  fastify.get("/api/finance/analytics", { config: { documentation: {  } } }, async (request) => { requireCan(request.userRole, "expenseClaim.create"); const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: request.workspaceId }, select: { expenseClaimAnalytics: true } }); return workspace.expenseClaimAnalytics; });
+  fastify.put("/api/finance/analytics", { config: { documentation: { body: z.object({ values: z.array(z.string().trim().min(1).max(50)).min(1).max(50) }) } } }, async (request) => { requireCan(request.userRole, "finance.write"); const values = z.object({ values: z.array(z.string().trim().min(1).max(50)).min(1).max(50) }).parse(request.body).values; return prisma.workspace.update({ where: { id: request.workspaceId }, data: { expenseClaimAnalytics: [...new Set(values)] }, select: { expenseClaimAnalytics: true } }); });
 
-  fastify.get("/api/expense-claims/mine", async (request) => prisma.expenseClaim.findMany({ where: { workspaceId: request.workspaceId, submitterId: request.user!.id }, include: { event: { select: { id: true, name: true } }, expense: { select: { id: true, reimbursement: true } } }, orderBy: { createdAt: "desc" } }));
+  fastify.get("/api/expense-claims/mine", { config: { documentation: {  } } }, async (request) => prisma.expenseClaim.findMany({ where: { workspaceId: request.workspaceId, submitterId: request.user!.id }, include: { event: { select: { id: true, name: true } }, expense: { select: { id: true, reimbursement: true } } }, orderBy: { createdAt: "desc" } }));
 
-  fastify.post("/api/expense-claims", async (request, reply) => {
+  fastify.post("/api/expense-claims", { config: { documentation: { body: claimSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "expenseClaim.create");
     const data = claimSchema.parse(request.body); const eventId = await ensureEvent(data.eventId || undefined, request.workspaceId); const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: request.workspaceId }, select: { expenseClaimAnalytics: true } }); if (!workspace.expenseClaimAnalytics.includes(data.analyticCode)) throw new ValidationError("Axe analytique invalide");
     const vat = Math.round(data.amountHt * data.vatRateBasisPoints / 10000);
@@ -51,7 +51,7 @@ export async function financeRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(claim);
   });
 
-  fastify.post("/api/expense-claims/:id/approve", async (request) => {
+  fastify.post("/api/expense-claims/:id/approve", { config: { documentation: { params: idSchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write"); const { id } = idSchema.parse(request.params);
     const claim = await prisma.expenseClaim.findFirst({ where: { id, workspaceId: request.workspaceId }, include: { submitter: true } });
     if (!claim) throw new NotFoundError("Note de frais introuvable"); if (claim.status !== "SUBMITTED") throw new ValidationError("Cette note de frais a déjà été traitée");
@@ -65,14 +65,14 @@ export async function financeRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/api/finance/invoices", async (request, reply) => {
+  fastify.post("/api/finance/invoices", { config: { documentation: { body: invoiceSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "finance.write"); const data = invoiceSchema.parse(request.body); const eventId = await ensureEvent(data.eventId || undefined, request.workspaceId);
     if (data.direction === "OUTGOING" && (data.status !== "DRAFT" || data.number)) throw new ValidationError("Créez un brouillon : le numéro sera attribué à l'émission");
     const invoice = await prisma.invoice.create({ data: { ...invoiceData(data), workspaceId: request.workspaceId, eventId, direction: data.direction, status: data.status, number: data.number || null, issuedAt: data.direction === "INCOMING" && data.issuedAt ? new Date(data.issuedAt) : null }, include: { lines: true } });
     return reply.status(201).send(invoice);
   });
 
-  fastify.put("/api/finance/invoices/:id", async (request) => {
+  fastify.put("/api/finance/invoices/:id", { config: { documentation: { params: idSchema, body: invoiceSchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     const { id } = idSchema.parse(request.params);
     const data = invoiceSchema.parse(request.body);
@@ -88,12 +88,12 @@ export async function financeRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/api/finance/invoices/:id/issue", async (request) => {
+  fastify.post("/api/finance/invoices/:id/issue", { config: { documentation: { params: idSchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     return issueInvoice(idSchema.parse(request.params).id, request.workspaceId);
   });
 
-  fastify.post("/api/finance/invoices/:id/send", async (request) => {
+  fastify.post("/api/finance/invoices/:id/send", { config: { documentation: { params: idSchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     const { id } = idSchema.parse(request.params);
     const current = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId, direction: "OUTGOING" } });
@@ -107,7 +107,7 @@ export async function financeRoutes(fastify: FastifyInstance) {
     return invoice;
   });
 
-  fastify.post("/api/finance/invoices/:id/transmit-super-pdp", async (request) => {
+  fastify.post("/api/finance/invoices/:id/transmit-super-pdp", { config: { documentation: { params: idSchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write"); const { id } = idSchema.parse(request.params);
     const invoice = await prisma.invoice.findFirst({ where: { id, workspaceId: request.workspaceId, direction: "OUTGOING" }, include: { lines: { orderBy: { position: "asc" } } } });
     if (!invoice) throw new NotFoundError("Facture introuvable"); if (!invoice.number) throw new ValidationError("Envoyez d'abord la facture pour lui attribuer un numéro"); if (!invoice.counterpartSiren) throw new ValidationError("Le SIREN du client est requis pour transmettre une facture B2B à Super PDP");

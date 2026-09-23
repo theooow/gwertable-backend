@@ -21,106 +21,106 @@ const service = new BudgetService(
 export async function budgetRoutes(fastify: FastifyInstance) {
   // ── Expenses ─────────────────────────────────────────────────────────────────
 
-  fastify.get("/api/events/:eventId/expenses", async (request) => {
+  fastify.get("/api/events/:eventId/expenses", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listExpenses(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/expenses", async (request, reply) => {
+  fastify.post("/api/events/:eventId/expenses", { config: { documentation: { params: eventParamsSchema, body: expenseSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
     const expense = await service.createExpense(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(expense);
   });
 
-  fastify.put("/api/events/:eventId/expenses/:id", async (request) => {
+  fastify.put("/api/events/:eventId/expenses/:id", { config: { documentation: { params: eventItemParamsSchema, body: expenseSchema } } }, async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
     return service.updateExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.patch("/api/expenses/:id", async (request) => {
+  fastify.patch("/api/expenses/:id", { config: { documentation: { params: idParamsSchema, body: expenseCellSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.updateExpenseCell(id, request.workspaceId, request.userRole, request.user!.id, expenseCellSchema.parse(request.body));
   });
 
-  fastify.put("/api/expenses/:id", async (request) => {
+  fastify.put("/api/expenses/:id", { config: { documentation: { params: idParamsSchema, body: expenseSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = expenseSchema.parse(request.body);
     return service.updateExpense(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/events/:eventId/expenses/:id", async (request) => {
+  fastify.delete("/api/events/:eventId/expenses/:id", { config: { documentation: { params: eventItemParamsSchema } } }, async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     return service.deleteExpense(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.delete("/api/expenses/:id", async (request) => {
+  fastify.delete("/api/expenses/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteExpense(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.get("/api/events/:eventId/expenses/persons", async (request) => {
+  fastify.get("/api/events/:eventId/expenses/persons", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listExpensePersons(eventId, request.workspaceId, request.userRole);
   });
 
   // ── Incomes ──────────────────────────────────────────────────────────────────
 
-  fastify.get("/api/events/:eventId/incomes", async (request) => {
+  fastify.get("/api/events/:eventId/incomes", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listIncomes(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/incomes", async (request, reply) => {
+  fastify.post("/api/events/:eventId/incomes", { config: { documentation: { params: eventParamsSchema, body: incomeSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = incomeSchema.parse(request.body);
     const income = await service.createIncome(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(income);
   });
 
-  fastify.patch("/api/incomes/:id", async (request) => {
+  fastify.patch("/api/incomes/:id", { config: { documentation: { params: idParamsSchema, body: incomeCellSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.updateIncomeCell(id, request.workspaceId, request.userRole, request.user!.id, incomeCellSchema.parse(request.body));
   });
 
-  fastify.put("/api/incomes/:id", async (request) => {
+  fastify.put("/api/incomes/:id", { config: { documentation: { params: idParamsSchema, body: incomeSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = incomeSchema.parse(request.body);
     return service.updateIncome(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/incomes/:id", async (request) => {
+  fastify.delete("/api/incomes/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteIncome(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
   // ── Ticket Tiers ─────────────────────────────────────────────────────────────
 
-  fastify.get("/api/events/:eventId/ticket-tiers", async (request) => {
+  fastify.get("/api/events/:eventId/ticket-tiers", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listTicketTiers(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/ticket-tiers", async (request, reply) => {
+  fastify.post("/api/events/:eventId/ticket-tiers", { config: { documentation: { params: eventParamsSchema, body: ticketTierSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = ticketTierSchema.parse(request.body);
     const tier = await service.createTicketTier(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(tier);
   });
 
-  fastify.put("/api/ticket-tiers/:id", async (request) => {
+  fastify.put("/api/ticket-tiers/:id", { config: { documentation: { params: idParamsSchema, body: ticketTierSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = ticketTierSchema.parse(request.body);
     return service.updateTicketTier(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/ticket-tiers/:id", async (request) => {
+  fastify.delete("/api/ticket-tiers/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteTicketTier(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.post("/api/events/:eventId/shotgun/sync", async (request) => {
+  fastify.post("/api/events/:eventId/shotgun/sync", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     await service.syncShotgunTiers(eventId, request.workspaceId, request.userRole);
     return { ok: true };
@@ -128,25 +128,25 @@ export async function budgetRoutes(fastify: FastifyInstance) {
 
   // ── Consumables ───────────────────────────────────────────────────────────────
 
-  fastify.get("/api/events/:eventId/consumables", async (request) => {
+  fastify.get("/api/events/:eventId/consumables", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listConsumables(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/consumables", async (request, reply) => {
+  fastify.post("/api/events/:eventId/consumables", { config: { documentation: { params: eventParamsSchema, body: consumableSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = consumableSchema.parse(request.body);
     const item = await service.createConsumable(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(item);
   });
 
-  fastify.put("/api/consumables/:id", async (request) => {
+  fastify.put("/api/consumables/:id", { config: { documentation: { params: idParamsSchema, body: consumableSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = consumableSchema.parse(request.body);
     return service.updateConsumable(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/consumables/:id", async (request) => {
+  fastify.delete("/api/consumables/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteConsumable(id, request.workspaceId, request.userRole, request.user!.id);
   });

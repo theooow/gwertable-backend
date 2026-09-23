@@ -15,82 +15,82 @@ const service = new RunOfShowService(
 );
 
 export async function runOfShowRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/events/:eventId/run-of-show", async (request) => {
+  fastify.get("/api/events/:eventId/run-of-show", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.list(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.get("/api/events/:eventId/run-of-show/tracks", async (request) => {
+  fastify.get("/api/events/:eventId/run-of-show/tracks", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listTracks(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/run-of-show/tracks", async (request, reply) => {
+  fastify.post("/api/events/:eventId/run-of-show/tracks", { config: { documentation: { params: eventParamsSchema, body: runOfShowTrackSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = runOfShowTrackSchema.parse(request.body);
     const track = await service.createTrack(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(track);
   });
 
-  fastify.put("/api/run-of-show/tracks/:id", async (request) => {
+  fastify.put("/api/run-of-show/tracks/:id", { config: { documentation: { params: idParamsSchema, body: runOfShowTrackSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = runOfShowTrackSchema.parse(request.body);
     return service.updateTrack(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/run-of-show/tracks/:id", async (request) => {
+  fastify.delete("/api/run-of-show/tracks/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteTrack(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.get("/api/events/:eventId/run-of-show/sections", async (request) => {
+  fastify.get("/api/events/:eventId/run-of-show/sections", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listSections(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/run-of-show/sections", async (request, reply) => {
+  fastify.post("/api/events/:eventId/run-of-show/sections", { config: { documentation: { params: eventParamsSchema, body: runOfShowSectionSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = runOfShowSectionSchema.parse(request.body);
     const section = await service.createSection(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(section);
   });
 
-  fastify.put("/api/run-of-show/sections/:id", async (request) => {
+  fastify.put("/api/run-of-show/sections/:id", { config: { documentation: { params: idParamsSchema, body: runOfShowSectionSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = runOfShowSectionSchema.parse(request.body);
     return service.updateSection(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/run-of-show/sections/:id", async (request) => {
+  fastify.delete("/api/run-of-show/sections/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteSection(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.post("/api/events/:eventId/run-of-show", async (request, reply) => {
+  fastify.post("/api/events/:eventId/run-of-show", { config: { documentation: { params: eventParamsSchema, body: runOfShowSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = runOfShowSchema.parse(request.body);
     const item = await service.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(item);
   });
 
-  fastify.put("/api/events/:eventId/run-of-show/:id", async (request) => {
+  fastify.put("/api/events/:eventId/run-of-show/:id", { config: { documentation: { params: eventItemParamsSchema, body: runOfShowSchema } } }, async (request) => {
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     const data = runOfShowSchema.parse(request.body);
     return service.update(id, request.workspaceId, request.userRole, request.user!.id, data, eventId);
   });
 
-  fastify.put("/api/run-of-show/:id", async (request) => {
+  fastify.put("/api/run-of-show/:id", { config: { documentation: { params: idParamsSchema, body: runOfShowSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = runOfShowSchema.parse(request.body);
     return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/events/:eventId/run-of-show/:id", async (request) => {
+  fastify.delete("/api/events/:eventId/run-of-show/:id", { config: { documentation: { params: eventItemParamsSchema } } }, async (request) => {
     const { eventId, id } = eventItemParamsSchema.parse(request.params);
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id, eventId);
   });
 
-  fastify.delete("/api/run-of-show/:id", async (request) => {
+  fastify.delete("/api/run-of-show/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });

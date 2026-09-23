@@ -89,12 +89,12 @@ const service = new AuthService(
 );
 
 export async function authRoutes(fastify: FastifyInstance) {
-  fastify.post("/api/auth/login-options", async (request) => {
+  fastify.post("/api/auth/login-options", { config: { documentation: { body: loginOptionsSchema } } }, async (request) => {
     const { email, inviteToken } = loginOptionsSchema.parse(request.body);
     return service.getLoginOptions(email, inviteToken, env.FRONTEND_URL);
   });
 
-  fastify.post("/api/auth/register", async (request, reply) => {
+  fastify.post("/api/auth/register", { config: { documentation: { body: registerSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = registerSchema.parse(request.body);
     const session = await service.register(
       {
@@ -128,42 +128,42 @@ export async function authRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(session);
   });
 
-  fastify.post("/api/auth/login-link", async (request) => {
+  fastify.post("/api/auth/login-link", { config: { documentation: { body: loginLinkSchema } } }, async (request) => {
     const { email, inviteToken } = loginLinkSchema.parse(request.body);
     const result = await service.requestLoginLink(email, inviteToken, env.FRONTEND_URL);
     fastify.log.info({ email }, "Magic login link sent");
     return result;
   });
 
-  fastify.post("/api/auth/verify", async (_request, reply) => {
+  fastify.post("/api/auth/verify", { config: { documentation: { body: verifySchema } } }, async (_request, reply) => {
     const { email, token, inviteToken } = verifySchema.parse(_request.body);
     const session = await service.verify(email, token, inviteToken);
     return reply.send(session);
   });
 
-  fastify.post("/api/auth/verify-code", async (_request, reply) => {
+  fastify.post("/api/auth/verify-code", { config: { documentation: { body: verifyCodeSchema } } }, async (_request, reply) => {
     const { email, code, inviteToken } = verifyCodeSchema.parse(_request.body);
     const session = await service.verifyCode(email, code, inviteToken);
     return reply.send(session);
   });
 
-  fastify.post("/api/auth/password/login", async (_request, reply) => {
+  fastify.post("/api/auth/password/login", { config: { documentation: { body: passwordLoginSchema } } }, async (_request, reply) => {
     const { email, password, inviteToken } = passwordLoginSchema.parse(_request.body);
     const session = await service.loginWithPassword(email, password, inviteToken);
     return reply.send(session);
   });
 
-  fastify.post("/api/auth/password/setup", async (_request, reply) => {
+  fastify.post("/api/auth/password/setup", { config: { documentation: { body: setupPasswordSchema } } }, async (_request, reply) => {
     const { email, token, password } = setupPasswordSchema.parse(_request.body);
     const session = await service.setupPassword(email, token, password);
     return reply.send(session);
   });
 
-  fastify.get("/api/auth/me", async (request) => ({
+  fastify.get("/api/auth/me", { config: { documentation: {  } } }, async (request) => ({
     user: request.user,
   }));
 
-  fastify.post("/api/auth/logout", async (request) => {
+  fastify.post("/api/auth/logout", { config: { documentation: {  } } }, async (request) => {
     const authorization = Array.isArray(request.headers.authorization)
       ? request.headers.authorization[0]
       : request.headers.authorization;

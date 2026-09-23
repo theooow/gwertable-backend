@@ -105,7 +105,7 @@ const service = new WorkspaceService(
 );
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
-  fastify.get("/uploads/profile-images/:fileName", async (request, reply) => {
+  fastify.get("/uploads/profile-images/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) throw new NotFoundError("Image de profil introuvable");
 
@@ -123,7 +123,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     return reply.type(contentType).send(data);
   });
 
-  fastify.post("/api/uploads/profile-images", async (request, reply) => {
+  fastify.post("/api/uploads/profile-images", { config: { documentation: { body: profileImageUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = profileImageUploadSchema.parse(request.body);
     if (!allowedProfileImageTypes.has(parsed.contentType)) {
       throw new ValidationError("Format d'image de profil non supporte");
@@ -147,9 +147,9 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.get("/api/account", async (request) => ({ user: request.user }));
+  fastify.get("/api/account", { config: { documentation: {  } } }, async (request) => ({ user: request.user }));
 
-  fastify.put("/api/account", async (request) => {
+  fastify.put("/api/account", { config: { documentation: { body: updateAccountSchema } } }, async (request) => {
     const parsed = updateAccountSchema.parse(request.body);
     const user = await service.updateAccount(request.user!.id, {
       name: nullableString(parsed.name),
@@ -192,7 +192,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.delete("/api/account", async (request) => {
+  fastify.delete("/api/account", { config: { documentation: { body: deleteConfirmationSchema } } }, async (request) => {
     const parsed = deleteConfirmationSchema.parse(request.body);
     await service.deleteAccount(
       request.user!.id,
@@ -204,11 +204,11 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     return { ok: true };
   });
 
-  fastify.get("/api/workspace", async (request) => ({
+  fastify.get("/api/workspace", { config: { documentation: {  } } }, async (request) => ({
     workspace: await service.getWorkspace(request.workspaceId),
   }));
 
-  fastify.get("/api/workspaces", async (request) => ({
+  fastify.get("/api/workspaces", { config: { documentation: {  } } }, async (request) => ({
     workspaces: await service.listWorkspaces(
       request.user!.id,
       request.user!.email,
@@ -216,7 +216,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     ),
   }));
 
-  fastify.get("/api/workspace/invited-events", async (request) => ({
+  fastify.get("/api/workspace/invited-events", { config: { documentation: {  } } }, async (request) => ({
     events: await service.listInvitedEvents(
       request.userRole,
       request.user!.id,
@@ -224,7 +224,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     ),
   }));
 
-  fastify.post("/api/workspace/contacts/transfer", async (request) => {
+  fastify.post("/api/workspace/contacts/transfer", { config: { documentation: { body: contactTransferSchema } } }, async (request) => {
     const parsed = contactTransferSchema.parse(request.body);
     const stats = await service.transferContacts(
       parsed.sourceWorkspaceId,
@@ -237,13 +237,13 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     return { ok: true, ...stats };
   });
 
-  fastify.post("/api/workspaces", async (request, reply) => {
+  fastify.post("/api/workspaces", { config: { documentation: { body: updateWorkspaceSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = updateWorkspaceSchema.parse(request.body);
     const workspace = await service.createWorkspace(request.user!.id, parsed.name);
     return reply.status(201).send({ workspace });
   });
 
-  fastify.put("/api/account/workspace", async (request) => {
+  fastify.put("/api/account/workspace", { config: { documentation: { body: switchWorkspaceSchema } } }, async (request) => {
     const { workspaceId } = switchWorkspaceSchema.parse(request.body);
     const { user, membership } = await service.switchWorkspace(request.user!.id, workspaceId);
     return {
@@ -256,7 +256,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.put("/api/workspace", async (request) => {
+  fastify.put("/api/workspace", { config: { documentation: { body: updateWorkspaceSchema } } }, async (request) => {
     const parsed = updateWorkspaceSchema.parse(request.body);
     return {
       workspace: await service.updateWorkspace(
@@ -270,7 +270,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.delete("/api/workspace", async (request) => {
+  fastify.delete("/api/workspace", { config: { documentation: { body: deleteConfirmationSchema } } }, async (request) => {
     const parsed = deleteConfirmationSchema.parse(request.body);
     return service.deleteWorkspace(
       request.workspaceId,
@@ -280,7 +280,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     );
   });
 
-  fastify.get("/api/workspace/members", async (request) => {
+  fastify.get("/api/workspace/members", { config: { documentation: {  } } }, async (request) => {
     const { members, invitations } = await service.getMembers(
       request.workspaceId,
       request.userRole,
@@ -303,19 +303,19 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.put("/api/workspace/members/:memberId", async (request) => {
+  fastify.put("/api/workspace/members/:memberId", { config: { documentation: { params: workspaceMemberParamsSchema, body: updateWorkspaceMemberSchema } } }, async (request) => {
     const { memberId } = workspaceMemberParamsSchema.parse(request.params);
     const { role: newRole } = updateWorkspaceMemberSchema.parse(request.body);
     return service.updateMemberRole(memberId, request.workspaceId, request.userRole, newRole);
   });
 
-  fastify.delete("/api/workspace/members/:memberId", async (request) => {
+  fastify.delete("/api/workspace/members/:memberId", { config: { documentation: { params: workspaceMemberParamsSchema } } }, async (request) => {
     const { memberId } = workspaceMemberParamsSchema.parse(request.params);
     await service.removeMember(memberId, request.workspaceId, request.userRole, request.user!.id);
     return { ok: true };
   });
 
-  fastify.post("/api/workspace/invitations", async (request, reply) => {
+  fastify.post("/api/workspace/invitations", { config: { documentation: { body: inviteSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = inviteSchema.parse(request.body);
     const invitation = await service.createInvitation(
       request.workspaceId,
@@ -336,7 +336,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/api/workspace/invitations/accept", async (request) => {
+  fastify.post("/api/workspace/invitations/accept", { config: { documentation: { body: acceptInvitationSchema } } }, async (request) => {
     const { inviteToken } = acceptInvitationSchema.parse(request.body);
     return service.acceptInvitation(inviteToken, request.user!.id, request.user!.email);
   });

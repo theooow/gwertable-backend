@@ -33,7 +33,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     reply.header("Cache-Control", "no-store");
   });
 
-  fastify.get("/api/admin/logs", async (request) => {
+  fastify.get("/api/admin/logs", { config: { documentation: { querystring: logFilters } } }, async (request) => {
     const filters = logFilters.parse(request.query);
     const where = {
       createdAt: { gte: filters.from ? new Date(filters.from) : new Date(Date.now() - 30 * 86400000), ...(filters.to ? { lte: new Date(filters.to) } : {}) },
@@ -53,14 +53,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
     return { logs, nextCursor: hasMore ? logs.at(-1)?.id : null, retentionDays: 30 };
   });
 
-  fastify.get("/api/admin/logs/:id", async (request) => {
+  fastify.get("/api/admin/logs/:id", { config: { documentation: { params: z.object({ id: z.string().max(100) }) } } }, async (request) => {
     const { id } = z.object({ id: z.string().max(100) }).parse(request.params);
     const log = await prisma.apiLog.findUnique({ where: { id } });
     if (!log) throw new NotFoundError("Log introuvable");
     return log;
   });
 
-  fastify.get("/api/admin/overview", async () => {
+  fastify.get("/api/admin/overview", { config: { documentation: {  } } }, async () => {
     const since = new Date(Date.now() - 86400000);
     const where = { createdAt: { gte: since }, NOT: { route: { startsWith: "/api/admin" } } };
     const [totalUsers, totalWorkspaces, totalEvents, activeSessions, requests, errors, serverErrors, latency, slowRequests, users] = await Promise.all([
@@ -79,7 +79,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       requests, errors, serverErrors, averageDurationMs: Math.round(latency._avg.durationMs ?? 0), slowRequests }, users };
   });
 
-  fastify.patch("/api/admin/users/:userId/plan", async (request) => {
+  fastify.patch("/api/admin/users/:userId/plan", { config: { documentation: { params: userParamsSchema, body: updatePlanSchema } } }, async (request) => {
     assertAdmin(request);
     const { userId } = userParamsSchema.parse(request.params);
     const { usagePlan } = updatePlanSchema.parse(request.body);

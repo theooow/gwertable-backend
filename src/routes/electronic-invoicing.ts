@@ -54,7 +54,7 @@ function connectionView(connection: {
 }
 
 export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/workspace/electronic-invoicing", async (request) => {
+  fastify.get("/api/workspace/electronic-invoicing", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     const [legalEntity, connection] = await Promise.all([
       prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } }),
@@ -75,7 +75,7 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
     return { legalEntity, superPdp: view, connectionAvailable: Boolean(env.SUPER_PDP_CLIENT_ID && env.SUPER_PDP_CLIENT_SECRET && env.PDP_CREDENTIAL_ENCRYPTION_KEY) };
   });
 
-  fastify.put("/api/workspace/electronic-invoicing/legal-entity", async (request) => {
+  fastify.put("/api/workspace/electronic-invoicing/legal-entity", { config: { documentation: { body: legalEntitySchema } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     const data = legalEntitySchema.parse(request.body);
     if (data.siret && data.siren && !data.siret.startsWith(data.siren)) throw new ValidationError("Le SIRET doit commencer par le SIREN de votre entreprise");
@@ -104,7 +104,7 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.post("/api/workspace/electronic-invoicing/super-pdp/connect", async (request) => {
+  fastify.post("/api/workspace/electronic-invoicing/super-pdp/connect", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     requireSuperPdpOAuthConfig();
     const legalEntity = await prisma.legalEntity.findUnique({ where: { workspaceId: request.workspaceId } });
@@ -129,7 +129,7 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
     return { authorizationUrl: url.toString() };
   });
 
-  fastify.delete("/api/workspace/electronic-invoicing/super-pdp", async (request) => {
+  fastify.delete("/api/workspace/electronic-invoicing/super-pdp", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "finance.write");
     await prisma.$transaction([
       prisma.electronicInvoicingConnection.deleteMany({ where: { workspaceId: request.workspaceId, provider: "SUPER_PDP" } }),
@@ -139,7 +139,7 @@ export async function electronicInvoicingRoutes(fastify: FastifyInstance) {
   });
 
   // This endpoint is only called server-to-server by the public Next.js callback.
-  fastify.post("/api/workspace/electronic-invoicing/super-pdp/callback", async (request) => {
+  fastify.post("/api/workspace/electronic-invoicing/super-pdp/callback", { config: { documentation: { body: callbackSchema } } }, async (request) => {
     const { code, state } = callbackSchema.parse(request.body);
     const oauthState = await prisma.electronicInvoicingOAuthState.findUnique({ where: { state } });
     if (!oauthState || oauthState.provider !== "SUPER_PDP" || oauthState.consumedAt || oauthState.expiresAt <= new Date()) {

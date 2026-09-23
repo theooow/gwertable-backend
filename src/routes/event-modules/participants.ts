@@ -30,14 +30,14 @@ const service = new EventParticipantService(
 const activityRepository = new ActivityRepository(prisma);
 
 export async function participantRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/events/:eventId/participants", async (request) => {
+  fastify.get("/api/events/:eventId/participants", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const participants = await service.list(eventId, request.workspaceId, request.userRole);
     const canSee = service.canSeeSensitive(request.userRole);
     return participants.map((p) => toParticipantDTO(p, canSee));
   });
 
-  fastify.post("/api/events/:eventId/participants", async (request, reply) => {
+  fastify.post("/api/events/:eventId/participants", { config: { documentation: { params: eventParamsSchema, body: participantSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
     const participant = await service.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
@@ -45,7 +45,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(toParticipantDTO(participant, canSee));
   });
 
-  fastify.put("/api/events/:eventId/participants/:id", async (request) => {
+  fastify.put("/api/events/:eventId/participants/:id", { config: { documentation: { params: eventItemParamsSchema, body: participantSchema } } }, async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
     const participant = await service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
@@ -53,7 +53,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
     return toParticipantDTO(participant, canSee);
   });
 
-  fastify.put("/api/participants/:id", async (request) => {
+  fastify.put("/api/participants/:id", { config: { documentation: { params: idParamsSchema, body: participantSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = participantSchema.parse(request.body);
     const participant = await service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
@@ -61,22 +61,22 @@ export async function participantRoutes(fastify: FastifyInstance) {
     return toParticipantDTO(participant, canSee);
   });
 
-  fastify.delete("/api/events/:eventId/participants/:id", async (request) => {
+  fastify.delete("/api/events/:eventId/participants/:id", { config: { documentation: { params: eventItemParamsSchema } } }, async (request) => {
     const { id } = eventItemParamsSchema.parse(request.params);
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.delete("/api/participants/:id", async (request) => {
+  fastify.delete("/api/participants/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
-  fastify.get("/api/events/:eventId/participants/persons", async (request) => {
+  fastify.get("/api/events/:eventId/participants/persons", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listPersons(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.get("/api/events/:eventId/collaborators", async (request) => {
+  fastify.get("/api/events/:eventId/collaborators", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     requireCan(request.userRole, "event.read");
     const { eventId } = eventParamsSchema.parse(request.params);
 
@@ -102,7 +102,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/api/events/:eventId/collaborators", async (request, reply) => {
+  fastify.post("/api/events/:eventId/collaborators", { config: { documentation: { params: eventParamsSchema, body: eventCollaboratorSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "event.write");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = eventCollaboratorSchema.parse(request.body);
@@ -152,7 +152,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.delete("/api/events/:eventId/collaborators/:collaboratorId", async (request) => {
+  fastify.delete("/api/events/:eventId/collaborators/:collaboratorId", { config: { documentation: { params: eventCollaboratorParamsSchema } } }, async (request) => {
     requireCan(request.userRole, "event.write");
     const { eventId, collaboratorId } = eventCollaboratorParamsSchema.parse(request.params);
 

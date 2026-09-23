@@ -75,60 +75,60 @@ const service = new EquipmentService(
 );
 
 export async function equipmentEventRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/events/:eventId/equipment", async (request) => {
+  fastify.get("/api/events/:eventId/equipment", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listUsages(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/equipment", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment", { config: { documentation: { params: eventParamsSchema, body: equipmentUsageSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentUsageSchema.parse(request.body);
     const usage = await service.createUsage(eventId, request.workspaceId, request.userRole, data);
     return reply.status(201).send(usage);
   });
 
-  fastify.post("/api/events/:eventId/equipment/bulk-import", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment/bulk-import", { config: { documentation: { params: eventParamsSchema, body: equipmentBulkImportSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentBulkImportSchema.parse(request.body);
     const result = await service.bulkImportLibraryUsages(eventId, request.workspaceId, request.userRole, data);
     return reply.status(201).send(result);
   });
 
-  fastify.put("/api/events/:eventId/equipment/:usageId", async (request) => {
+  fastify.put("/api/events/:eventId/equipment/:usageId", { config: { documentation: { params: usageParamsSchema, body: equipmentUsageUpdateSchema } } }, async (request) => {
     const { eventId, usageId } = usageParamsSchema.parse(request.params);
     const data = equipmentUsageUpdateSchema.parse(request.body);
     return service.updateUsage(usageId, eventId, request.workspaceId, request.userRole, data);
   });
 
-  fastify.delete("/api/events/:eventId/equipment/:usageId", async (request) => {
+  fastify.delete("/api/events/:eventId/equipment/:usageId", { config: { documentation: { params: usageParamsSchema } } }, async (request) => {
     const { eventId, usageId } = usageParamsSchema.parse(request.params);
     return service.deleteUsage(usageId, eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.get("/api/events/:eventId/equipment-quotes", async (request) => {
+  fastify.get("/api/events/:eventId/equipment-quotes", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listQuotes(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/equipment-quotes", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment-quotes", { config: { documentation: { params: eventParamsSchema, body: equipmentQuoteSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentQuoteSchema.parse(request.body);
     const quote = await service.createQuote(eventId, request.workspaceId, request.userRole, data);
     return reply.status(201).send(quote);
   });
 
-  fastify.put("/api/events/:eventId/equipment-quotes/:quoteId", async (request) => {
+  fastify.put("/api/events/:eventId/equipment-quotes/:quoteId", { config: { documentation: { params: quoteParamsSchema, body: equipmentQuoteSchema } } }, async (request) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
     const data = equipmentQuoteSchema.parse(request.body);
     return service.updateQuote(quoteId, eventId, request.workspaceId, request.userRole, data);
   });
 
-  fastify.delete("/api/events/:eventId/equipment-quotes/:quoteId", async (request) => {
+  fastify.delete("/api/events/:eventId/equipment-quotes/:quoteId", { config: { documentation: { params: quoteParamsSchema } } }, async (request) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
     return service.deleteQuote(quoteId, eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", { config: { documentation: { params: quoteParamsSchema, body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
     const parsed = receiptUploadSchema.parse(request.body);
 
@@ -152,7 +152,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
   });
 
-  fastify.post("/api/events/:eventId/equipment/import-preview", async (request) => {
+  fastify.post("/api/events/:eventId/equipment/import-preview", { config: { documentation: { params: eventParamsSchema, body: equipmentImportPreviewSchema } } }, async (request) => {
     eventParamsSchema.parse(request.params);
     const parsed = equipmentImportPreviewSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");
@@ -160,7 +160,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return service.previewDocumentImport(request.workspaceId, request.userRole, request.user!.usagePlan, parsed);
   });
 
-  fastify.post("/api/events/:eventId/equipment/import-confirm", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment/import-confirm", { config: { documentation: { params: eventParamsSchema, body: equipmentImportConfirmSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = equipmentImportConfirmSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");
@@ -170,7 +170,10 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(quote);
   });
 
-  fastify.post("/api/events/:eventId/equipment/group-import", async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment/group-import", { config: { documentation: { params: eventParamsSchema, body: z.object({
+      groupId: z.string().min(1),
+      quoteId: z.string().optional().nullable(),
+    }), statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const { groupId, quoteId } = z.object({
       groupId: z.string().min(1),

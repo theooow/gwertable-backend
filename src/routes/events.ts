@@ -17,30 +17,30 @@ const service = new EventService(
 );
 
 export async function eventRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/events", async (request) => {
+  fastify.get("/api/events", { config: { documentation: {  } } }, async (request) => {
     const collaborator = request.eventScoped
       ? { userId: request.user!.id, userEmail: request.user!.email }
       : undefined;
     return service.list(request.workspaceId, request.userRole, collaborator);
   });
 
-  fastify.post("/api/events", async (request, reply) => {
+  fastify.post("/api/events", { config: { documentation: { body: eventSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = eventSchema.parse(request.body);
     const event = await service.create(request.workspaceId, request.userRole, request.user!.id, data);
     return reply.status(201).send(event);
   });
 
-  fastify.get("/api/events/venues", async (request) => {
+  fastify.get("/api/events/venues", { config: { documentation: {  } } }, async (request) => {
     return service.listVenues(request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/venues", async (request, reply) => {
+  fastify.post("/api/events/venues", { config: { documentation: { body: createVenueSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { name } = createVenueSchema.parse(request.body);
     const venue = await service.createVenue(request.workspaceId, request.userRole, name);
     return reply.status(201).send(venue);
   });
 
-  fastify.get("/api/events/:id", async (request) => {
+  fastify.get("/api/events/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const collaborator = request.eventScoped
       ? { userId: request.user!.id, userEmail: request.user!.email }
@@ -48,13 +48,13 @@ export async function eventRoutes(fastify: FastifyInstance) {
     return service.get(id, request.workspaceId, request.userRole, collaborator);
   });
 
-  fastify.put("/api/events/:id", async (request) => {
+  fastify.put("/api/events/:id", { config: { documentation: { params: idParamsSchema, body: eventSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = eventSchema.parse(request.body);
     return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
-  fastify.delete("/api/events/:id", async (request) => {
+  fastify.delete("/api/events/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });

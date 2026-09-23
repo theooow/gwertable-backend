@@ -70,13 +70,13 @@ function contentTypeForExtension(ext: string): string {
  * Couvre les justificatifs de dépenses, bannières d'événements et devis équipement.
  */
 export async function uploadRoutes(fastify: FastifyInstance) {
-  fastify.get("/uploads/association-logos/:fileName", async (request, reply) => {
+  fastify.get("/uploads/association-logos/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().regex(/^[a-zA-Z0-9_-]+\.(png|jpg|gif)$/) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().regex(/^[a-zA-Z0-9_-]+\.(png|jpg|gif)$/) }).parse(request.params);
     const data = await readFile(path.join(uploadRoot, "association-logos", fileName)).catch(() => null);
     if (!data) throw new NotFoundError("Logo introuvable");
     return reply.header("X-Content-Type-Options", "nosniff").type(contentTypeForExtension(path.extname(fileName))).send(data);
   });
-  fastify.post("/api/workspace/logo", { bodyLimit: 3 * 1024 * 1024 }, async (request, reply) => {
+  fastify.post("/api/workspace/logo", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } }, bodyLimit: 3 * 1024 * 1024 }, async (request, reply) => {
     requireCan(request.userRole, "user.manage");
     if (request.eventScoped) throw new ForbiddenError("Réservé aux administrateurs du workspace");
     const parsed = receiptUploadSchema.parse(request.body);
@@ -93,13 +93,13 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     await prisma.workspace.update({ where: { id: request.workspaceId }, data: { logoUrl } });
     return reply.code(201).send({ logoUrl });
   });
-  fastify.delete("/api/workspace/logo", async (request) => {
+  fastify.delete("/api/workspace/logo", { config: { documentation: {  } } }, async (request) => {
     requireCan(request.userRole, "user.manage");
     if (request.eventScoped) throw new ForbiddenError("Réservé aux administrateurs du workspace");
     await prisma.workspace.update({ where: { id: request.workspaceId }, data: { logoUrl: null } });
     return { logoUrl: null };
   });
-  fastify.get("/uploads/receipts/:fileName", async (request, reply) => {
+  fastify.get("/uploads/receipts/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) throw new NotFoundError("Justificatif introuvable");
     const data = await readFile(path.join(uploadRoot, "receipts", fileName)).catch(() => null);
@@ -107,7 +107,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.type(contentTypeForExtension(path.extname(fileName))).send(data);
   });
 
-  fastify.get("/uploads/event-banners/:fileName", async (request, reply) => {
+  fastify.get("/uploads/event-banners/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) throw new NotFoundError("Banniere introuvable");
     const data = await readFile(path.join(uploadRoot, "event-banners", fileName)).catch(() => null);
@@ -115,7 +115,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.type(contentTypeForExtension(path.extname(fileName))).send(data);
   });
 
-  fastify.get("/uploads/equipment-photos/:fileName", async (request, reply) => {
+  fastify.get("/uploads/equipment-photos/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }), statusCodes: [200,400,404] } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
     const data = await readFile(path.join(uploadRoot, "equipment-photos", fileName)).catch(() => null);
@@ -126,7 +126,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.send(data);
   });
 
-  fastify.get("/uploads/equipment-quotes/:fileName", async (request, reply) => {
+  fastify.get("/uploads/equipment-quotes/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }), statusCodes: [200,400,404] } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
     const data = await readFile(path.join(uploadRoot, "equipment-quotes", fileName)).catch(() => null);
@@ -137,7 +137,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.send(data);
   });
 
-  fastify.post("/api/uploads/expense-receipts", async (request, reply) => {
+  fastify.post("/api/uploads/expense-receipts", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "expenseClaim.create");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedReceiptTypes.has(parsed.contentType)) throw new ValidationError("Format de justificatif non supporte");
@@ -152,7 +152,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: `/uploads/receipts/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
   });
 
-  fastify.post("/api/uploads/event-banners", async (request, reply) => {
+  fastify.post("/api/uploads/event-banners", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "event.write");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedBannerTypes.has(parsed.contentType)) throw new ValidationError("Format de banniere non supporte");
@@ -167,7 +167,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: `/uploads/event-banners/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
   });
 
-  fastify.get("/uploads/person-documents/:fileName", async (request, reply) => {
+  fastify.get("/uploads/person-documents/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }), statusCodes: [200,400,404] } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
     const data = await readFile(path.join(uploadRoot, "person-documents", fileName)).catch(() => null);
@@ -178,7 +178,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.send(data);
   });
 
-  fastify.post("/api/uploads/person-documents", async (request, reply) => {
+  fastify.post("/api/uploads/person-documents", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "person.write");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedPersonDocTypes.has(parsed.contentType)) throw new ValidationError("Format de document non supporte");
@@ -193,7 +193,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: `/uploads/person-documents/${fileName}`, fileName: parsed.fileName, contentType: parsed.contentType, size: buffer.byteLength });
   });
 
-  fastify.get("/uploads/task-attachments/:fileName", async (request, reply) => {
+  fastify.get("/uploads/task-attachments/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }), statusCodes: [200,400,404] } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) return reply.status(400).send({ error: "Invalid file name" });
     const data = await readFile(path.join(uploadRoot, "task-attachments", fileName)).catch(() => null);
@@ -204,7 +204,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.send(data);
   });
 
-  fastify.post("/api/uploads/task-attachments", async (request, reply) => {
+  fastify.post("/api/uploads/task-attachments", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "task.write");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedTaskAttachmentTypes.has(parsed.contentType)) throw new ValidationError("Format de piece jointe non supporte");

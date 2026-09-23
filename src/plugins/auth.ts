@@ -70,7 +70,7 @@ function getBearerToken(authorization: string | undefined): string | null {
   return authorization.slice("Bearer ".length).trim() || null;
 }
 
-function isPublicRoute(url: string): boolean {
+export function isPublicRoute(url: string): boolean {
   return (
     url === "/health" ||
     url.startsWith("/api/public/volunteers/") ||
