@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import { volunteerRoutes } from "./routes/event-modules/volunteers.js";
+import { volunteerContractRoutes } from "./routes/volunteer-contracts.js";
 import { apiLogsPlugin } from "./plugins/api-logs.js";
 import fastify from "fastify";
 import { env } from "./env.js";
@@ -33,7 +34,7 @@ export async function buildApp() {
       level: env.NODE_ENV === "production" ? "info" : "debug",
       serializers: {
         req(request) {
-          return { method: request.method, url: request.url?.replace(/(\/api\/public\/volunteers\/(?:portal\/)?)[^/?]+/, "$1[redacted]").split("?")[0], host: request.hostname, remoteAddress: request.ip };
+          return { method: request.method, url: request.url?.replace(/(\/api\/public\/volunteers\/(?:(?:portal|contracts)\/)?)[^/?]+/, "$1[redacted]").split("?")[0], host: request.hostname, remoteAddress: request.ip };
         },
       },
     },
@@ -54,6 +55,7 @@ export async function buildApp() {
   await app.register(eventModuleRoutes);
   await app.register(participantRoutes);
   await app.register(volunteerRoutes);
+  await app.register(volunteerContractRoutes);
   await app.register(taskRoutes);
   await app.register(runOfShowRoutes);
   await app.register(notificationRoutes);

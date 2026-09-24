@@ -30,6 +30,15 @@ function createTransport() {
   });
 }
 
+export const contractMailer = {
+  async send(email: string, subject: string, text: string) {
+    // Never pretend that a verification code was delivered in production.
+    if (env.MAIL_TRANSPORT === "log") throw new EmailDeliveryError("L’envoi SMTP doit être configuré pour signer une convention.");
+    try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text }); }
+    catch { throw new EmailDeliveryError("Email non envoyé. Réessayez depuis la convention."); }
+  },
+};
+
 export async function sendVolunteerEmail(email: string, content: VolunteerEmailContent, deliveryId: string) {
   if (env.MAIL_TRANSPORT === "log") {
     console.info({ deliveryId, kind: content.kind }, "Volunteer email skipped (log transport)");

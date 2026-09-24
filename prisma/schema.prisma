@@ -261,6 +261,7 @@ model User {
 }
 
 model Workspace {
+  volunteerContracts VolunteerContract[]
   logoUrl            String?
   emailPrimaryColor  String?
   id        String   @id @default(cuid())
@@ -441,6 +442,7 @@ model VerificationToken {
 }
 
 model Person {
+  volunteerContracts VolunteerContract[]
   id            String    @id @default(cuid())
   workspaceId   String
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -622,6 +624,7 @@ model EquipmentGroupItem {
 // ============================================================
 
 model Event {
+  volunteerContracts VolunteerContract[]
   id            String      @id @default(cuid())
   workspaceId   String
   workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -959,6 +962,7 @@ model VolunteerForm {
 }
 
 model VolunteerApplication {
+  contracts VolunteerContract[]
   planningResponse String?
   planningRespondedAt DateTime?
   emails      VolunteerEmail[]
@@ -992,6 +996,42 @@ model VolunteerApplication {
   @@unique([eventId, personId])
   @@index([eventId, status])
   @@index([personId])
+}
+
+model VolunteerContract {
+  id String @id @default(cuid())
+  workspaceId String
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  eventId String
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  personId String
+  person Person @relation(fields: [personId], references: [id], onDelete: Restrict)
+  applicationId String
+  application VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  title String
+  eventName String
+  signerName String
+  signerEmail String
+  content String
+  documentHash String
+  sourcePdf Bytes
+  createdBy String
+  createdAt DateTime @default(now())
+  status String @default("PENDING")
+  tokenHash String @unique
+  expiresAt DateTime
+  invitationSentAt DateTime?
+  codeHash String?
+  codeExpiresAt DateTime?
+  codeSentAt DateTime?
+  codeAttempts Int @default(0)
+  codeSends Int @default(0)
+  signedAt DateTime?
+  evidence Json?
+  signedPdf Bytes?
+  signedPdfHash String?
+  @@index([workspaceId, personId])
+  @@index([workspaceId, eventId])
 }
 
 model VolunteerEmail {
