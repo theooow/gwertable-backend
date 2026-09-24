@@ -72,6 +72,7 @@ const groups: Record<string, [string, string][]> = {
   ],
   Bénévoles: [
     ["GET /api/public/volunteers/portal/:token", "Consulter son portail bénévole avec un lien privé"],
+    ["POST /api/public/volunteers/portal/:token/contract", "Obtenir le lien de signature de la convention de bénévolat"],
     ["PATCH /api/public/volunteers/portal/:token/planning", "Accepter ou refuser des créneaux proposés"],
     ["POST /api/public/volunteers/portal/:token/swaps", "Demander un échange de créneaux"],
     ["PATCH /api/public/volunteers/portal/:token/swaps/:id", "Accepter ou refuser un échange"],
