@@ -190,20 +190,26 @@ export class VolunteerRepository {
       if (data.status === "APPROVED" && app.status !== "APPROVED") {
         await tx.volunteerEmail.create({ data: { applicationId: id, kind: "APPROVED", dedupeKey: `approved:${id}:${updated.accessToken}` } });
 
-        // Auto-generate contract
-        const event = await tx.event.findUniqueOrThrow({ where: { id: eventId }, include: { workspace: true } });
-        const person = await tx.person.findUniqueOrThrow({ where: { id: app.personId } });
-        const email = person.email ?? app.email;
-        if (email) {
-          const content = `Convention de bénévolat\n\nOrganisme : ${event.workspace.name}\nReprésentant : L'équipe d'organisation\n\nBénévole : ${person.fullName}\nEmail : ${email}\nÉvénement : ${event.name}\nDébut : ${event.startsAt.toISOString()}\nFin : ${event.endsAt?.toISOString() ?? "Non précisée"}\n\nLe bénévole s'engage à participer à l'événement dans le respect des règles de l'organisation. L'association s'engage à fournir les conditions nécessaires au bon déroulement de la mission.\n\nÉmise par le représentant désigné, qui déclare être habilité à engager l’organisme.\nSignature électronique simple du bénévole par code email.`;
-          const pdf = await contractPdf(content);
-          await tx.volunteerContract.create({ data: {
-            workspaceId: event.workspaceId, eventId, personId: app.personId, applicationId: app.id,
-            title: "Convention de bénévolat", eventName: event.name, signerName: person.fullName, signerEmail: email,
-            content, sourcePdf: new Uint8Array(pdf), documentHash: createHash("sha256").update(pdf).digest("hex"), createdBy: "system",
-            tokenHash: createHash("sha256").update(randomBytes(32)).digest("hex"), expiresAt: new Date(Date.now() + 30 * 86400000),
-          } });
-        }
+        // Auto-generate contract asynchronously outside the transaction
+        Promise.resolve().then(async () => {
+          try {
+            const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: { workspace: true } });
+            const person = await prisma.person.findUniqueOrThrow({ where: { id: app.personId } });
+            const email = person.email ?? app.email;
+            if (email) {
+              const content = `Convention de bénévolat\n\nOrganisme : ${event.workspace.name}\nReprésentant : L'équipe d'organisation\n\nBénévole : ${person.fullName}\nEmail : ${email}\nÉvénement : ${event.name}\nDébut : ${event.startsAt.toISOString()}\nFin : ${event.endsAt?.toISOString() ?? "Non précisée"}\n\nLe bénévole s'engage à participer à l'événement dans le respect des règles de l'organisation. L'association s'engage à fournir les conditions nécessaires au bon déroulement de la mission.\n\nÉmise par le représentant désigné, qui déclare être habilité à engager l’organisme.\nSignature électronique simple du bénévole par code email.`;
+              const pdf = await contractPdf(content);
+              await prisma.volunteerContract.create({ data: {
+                workspaceId: event.workspaceId, eventId, personId: app.personId, applicationId: app.id,
+                title: "Convention de bénévolat", eventName: event.name, signerName: person.fullName, signerEmail: email,
+                content, sourcePdf: new Uint8Array(pdf), documentHash: createHash("sha256").update(pdf).digest("hex"), createdBy: "system",
+                tokenHash: createHash("sha256").update(randomBytes(32)).digest("hex"), expiresAt: new Date(Date.now() + 30 * 86400000),
+              } });
+            }
+          } catch (err) {
+            console.error("Failed to auto-generate volunteer contract:", err);
+          }
+        });
       }
       return updated;
   }
