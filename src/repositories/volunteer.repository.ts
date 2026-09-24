@@ -41,8 +41,9 @@ export class VolunteerRepository {
         eventId, workspaceId: request.workspaceId, acceptedAt: { not: null },
         OR: [{ userId: request.user!.id }, { email: request.user!.email }],
       } });
-      if (!collaborator || !["ADMIN", "ORGANIZER"].includes(collaborator.role)) throw new ForbiddenError("Accès refusé");
-    } else requireCan(request.userRole, "event.write");
+      if (!collaborator) throw new ForbiddenError("Accès refusé");
+      requireCan(collaborator.role, "volunteer.manage");
+    } else requireCan(request.userRole, "volunteer.manage");
     return event;
   }
 

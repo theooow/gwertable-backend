@@ -8,6 +8,7 @@ import { VenueDao } from "../dao/venue.dao.js";
 import { EventRepository } from "../repositories/event.repository.js";
 import { EventService } from "../services/event.service.js";
 import { ActivityRepository } from "../repositories/activity.repository.js";
+import { can } from "../lib/permissions.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const createVenueSchema = z.object({ name: requiredText("Le nom du lieu", LIMITS.name) });
@@ -21,7 +22,15 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const collaborator = request.eventScoped
       ? { userId: request.user!.id, userEmail: request.user!.email }
       : undefined;
-    return service.list(request.workspaceId, request.userRole, collaborator);
+    const events = await service.list(request.workspaceId, request.userRole, collaborator);
+    const invitations = request.eventScoped ? await prisma.eventCollaborator.findMany({
+      where: { workspaceId: request.workspaceId, acceptedAt: { not: null }, OR: [{ userId: request.user!.id }, { email: request.user!.email }] },
+      select: { eventId: true, role: true },
+    }) : [];
+    return events.map(({ budgetSummary, ...event }) => ({
+      ...event,
+      ...(can(invitations.find((entry) => entry.eventId === event.id)?.role ?? request.userRole, "budget.read") ? { budgetSummary } : {}),
+    }));
   });
 
   fastify.post("/api/events", { config: { documentation: { body: eventSchema, statusCodes: [201] } } }, async (request, reply) => {
@@ -45,7 +54,8 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const collaborator = request.eventScoped
       ? { userId: request.user!.id, userEmail: request.user!.email }
       : undefined;
-    return service.get(id, request.workspaceId, request.userRole, collaborator);
+    const event = await service.get(id, request.workspaceId, request.userRole, collaborator);
+    return { ...event, accessRole: request.userRole };
   });
 
   fastify.put("/api/events/:id", { config: { documentation: { params: idParamsSchema, body: eventSchema } } }, async (request) => {

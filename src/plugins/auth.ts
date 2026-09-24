@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import type { User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { UnauthorizedError, ForbiddenError } from "../lib/errors.js";
+import { UnauthorizedError, ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { isAdminEmail } from "../lib/admin.js";
 
 /**
@@ -206,6 +206,7 @@ export const authPlugin = fp(async (fastify) => {
     if (!membership) {
       const collaborator = await prisma.eventCollaborator.findFirst({
         where: {
+          ...(workspaceId ? { workspaceId } : {}),
           acceptedAt: { not: null },
           OR: [{ userId: session.user.id }, { email: session.user.email }],
         },
@@ -239,5 +240,30 @@ export const authPlugin = fp(async (fastify) => {
       workspaceName: membership.workspace.name,
     };
     request.userRole = membership.role;
+
+    // Resolve the invitation for the requested event, never reuse another event's role.
+    if (eventScoped) {
+      const params = request.params as { eventId?: string; id?: string };
+      const route = request.routeOptions.url ?? "";
+      let eventId = params.eventId ?? (route === "/api/events/:id" ? params.id : undefined);
+      if (route.startsWith("/api/run-of-show/") && params.id) {
+        const where = { id: params.id, event: { workspaceId } };
+        const item = route.includes("/tracks/")
+          ? await prisma.runOfShowTrack.findFirst({ where, select: { eventId: true } })
+          : route.includes("/sections/")
+            ? await prisma.runOfShowSection.findFirst({ where, select: { eventId: true } })
+            : await prisma.runOfShowItem.findFirst({ where, select: { eventId: true } });
+        if (!item) throw new NotFoundError("Élément introuvable");
+        eventId = item.eventId;
+      }
+      if (eventId) {
+        const invitation = await prisma.eventCollaborator.findFirst({
+          where: { eventId, workspaceId, acceptedAt: { not: null }, OR: [{ userId: user.id }, { email: user.email }] },
+          select: { role: true },
+        });
+        if (!invitation) throw new ForbiddenError("Accès refusé à cet événement");
+        request.userRole = invitation.role;
+      }
+    }
   });
 });

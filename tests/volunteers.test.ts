@@ -153,7 +153,7 @@ describe("volunteer management", () => {
     assert.equal((await request("GET", c.publicPath)).statusCode, 404);
   });
 
-  it("limits access to event organizers and scopes every nested resource", async () => {
+  it("allows volunteer managers and scopes every nested resource to their invitations", async () => {
     const c = await context();
     assert.equal((await request("GET", c.base)).statusCode, 401);
     const other = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Other", startsAt: new Date() } });
@@ -164,11 +164,24 @@ describe("volunteer management", () => {
     const outsideEvent = await prisma.event.create({ data: { workspaceId: outsider.id, name: "Outside", startsAt: new Date() } });
     assert.equal((await request("GET", `/api/events/${outsideEvent.id}/volunteers`, c.authorization)).statusCode, 404);
     await prisma.workspaceMember.updateMany({ where: { userId: c.user.id }, data: { role: "VOLUNTEER" } });
-    assert.equal((await request("GET", c.base, c.authorization)).statusCode, 403);
+    assert.equal((await request("GET", c.base, c.authorization)).statusCode, 200);
+    assert.equal((await request("PUT", `${c.base}/form`, c.authorization, formInput)).statusCode, 200);
+    for (const path of ["expenses", "equipment", "equipment-quotes", "shopping"]) {
+      assert.equal((await request("GET", `/api/events/${c.event.id}/${path}`, c.authorization)).statusCode, 403, path);
+    }
+    assert.equal((await request("GET", `/api/events/${c.event.id}/run-of-show`, c.authorization)).statusCode, 200);
+    assert.equal((await request("POST", `/api/events/${c.event.id}/run-of-show/tracks`, c.authorization, { name: "Scène" })).statusCode, 403);
+    assert.ok(!("budgetSummary" in json<Record<string, unknown>[]>(await request("GET", "/api/events", c.authorization))[0]!));
     await prisma.workspaceMember.deleteMany({ where: { userId: c.user.id } });
     await prisma.eventCollaborator.create({ data: { eventId: other.id, workspaceId: c.workspace.id, userId: c.user.id, email: c.user.email, role: "ORGANIZER", token: "collaborator-test", expires: new Date(Date.now() + 100000), acceptedAt: new Date() } });
     assert.equal((await request("GET", `/api/events/${other.id}/volunteers`, c.authorization)).statusCode, 200);
     assert.equal((await request("GET", c.base, c.authorization)).statusCode, 403);
+    await prisma.eventCollaborator.create({ data: { eventId: c.event.id, workspaceId: c.workspace.id, userId: c.user.id, email: c.user.email, role: "VOLUNTEER", token: "volunteer-manager-test", expires: new Date(Date.now() + 100000), acceptedAt: new Date() } });
+    assert.equal((await request("PUT", `${c.base}/form`, c.authorization, formInput)).statusCode, 200);
+    assert.equal(json<{ accessRole: string }>(await request("GET", `/api/events/${c.event.id}`, c.authorization)).accessRole, "VOLUNTEER");
+    assert.equal((await request("POST", `/api/events/${c.event.id}/run-of-show/tracks`, c.authorization, { name: "Scène" })).statusCode, 403);
+    const uninvited = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Sans invitation", startsAt: new Date() } });
+    assert.equal((await request("GET", `/api/events/${uninvited.id}/run-of-show`, c.authorization)).statusCode, 403);
   });
 
   it("requires approval and availability, prevents overlapping shifts and releases assignments on rejection", async () => {
