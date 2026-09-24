@@ -85,10 +85,17 @@ export const swaggerPlugin = fp(async (fastify) => {
       const params = Object.fromEntries([...url.matchAll(/:([A-Za-z0-9_]+)/g)].map((match) => [match[1], { type: "string", description: `Identifiant ${match[1]}` }]));
       const declaredParams = contract.params ? inputSchema(contract.params) : undefined;
       const isCalendar = url.startsWith("/calendar/") || url.endsWith("/calendar.ics");
+      const isContractDownload = url.includes("/volunteers/contracts/") && url.endsWith("/:format");
       const isFile = url.startsWith("/uploads/") || url.endsWith("/pdf") || isCalendar;
       const contentType = url.endsWith("/pdf") ? "application/pdf" : isCalendar ? "text/calendar" : "application/octet-stream";
       const error = (description: string) => ({ description, type: "object", properties: { error: { type: "string" }, message: { type: "string" }, issues: { type: "array", items: { type: "object", additionalProperties: true } } } });
-      const response = Object.fromEntries((contract.statusCodes ?? [200]).map((status) => [status, status >= 400 ? error("Requête refusée") : status === 204 ? { description: "Opération effectuée, sans contenu" } : isFile ? { description: "Fichier à télécharger", content: { [contentType]: { schema: { type: "string", format: "binary" } } } } : { description: status === 201 ? "Ressource créée" : "Opération effectuée" }]));
+      const response = Object.fromEntries((contract.statusCodes ?? [200]).map((status) => [status, status >= 400 ? error("Requête refusée") : status === 204 ? { description: "Opération effectuée, sans contenu" } : isContractDownload ? {
+        description: "PDF pour source/pdf ; dossier de preuve JSON pour proof",
+        content: {
+          "application/pdf": { schema: { type: "string", format: "binary" } },
+          "application/json": { schema: { type: "object", additionalProperties: true } },
+        },
+      } : isFile ? { description: "Fichier à télécharger", content: { [contentType]: { schema: { type: "string", format: "binary" } } } } : { description: status === 201 ? "Ressource créée" : "Opération effectuée" }]));
       return { schema: {
         ...schema,
         ...doc,

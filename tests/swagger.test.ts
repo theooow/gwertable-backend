@@ -85,6 +85,8 @@ test("generated inputs reflect real validation, optional fields, unions and nest
   assert.equal((batch.properties!.shift as OpenAPIV3.SchemaObject).type, "object");
   const planning = body("/api/public/volunteers/portal/{token}/planning", OpenAPIV3.HttpMethods.PATCH);
   assert.equal((planning.properties!.shifts as OpenAPIV3.ArraySchemaObject).type, "array");
+  const signature = body("/api/public/volunteers/contracts/{token}/sign", OpenAPIV3.HttpMethods.POST);
+  assert.deepEqual(signature.required, ["code", "documentHash", "name", "consent"]);
 });
 
 test("Swagger is served publicly, uses the current server and documents file responses", async () => {
@@ -96,4 +98,12 @@ test("Swagger is served publicly, uses the current server and documents file res
     assert.ok(response.content?.[type]);
   }
   assert.equal((await app.inject({ method: "GET", url: "/api/auth/me" })).statusCode, 401);
+  for (const url of ["/api/events/{eventId}/volunteers/contracts/{id}/{format}", "/api/people/{personId}/volunteers/contracts/{id}/{format}", "/api/public/volunteers/contracts/{token}/{format}"]) {
+    const operation = spec.paths[url]!.get!;
+    const response = operation.responses[200] as OpenAPIV3.ResponseObject;
+    assert.ok(response.content?.["application/pdf"], url);
+    assert.ok(response.content?.["application/json"], url);
+    const format = operation.parameters!.find((p): p is OpenAPIV3.ParameterObject => "name" in p && p.name === "format")!;
+    assert.deepEqual((format.schema as OpenAPIV3.SchemaObject).enum, ["source", "pdf", "proof"]);
+  }
 });
