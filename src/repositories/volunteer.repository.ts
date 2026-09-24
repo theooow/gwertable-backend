@@ -7,6 +7,7 @@ import { requireCan } from "../lib/permissions.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { availabilityPeriodSchema, questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
 import { suggestVolunteerAssignments } from "../services/volunteer-planning.service.js";
+import { contractPdf } from "../services/volunteer-contract-pdf.js";
 
 // Serializable transactions prevent concurrent approvals or assignments from
 // exceeding meal capacities, duplicating contacts, or double-booking a person.
@@ -188,6 +189,21 @@ export class VolunteerRepository {
       } });
       if (data.status === "APPROVED" && app.status !== "APPROVED") {
         await tx.volunteerEmail.create({ data: { applicationId: id, kind: "APPROVED", dedupeKey: `approved:${id}:${updated.accessToken}` } });
+
+        // Auto-generate contract
+        const event = await tx.event.findUniqueOrThrow({ where: { id: eventId }, include: { workspace: true } });
+        const person = await tx.person.findUniqueOrThrow({ where: { id: app.personId } });
+        const email = person.email ?? app.email;
+        if (email) {
+          const content = `Convention de bénévolat\n\nOrganisme : ${event.workspace.name}\nReprésentant : L'équipe d'organisation\n\nBénévole : ${person.fullName}\nEmail : ${email}\nÉvénement : ${event.name}\nDébut : ${event.startsAt.toISOString()}\nFin : ${event.endsAt?.toISOString() ?? "Non précisée"}\n\nLe bénévole s'engage à participer à l'événement dans le respect des règles de l'organisation. L'association s'engage à fournir les conditions nécessaires au bon déroulement de la mission.\n\nÉmise par le représentant désigné, qui déclare être habilité à engager l’organisme.\nSignature électronique simple du bénévole par code email.`;
+          const pdf = await contractPdf(content);
+          await tx.volunteerContract.create({ data: {
+            workspaceId: event.workspaceId, eventId, personId: app.personId, applicationId: app.id,
+            title: "Convention de bénévolat", eventName: event.name, signerName: person.fullName, signerEmail: email,
+            content, sourcePdf: new Uint8Array(pdf), documentHash: createHash("sha256").update(pdf).digest("hex"), createdBy: "system",
+            tokenHash: createHash("sha256").update(randomBytes(32)).digest("hex"), expiresAt: new Date(Date.now() + 30 * 86400000),
+          } });
+        }
       }
       return updated;
   }
@@ -302,11 +318,31 @@ export class VolunteerRepository {
     const alternatives = await prisma.shift.findMany({ where: { eventId: application.eventId, swapAllowed: true, assigneeId: { not: application.personId }, startsAt: { gt: new Date() }, assignee: { volunteerApplications: { some: { eventId: application.eventId, status: "APPROVED" } } } }, select: { id: true, position: true, team: true, startsAt: true, endsAt: true } });
     const swaps = await prisma.volunteerSwap.findMany({ where: { application: { eventId: application.eventId }, OR: [{ applicationId: application.id }, { targetPersonId: application.personId }] }, orderBy: { createdAt: "desc" }, take: 100 });
     const related = await prisma.shift.findMany({ where: { eventId: application.eventId, id: { in: swaps.flatMap((s) => [s.sourceShiftId, s.targetShiftId]) } }, select: { id: true, position: true, startsAt: true, endsAt: true } });
+    const contract = await prisma.volunteerContract.findFirst({ where: { applicationId: application.id }, orderBy: { createdAt: "desc" } });
+    
+    // Compute link to signature page if a tokenHash exists. But tokenHash is hashed. Oh wait, the link needs `token`. We can't reverse `tokenHash`.
+    // Wait, VolunteerContract schema has a tokenHash. How does the frontend get the token?
+    // In `volunteer-contract.repository.ts`, `invite` creates a new token and sends it.
+    // If we want the volunteer to access the contract from the portal directly, we can't use the email token because we don't have it.
+    // Actually, if they are authenticated in the portal via `application.accessToken`, we can just let them view/sign it through a new API, OR we can generate a temporary contract access token on the fly, OR we just generate a signature token.
     return { fullName: application.person.fullName, team: application.team, badgeToken: application.badgeToken, checkedInAt: application.checkedInAt, eventName: application.event.name,
       planningResponse: application.planningResponse, planningRespondedAt: application.planningRespondedAt,
       shifts: shifts.map(({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed }) => ({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed })), alternatives,
       swaps: swaps.map((s) => ({ id: s.id, status: s.status, incoming: s.targetPersonId === application.personId, source: related.find((v) => v.id === s.sourceShiftId), target: related.find((v) => v.id === s.targetShiftId) })),
+      contract: contract ? { id: contract.id, status: contract.status, signedAt: contract.signedAt } : null,
     };
+  }
+
+  async getContractToken(token: string) {
+    return transaction(async (tx) => {
+      const application = await this.portalApplication(token, tx);
+      const contract = await tx.volunteerContract.findFirst({ where: { applicationId: application.id }, orderBy: { createdAt: "desc" } });
+      if (!contract) throw new NotFoundError("Aucune convention n'est associée à cette candidature.");
+      const contractToken = randomBytes(32).toString("base64url");
+      const tokenHash = createHash("sha256").update(contractToken).digest("hex");
+      await tx.volunteerContract.update({ where: { id: contract.id }, data: { tokenHash, expiresAt: new Date(Date.now() + 30 * 86400000) } });
+      return { token: contractToken };
+    });
   }
 
   notifyPlanning(eventId: string) {

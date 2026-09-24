@@ -17,6 +17,10 @@ export async function volunteerRoutes(app: FastifyInstance) {
     reply.header("Cache-Control", "no-store");
     return repository.portal(tokenParams.parse(req.params).token);
   });
+  app.post("/api/public/volunteers/portal/:token/contract", { config: { documentation: { params: tokenParams, statusCodes: [200] } } }, async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    return repository.getContractToken(tokenParams.parse(req.params).token);
+  });
   app.patch("/api/public/volunteers/portal/:token/planning", { config: { documentation: { params: tokenParams, body: z.object({ accept: z.boolean(), shifts: z.array(z.object({ id: z.string().min(1), version: z.number().int().nonnegative() })).min(1).max(1000) }) } } }, async (req, reply) => {
     reply.header("Cache-Control", "no-store");
     const { token } = tokenParams.parse(req.params);
