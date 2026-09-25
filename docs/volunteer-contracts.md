@@ -2,6 +2,15 @@
 
 ## Parcours automatique
 
+Dans **Paramètres → Structure et conventions**, l’administrateur renseigne le
+nom légal, la forme juridique, l’adresse du siège, le représentant et sa fonction,
+l’email de contact, ainsi que le téléphone, SIRET et RNA si disponibles. Ces
+informations sont propres à l’espace et alimentent les PDF et leurs instantanés.
+Le panneau de gestion des bénévoles affiche les champs essentiels manquants et
+un lien vers cette section pour l’administrateur. Les SIRET/RNA sont facultatifs.
+Le contact et le référent du formulaire événement peuvent remplacer ceux de la
+structure. Modifier une information utilisée renouvelle la convention à signer.
+
 Une candidature validée doit avoir un email et au moins un créneau affecté pour
 disposer de sa convention dans le portail personnel. Les emails de modification
 du planning rappellent de la signer. L’onglet Conventions de l’événement est

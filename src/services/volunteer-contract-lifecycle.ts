@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Prisma, VolunteerContract } from "@prisma/client";
 import { contractPdf } from "./volunteer-contract-pdf.js";
+import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 
 export const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const date = (value: Date) => value.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Paris" });
@@ -16,13 +17,17 @@ export async function contractContext(tx: Prisma.TransactionClient, applicationI
   const { event } = app;
   const form = event.volunteerForm;
   const legal = event.workspace.legalEntity;
+  const issuer = contractIssuerSchema.parse(event.workspace.contractIssuer);
   const snapshot = {
     revision: app.contractRevision,
-    organization: legal?.legalName || event.workspace.name,
-    address: legal ? [legal.addressLine1, legal.addressLine2, legal.postalCode, legal.city, legal.countryCode].filter(Boolean).join(", ") : "",
-    siret: legal?.siret ?? "",
-    representative: form?.contractRepresentative || "L’équipe d’organisation",
-    contact: form?.contractContact || event.workspace.members[0]?.user.email || "",
+    organization: issuer.legalName || legal?.legalName || event.workspace.name,
+    ...(issuer.legalForm ? { legalForm: issuer.legalForm } : {}),
+    address: [issuer.address, issuer.postalCode, issuer.city, issuer.country].filter(Boolean).join(", ") || (legal ? [legal.addressLine1, legal.addressLine2, legal.postalCode, legal.city, legal.countryCode].filter(Boolean).join(", ") : ""),
+    siret: issuer.siret || legal?.siret || "",
+    ...(issuer.rna ? { rna: issuer.rna } : {}),
+    ...(issuer.phone ? { phone: issuer.phone } : {}),
+    representative: form?.contractRepresentative || [issuer.representative, issuer.representativeRole].filter(Boolean).join(", ") || "L’équipe d’organisation",
+    contact: form?.contractContact || issuer.email || event.workspace.members[0]?.user.email || "",
     retentionYears: form?.contractRetentionYears ?? 3,
     event: { id: event.id, name: event.name, startsAt: event.startsAt.toISOString(), endsAt: event.endsAt?.toISOString() ?? null,
       location: [event.venue?.name, event.venue?.address].filter(Boolean).join(" — ") || "Lieu à confirmer auprès de l’organisateur" },
@@ -36,9 +41,9 @@ export function contractContent(context: Awaited<ReturnType<typeof contractConte
   return `Convention de bénévolat
 
 Les parties
-Organisme : ${s.organization}${s.address ? `\nAdresse : ${s.address}` : ""}${s.siret ? `\nSIRET : ${s.siret}` : ""}
+Organisme : ${s.organization}${s.legalForm ? `\nForme juridique : ${s.legalForm}` : ""}${s.address ? `\nAdresse : ${s.address}` : ""}${s.siret ? `\nSIRET : ${s.siret}` : ""}${s.rna ? `\nRNA : ${s.rna}` : ""}
 Représentant / référent : ${s.representative}
-Contact de l’organisateur : ${s.contact || "Via le contact habituel de l’organisation"}
+Contact de l’organisateur : ${s.contact || "Via le contact habituel de l’organisation"}${s.phone ? `\nTéléphone : ${s.phone}` : ""}
 Bénévole : ${app.person.fullName}
 Email : ${app.person.email ?? app.email ?? ""}
 

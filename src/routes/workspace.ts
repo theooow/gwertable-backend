@@ -5,7 +5,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
 import { prisma } from "../prisma.js";
-import { NotFoundError, ValidationError } from "../lib/errors.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
+import { requireCan } from "../lib/permissions.js";
+import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 import { WorkspaceDao } from "../dao/workspace.dao.js";
 import { WorkspaceMemberDao } from "../dao/workspace-member.dao.js";
 import { WorkspaceInvitationDao } from "../dao/workspace-invitation.dao.js";
@@ -105,6 +107,12 @@ const service = new WorkspaceService(
 );
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
+  fastify.put("/api/workspace/contract-issuer", { config: { documentation: { body: contractIssuerSchema } } }, async (request) => {
+    if (request.eventScoped) throw new ForbiddenError("Paramètres réservés à l’administrateur de l’espace");
+    requireCan(request.userRole, "user.manage");
+    const contractIssuer = contractIssuerSchema.parse(request.body);
+    return prisma.workspace.update({ where: { id: request.workspaceId }, data: { contractIssuer }, select: { contractIssuer: true } });
+  });
   fastify.get("/uploads/profile-images/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
     if (fileName.includes("/") || fileName.includes("\\")) throw new NotFoundError("Image de profil introuvable");

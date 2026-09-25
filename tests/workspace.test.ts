@@ -6,6 +6,26 @@ import { json, request, seedAdminSession, setupTestApp } from "./helpers.js";
 setupTestApp();
 
 describe("workspace routes", () => {
+  it("saves the contract issuer only for workspace admins and validates identifiers", async () => {
+    const { authorization, workspace, user } = await seedAdminSession();
+    const path = "/api/workspace/contract-issuer";
+    assert.equal((await request("PUT", path, undefined, {})).statusCode, 401);
+    assert.equal((await request("PUT", path, authorization, { legalName: "Association Test", email: "bad" })).statusCode, 400);
+    assert.equal((await request("PUT", path, authorization, { siret: "123" })).statusCode, 400);
+    assert.equal((await request("PUT", path, authorization, { rna: "123" })).statusCode, 400);
+    const issuer = { legalName: "Association Test", email: "contact@example.test", rna: "W123456789" };
+    assert.equal((await request("PUT", path, authorization, issuer)).statusCode, 200);
+    const saved = (await request("GET", "/api/workspace", authorization)).json().workspace.contractIssuer;
+    assert.equal(saved.legalName, issuer.legalName);
+    assert.equal(saved.rna, issuer.rna);
+    await request("PUT", "/api/workspace", authorization, { name: "Renamed" });
+    assert.deepEqual((await request("GET", "/api/workspace", authorization)).json().workspace.contractIssuer, saved);
+    const other = await prisma.workspace.create({ data: { name: "Other" } });
+    assert.deepEqual(other.contractIssuer, {});
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: workspace.id, userId: user.id }, data: { role: "VOLUNTEER" } });
+    assert.equal((await request("PUT", path, authorization, {})).statusCode, 403);
+    assert.deepEqual((await prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).contractIssuer, saved);
+  });
   it("persists email color, preserves omitted values, validates and restricts changes to admins", async () => {
     const { authorization, workspace } = await seedAdminSession();
     const save = (color?: string) => request("PUT", "/api/workspace", authorization, { name: workspace.name, ...(color !== undefined ? { emailPrimaryColor: color } : {}) });

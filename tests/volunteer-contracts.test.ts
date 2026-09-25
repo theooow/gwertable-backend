@@ -37,6 +37,25 @@ async function code(path: string) {
 }
 
 describe("volunteer contracts", () => {
+  it("reports missing issuer details and includes the saved structure in a new convention", async () => {
+    const c = await context();
+    const overview = `/api/events/${c.event.id}/volunteers`;
+    assert.ok((await request("GET", overview, c.authorization)).json().contractIssuerMissing.includes("Nom légal"));
+    const issuer = { legalName: "Les Nuits Partagées", legalForm: "Association loi 1901", address: "12 rue des Arts", postalCode: "75011", city: "Paris", country: "France", representative: "Camille Martin", representativeRole: "Présidente", email: "contact@example.test", rna: "W123456789", phone: "0123456789" };
+    assert.equal((await request("PUT", "/api/workspace/contract-issuer", c.authorization, issuer)).statusCode, 200);
+    assert.deepEqual((await request("GET", overview, c.authorization)).json().contractIssuerMissing, []);
+    const portal = `/api/public/volunteers/portal/${c.application.accessToken}`;
+    const token = (await request("POST", `${portal}/contract`)).json().token;
+    const document = (await request("GET", `/api/public/volunteers/contracts/${token}`)).json();
+    for (const value of Object.values(issuer)) assert.ok(document.content.includes(value), value);
+    assert.equal((await prisma.volunteerContract.findUniqueOrThrow({ where: { id: c.contract.id } })).status, "CANCELLED");
+    assert.equal((await request("PUT", "/api/workspace/contract-issuer", c.authorization, { ...issuer, representative: "Alex Martin" })).statusCode, 200);
+    assert.equal((await request("GET", `/api/public/volunteers/contracts/${token}`)).statusCode, 404);
+    const next = (await request("POST", `${portal}/contract`)).json().token;
+    assert.match((await request("GET", `/api/public/volunteers/contracts/${next}`)).json().content, /Alex Martin/);
+    await request("PUT", "/api/workspace/contract-issuer", c.authorization, { ...issuer, address: "" });
+    assert.deepEqual((await request("GET", overview, c.authorization)).json().contractIssuerMissing, ["Adresse"]);
+  });
   it("signs the immutable document once and exposes identical PDFs in both authorized contexts", async () => {
     const c = await context(); const { path } = await invite(c); const otp = await code(path);
     assert.equal(emails[0]!.email, "alice@abregi.test");

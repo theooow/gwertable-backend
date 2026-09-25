@@ -8,6 +8,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { availabilityPeriodSchema, questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
 import { suggestVolunteerAssignments } from "../services/volunteer-planning.service.js";
 import { hash, syncVolunteerContract } from "../services/volunteer-contract-lifecycle.js";
+import { contractIssuerMissing } from "../schemas/contract-issuer.js";
 
 // Serializable transactions prevent concurrent approvals or assignments from
 // exceeding meal capacities, duplicating contacts, or double-booking a person.
@@ -54,7 +55,7 @@ export class VolunteerRepository {
       prisma.volunteerApplication.findMany({ where: { eventId }, orderBy: { createdAt: "desc" }, include: { meals: true, person: { select: { fullName: true, email: true, phone: true } } } }),
       prisma.shift.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { assignee: { select: { id: true, fullName: true } } } }),
       prisma.cateringService.findMany({ where: { eventId }, orderBy: { startsAt: "asc" }, include: { bookings: true } }),
-      prisma.event.findUniqueOrThrow({ where: { id: eventId }, select: { name: true, startsAt: true, endsAt: true } }),
+      prisma.event.findUniqueOrThrow({ where: { id: eventId }, select: { name: true, startsAt: true, endsAt: true, workspace: { select: { contractIssuer: true } } } }),
     ]);
     const busySlots = await prisma.shift.findMany({
       where: { eventId: { not: eventId }, assigneeId: { in: [...new Set([...applications.map((a) => a.personId), ...shifts.flatMap((s) => s.assigneeId ? [s.assigneeId] : [])])] } },
@@ -62,7 +63,8 @@ export class VolunteerRepository {
     });
     return { form, applications: applications.map(({ person, ...application }) => ({
       ...application, fullName: person.fullName, email: person.email ?? application.email ?? "", phone: person.phone ?? application.phone,
-    })), shifts, services, event, busySlots };
+    })), shifts, services, event: { name: event.name, startsAt: event.startsAt, endsAt: event.endsAt }, busySlots,
+      contractIssuerMissing: contractIssuerMissing(event.workspace.contractIssuer) };
   }
 
   saveForm(eventId: string, data: FormInput) {

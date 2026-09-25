@@ -29,6 +29,7 @@ export class WorkspaceDao extends BaseDao {
         shotgunApiToken: true,
         logoUrl: true,
         emailPrimaryColor: true,
+        contractIssuer: true,
       },
     });
   }
@@ -89,6 +90,7 @@ export class WorkspaceDao extends BaseDao {
         shotgunApiToken: true,
         logoUrl: true,
         emailPrimaryColor: true,
+        contractIssuer: true,
       },
     });
   }

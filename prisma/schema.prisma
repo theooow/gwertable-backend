@@ -261,6 +261,7 @@ model User {
 }
 
 model Workspace {
+  contractIssuer Json @default("{}")
   volunteerContracts VolunteerContract[]
   logoUrl            String?
   emailPrimaryColor  String?
