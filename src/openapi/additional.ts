@@ -71,6 +71,7 @@ const groups: Record<string, [string, string][]> = {
     ["POST /api/uploads/task-attachments", "Importer une pièce jointe de tâche"],
   ],
   Bénévoles: [
+    ["PUT /api/workspace/contract-issuer", "Configurer la structure émettrice des conventions de bénévolat (administrateur)"],
     ["GET /api/public/volunteers/portal/:token", "Consulter son portail bénévole avec un lien privé"],
     ["POST /api/public/volunteers/portal/:token/contract", "Obtenir le lien de signature de la convention de bénévolat"],
     ["PATCH /api/public/volunteers/portal/:token/planning", "Accepter ou refuser des créneaux proposés"],
