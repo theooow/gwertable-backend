@@ -19,7 +19,19 @@ function download(contract: VolunteerContract, format: "source" | "pdf" | "proof
   reply.header("Cache-Control", "no-store");
   reply.header("X-Content-Type-Options", "nosniff");
   reply.header("Content-Disposition", `attachment; filename="convention-${contract.id}-${format}.${format === "proof" ? "json" : "pdf"}"`);
-  if (format === "proof") return reply.type("application/json").send({ evidence: contract.evidence, signedPdfHash: contract.signedPdfHash });
+  if (format === "proof") {
+    const source = Buffer.from(contract.sourcePdf), signed = Buffer.from(contract.signedPdf!);
+    if (sha256(source) !== contract.documentHash || sha256(signed) !== contract.signedPdfHash) throw new ConflictError("Intégrité du dossier non vérifiable.");
+    return reply.type("application/json").send({
+      version: 2, evidence: contract.evidence, signedPdfHash: contract.signedPdfHash,
+      contract: { id: contract.id, title: contract.title, content: contract.content, snapshot: contract.snapshot },
+      documents: [
+        { filename: `convention-${contract.id}-source.pdf`, mediaType: "application/pdf", sha256: contract.documentHash, encoding: "base64", content: source.toString("base64") },
+        { filename: `convention-${contract.id}-pdf.pdf`, mediaType: "application/pdf", sha256: contract.signedPdfHash, encoding: "base64", content: signed.toString("base64") },
+      ],
+      verification: "Décoder les documents base64, calculer leur SHA-256 et comparer les empreintes. L’empreinte du document source doit correspondre à evidence.documentHash. L’attestation lisible figure à la fin du PDF signé.",
+    });
+  }
   const bytes = Buffer.from(format === "source" ? contract.sourcePdf : contract.signedPdf!);
   if (sha256(bytes) !== (format === "source" ? contract.documentHash : contract.signedPdfHash)) throw new ConflictError("Intégrité du PDF non vérifiable.");
   return reply.type("application/pdf").send(bytes);

@@ -12,6 +12,9 @@ export const questionSchema = z.object({
   options: z.array(name).max(30).default([]),
 }).refine((q) => q.type !== "select" || q.options.length > 0, "Ajoutez des choix");
 export const volunteerFormSchema = z.object({
+  contractContact: z.string().trim().max(1000).default(""),
+  contractRepresentative: z.string().trim().max(200).default(""),
+  contractRetentionYears: z.number().int().min(1).max(10).default(3),
   title: name, description: text, confirmationMessage: name,
   published: z.boolean(), closesAt: z.iso.datetime().nullable(),
   collectPhone: z.boolean(), collectDietary: z.boolean(),

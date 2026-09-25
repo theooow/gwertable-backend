@@ -1,71 +1,71 @@
 # Conventions de bénévolat
 
-Signature électronique **simple**, intégrée à Abregi, par code email. Ce procédé
-ne fournit ni vérification d’identité civile, ni certificat de signature, ni
-horodatage qualifié. Il ne garantit pas l’issue d’un contrôle. La convention doit
-refléter les conditions réelles du bénévolat (liberté, absence de rémunération et
-de subordination) ; le canevas doit être adapté par l’organisateur.
+## Parcours automatique
 
-Références : [Code civil, article 1367](https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000032042456/2021-10-30),
-[guide du bénévolat](https://www.associations.gouv.fr/IMG/pdf/guide_benevolat_2024-2025.pdf).
+Une candidature validée doit avoir un email et au moins un créneau affecté pour
+disposer de sa convention dans le portail personnel. Les emails de modification
+du planning rappellent de la signer. L’onglet Conventions de l’événement est
+supprimé ; les archives restent disponibles dans la fiche contact.
 
-## Parcours
+Le PDF contient l’organisme (identité légale si renseignée), le référent, le
+bénévole, le lieu, les dates, chaque poste, équipe, horaire et consigne de mission.
+Les clauses couvrent l’engagement libre et non rémunéré, l’accueil, les changements
+de mission, les données personnelles et l’acceptation par signature simple.
 
-Dans Bénévoles → Conventions, sélectionner une candidature validée, renseigner
-l’identité de l’organisme, son représentant et les conditions. La création fige
-le PDF et l’identité/email du contact. Télécharger et vérifier ce PDF avant
-« Envoyer pour signature ». Le représentant authentifié déclare son habilitation
-à émettre la convention ; ce parcours ne constitue pas une double signature OTP.
+Le formulaire d’inscription permet de configurer le représentant, le contact
+organisateur/RGPD et la conservation. Valeurs par défaut : équipe d’organisation,
+email du premier administrateur de l’espace et **3 ans après la fin de l’événement**.
+Renseigner le lieu dans l’événement et les missions dans les notes des créneaux.
+L’organisateur reste chargé de la suppression/anonymisation à échéance : aucune
+purge automatique des conventions n’est effectuée.
 
-Le bénévole reçoit un lien personnel valable 30 jours, lit le texte/PDF,
-demande un code, saisit son nom et accepte explicitement de signer. Après
-signature, il peut télécharger son exemplaire et le dossier de preuve depuis
-le même lien pendant sa validité. L’organisateur retrouve ces fichiers dans
-la fiche contact et l’événement. Une invitation peut être renvoyée avant
-signature, ce qui révoque le lien et les codes précédents. Pour corriger les
-informations, annuler la demande et créer une nouvelle convention. Une convention
-signée ne peut être annulée ou modifiée par ces API.
+## Versions et accès
 
-## Preuve et conservation
+Les modifications du planning, affectations automatiques, retraits de validation
+et échanges synchronisent la convention dans la même transaction sérialisable.
+Le portail synchronise aussi les anciennes conventions et les changements de
+paramètres. Les missions et conditions sont figées dans un instantané et une empreinte.
+Tout changement annule les versions en attente et nécessite une nouvelle signature.
+Les exemplaires signés restent immuables et consultables par l’organisateur.
+Retirer le dernier créneau termine la version : réaffecter exactement le même
+créneau ne réactive pas la signature antérieure.
 
-Les PDF avant/après signature sont stockés en base, avec leurs SHA-256. Le JSON
-de preuve associe le PDF présenté, l’identité déclarée, l’email vérifié, le
-consentement exact, les dates serveur et les informations techniques reçues.
-Le PDF signé reproduit la convention et ajoute une attestation. Ce PDF n’est pas
-un document PAdES et ne comporte pas de certificat cryptographique embarqué.
-L’IP est celle observée par le backend (souvent le proxy), pas une IP client
-certifiée. Un code email atteste de l’accès à une boîte, pas de l’identité civile.
+Chaque accès public et signature vérifie les affectations et la dernière version.
+Les liens du portail sont stockés dans une table d’accès séparée pour ne jamais
+réécrire un exemplaire signé. Ils sont valables 30 jours, renouvelables depuis le
+portail et révoqués par la rotation du lien du portail. Les anciennes API de
+création manuelle exigent également une affectation et incluent les clauses et
+missions automatiques.
 
-La base bloque toute modification de la source et toute modification d’un
-enregistrement signé/annulé. Les relations RESTRICT empêchent la suppression
-accidentelle des contacts, candidatures, événements et espaces portant ces
-conventions. L’archivage reste disponible. Un administrateur de base conserve
-techniquement la capacité de modifier/supprimer les données : ceci n’est pas
-un archivage probant indépendant. Sauvegarder la base et définir une politique
-de conservation/RGPD adaptée ; aucune purge automatique des conventions n’est
-effectuée. Les PDF ne sont pas placés dans un répertoire public.
+## PDF et preuve
 
-## Configuration et sécurité
+La base conserve les PDF source et signé avec leurs SHA-256 et protège le contenu
+figé ainsi que les conventions signées/annulées. L’attestation en fin du PDF signé
+indique l’identité déclarée, l’email vérifié, le consentement, les dates serveur,
+l’IP observée et l’empreinte du document présenté.
 
-Migration `20260924120000_volunteer_contracts`, sans nouvelle variable requise.
-Configurer SMTP et FRONTEND_URL en HTTPS comme pour les autres emails. Le
-transport `log` refuse les envois afin de ne pas simuler une vérification.
-Les liens utilisent 256 bits aléatoires et seule leur empreinte est en base.
-Les codes sont liés au lien et au PDF, expirent après 10 minutes, sont limités
-à 5 essais, 1 envoi/minute et 10 envois par convention. Les courses entre
-signature, rotation et annulation sont arbitrées par transactions sérialisables.
-Les logs applicatifs omettent les corps et masquent les liens/codes. Les logs
-des reverse proxies et de l’hébergement doivent également masquer les chemins
-`/volunteers/contracts/<token>` ; ne pas y activer d’analytics tiers.
+Le dossier JSON version 2 contient les preuves, l’instantané des missions, le
+texte et les deux PDF en base64. Décoder les PDF et comparer leurs SHA-256 aux
+empreintes déclarées ; celle de la source doit correspondre à `evidence.documentHash`.
+Les anciens dossiers restent téléchargeables avec leurs preuves d’origine.
 
-Les routes événement utilisent `volunteer.manage` et le contrôle de l’événement
-invité ; les routes contact utilisent `person.read` et sont interdites aux
-comptes limités à un événement. L’accès public est strictement limité à la
-convention identifiée par son lien et les réponses ne sont pas mises en cache.
+Ce procédé est une signature électronique simple par code email, sans vérification
+d’identité civile, certificat PAdES ou horodatage qualifié. L’IP peut être celle du
+proxy. Un administrateur de base peut techniquement modifier les données : ce
+n’est pas un archivage probant indépendant.
 
-## Vérification
+## Configuration et tests
 
-`npm run typecheck`, `npm run typecheck:tests`, puis
-`node --import tsx --import ./tests/setup-env.ts --test tests/volunteer-contracts.test.ts`
-avec les migrations appliquées sur une base de test dédiée. Les tests remplacent
-l’envoi SMTP, sans envoyer de messages réels.
+Migration `20260925120000_volunteer_contract_assignments`, sans variable nouvelle.
+Configurer SMTP et FRONTEND_URL en HTTPS. Le transport `log` refuse les codes.
+Codes valables 10 minutes, 5 essais, 1 envoi/minute et 10 envois par convention.
+Masquer les liens/codes dans les logs et proxies ; pas d’analytics tiers sur la signature.
+Les accès organisateur conservent les contrôles workspace/événement/contact.
+Les téléchargements sont privés et sans cache ; les empreintes sont vérifiées.
+
+`npm run typecheck`, `npm run typecheck:tests`, `npm test` sur une base de test
+dédiée avec les migrations appliquées. SMTP est simulé dans les tests.
+
+Références des clauses : [guide du bénévolat](https://www.associations.gouv.fr/IMG/pdf/guide_benevolat_2024-2025.pdf),
+[durées de conservation — CNIL](https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees).
+Les trois ans sont le choix de l’organisateur, pas une durée légale universelle.

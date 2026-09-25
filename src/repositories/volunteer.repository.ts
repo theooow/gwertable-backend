@@ -7,7 +7,7 @@ import { requireCan } from "../lib/permissions.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { availabilityPeriodSchema, questionSchema, intervalSchema, type ApplicationInput, type FormInput, type ReviewInput, type ShiftInput, type CateringInput } from "../schemas/volunteer.js";
 import { suggestVolunteerAssignments } from "../services/volunteer-planning.service.js";
-import { contractPdf } from "../services/volunteer-contract-pdf.js";
+import { hash, syncVolunteerContract } from "../services/volunteer-contract-lifecycle.js";
 
 // Serializable transactions prevent concurrent approvals or assignments from
 // exceeding meal capacities, duplicating contacts, or double-booking a person.
@@ -189,28 +189,8 @@ export class VolunteerRepository {
       } });
       if (data.status === "APPROVED" && app.status !== "APPROVED") {
         await tx.volunteerEmail.create({ data: { applicationId: id, kind: "APPROVED", dedupeKey: `approved:${id}:${updated.accessToken}` } });
-
-        // Auto-generate contract asynchronously outside the transaction
-        Promise.resolve().then(async () => {
-          try {
-            const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: { workspace: true } });
-            const person = await prisma.person.findUniqueOrThrow({ where: { id: app.personId } });
-            const email = person.email ?? app.email;
-            if (email) {
-              const content = `Convention de bénévolat\n\nOrganisme : ${event.workspace.name}\nReprésentant : L'équipe d'organisation\n\nBénévole : ${person.fullName}\nEmail : ${email}\nÉvénement : ${event.name}\nDébut : ${event.startsAt.toISOString()}\nFin : ${event.endsAt?.toISOString() ?? "Non précisée"}\n\nLe bénévole s'engage à participer à l'événement dans le respect des règles de l'organisation. L'association s'engage à fournir les conditions nécessaires au bon déroulement de la mission.\n\nÉmise par le représentant désigné, qui déclare être habilité à engager l’organisme.\nSignature électronique simple du bénévole par code email.`;
-              const pdf = await contractPdf(content);
-              await prisma.volunteerContract.create({ data: {
-                workspaceId: event.workspaceId, eventId, personId: app.personId, applicationId: app.id,
-                title: "Convention de bénévolat", eventName: event.name, signerName: person.fullName, signerEmail: email,
-                content, sourcePdf: new Uint8Array(pdf), documentHash: createHash("sha256").update(pdf).digest("hex"), createdBy: "system",
-                tokenHash: createHash("sha256").update(randomBytes(32)).digest("hex"), expiresAt: new Date(Date.now() + 30 * 86400000),
-              } });
-            }
-          } catch (err) {
-            console.error("Failed to auto-generate volunteer contract:", err);
-          }
-        });
       }
+      await syncVolunteerContract(tx, eventId, app.personId);
       return updated;
   }
 
@@ -231,15 +211,19 @@ export class VolunteerRepository {
         if (!intervals.some((v) => v.startsAt <= data.startsAt && v.endsAt >= data.endsAt)) throw new ConflictError("Créneau hors des disponibilités du bénévole");
         if (await tx.shift.findFirst({ where: { id: id ? { not: id } : undefined, assigneeId: data.assigneeId, startsAt: { lt: new Date(data.endsAt) }, endsAt: { gt: new Date(data.startsAt) } } })) throw new ConflictError("Ce bénévole est déjà affecté sur ces horaires");
       }
-      const changed = current && (current.assigneeId !== data.assigneeId || current.startsAt.toISOString() !== data.startsAt || current.endsAt.toISOString() !== data.endsAt || current.position !== data.position || (current.team ?? "") !== data.team);
+      const changed = current && (current.assigneeId !== data.assigneeId || current.startsAt.toISOString() !== data.startsAt || current.endsAt.toISOString() !== data.endsAt || current.position !== data.position || (current.team ?? "") !== data.team || (current.notes ?? "") !== data.notes);
       if (changed || (current && data.swapAllowed === false)) await tx.volunteerSwap.updateMany({ where: { status: "PENDING", OR: [{ sourceShiftId: id }, { targetShiftId: id }] }, data: { status: "DECLINED" } });
       if (id) {
         const updated = await tx.shift.update({ where: { id }, data: { ...data, reminderSentAt: null, ...(changed ? { confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } : {}) } });
         if (updated.assigneeId && changed) await this.queueShiftEmail(tx, eventId, updated.assigneeId, updated.id, updated.confirmationVersion);
+        for (const personId of new Set([current?.assigneeId, updated.assigneeId])) {
+          if (personId) await syncVolunteerContract(tx, eventId, personId);
+        }
         return updated;
       }
       const created = await tx.shift.create({ data: { ...data, eventId } });
       if (created.assigneeId) await this.queueShiftEmail(tx, eventId, created.assigneeId, created.id, created.confirmationVersion);
+      if (created.assigneeId) await syncVolunteerContract(tx, eventId, created.assigneeId);
       return created;
     });
   }
@@ -288,6 +272,7 @@ export class VolunteerRepository {
         const updated = await tx.shift.update({ where: { id: shift.id }, data: { assigneeId: assignment.personId, reminderSentAt: null, confirmationStatus: "PENDING", confirmationVersion: { increment: 1 } } });
         await this.queueShiftEmail(tx, eventId, assignment.personId, updated.id, updated.confirmationVersion);
       }
+      for (const personId of new Set(assignments.map((a) => a.personId))) await syncVolunteerContract(tx, eventId, personId);
       return { count: assignments.length };
     });
   }
@@ -324,13 +309,7 @@ export class VolunteerRepository {
     const alternatives = await prisma.shift.findMany({ where: { eventId: application.eventId, swapAllowed: true, assigneeId: { not: application.personId }, startsAt: { gt: new Date() }, assignee: { volunteerApplications: { some: { eventId: application.eventId, status: "APPROVED" } } } }, select: { id: true, position: true, team: true, startsAt: true, endsAt: true } });
     const swaps = await prisma.volunteerSwap.findMany({ where: { application: { eventId: application.eventId }, OR: [{ applicationId: application.id }, { targetPersonId: application.personId }] }, orderBy: { createdAt: "desc" }, take: 100 });
     const related = await prisma.shift.findMany({ where: { eventId: application.eventId, id: { in: swaps.flatMap((s) => [s.sourceShiftId, s.targetShiftId]) } }, select: { id: true, position: true, startsAt: true, endsAt: true } });
-    const contract = await prisma.volunteerContract.findFirst({ where: { applicationId: application.id }, orderBy: { createdAt: "desc" } });
-    
-    // Compute link to signature page if a tokenHash exists. But tokenHash is hashed. Oh wait, the link needs `token`. We can't reverse `tokenHash`.
-    // Wait, VolunteerContract schema has a tokenHash. How does the frontend get the token?
-    // In `volunteer-contract.repository.ts`, `invite` creates a new token and sends it.
-    // If we want the volunteer to access the contract from the portal directly, we can't use the email token because we don't have it.
-    // Actually, if they are authenticated in the portal via `application.accessToken`, we can just let them view/sign it through a new API, OR we can generate a temporary contract access token on the fly, OR we just generate a signature token.
+    const contract = await transaction((tx) => syncVolunteerContract(tx, application.eventId, application.personId));
     return { fullName: application.person.fullName, team: application.team, badgeToken: application.badgeToken, checkedInAt: application.checkedInAt, eventName: application.event.name,
       planningResponse: application.planningResponse, planningRespondedAt: application.planningRespondedAt,
       shifts: shifts.map(({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed }) => ({ id, position, team, startsAt, endsAt, notes, confirmationStatus, confirmationVersion, swapAllowed })), alternatives,
@@ -342,11 +321,13 @@ export class VolunteerRepository {
   async getContractToken(token: string) {
     return transaction(async (tx) => {
       const application = await this.portalApplication(token, tx);
-      const contract = await tx.volunteerContract.findFirst({ where: { applicationId: application.id }, orderBy: { createdAt: "desc" } });
+      const contract = await syncVolunteerContract(tx, application.eventId, application.personId);
       if (!contract) throw new NotFoundError("Aucune convention n'est associée à cette candidature.");
-      const contractToken = randomBytes(32).toString("base64url");
-      const tokenHash = createHash("sha256").update(contractToken).digest("hex");
-      await tx.volunteerContract.update({ where: { id: contract.id }, data: { tokenHash, expiresAt: new Date(Date.now() + 30 * 86400000) } });
+      const contractToken = createHash("sha256").update(`portal-contract:${token}:${contract.id}`).digest("base64url");
+      const tokenHash = hash(contractToken);
+      const expiresAt = new Date(Date.now() + 30 * 86400000);
+      await tx.volunteerContractAccess.upsert({ where: { tokenHash },
+        create: { tokenHash, contractId: contract.id, portalTokenHash: hash(token), expiresAt }, update: { expiresAt } });
       return { token: contractToken };
     });
   }
@@ -385,6 +366,7 @@ export class VolunteerRepository {
         ...(!accept ? { assigneeId: null, reminderSentAt: null, confirmationVersion: { increment: 1 } } : {}),
       } });
       await tx.volunteerApplication.update({ where: { id: app.id }, data: { planningResponse: accept ? "ACCEPTED" : "DECLINED", planningRespondedAt: new Date() } });
+      if (!accept) await syncVolunteerContract(tx, app.eventId, app.personId);
       return { ok: true };
     });
   }
@@ -425,12 +407,21 @@ export class VolunteerRepository {
         await this.queueShiftEmail(tx, application.eventId, application.personId, sourceUpdated.id, sourceUpdated.confirmationVersion);
         await this.queueShiftEmail(tx, application.eventId, swap.application.personId, targetUpdated.id, targetUpdated.confirmationVersion);
       }
+      if (accept) {
+        await syncVolunteerContract(tx, application.eventId, application.personId);
+        await syncVolunteerContract(tx, application.eventId, swap.application.personId);
+      }
       return tx.volunteerSwap.update({ where: { id }, data: { status: accept ? "ACCEPTED" : "DECLINED" } });
     });
   }
   async deleteShift(eventId: string, id: string) {
-    if (!(await prisma.shift.deleteMany({ where: { id, eventId } })).count) throw new NotFoundError("Créneau introuvable");
-    return { ok: true };
+    return transaction(async (tx) => {
+      const shift = await tx.shift.findFirst({ where: { id, eventId } });
+      if (!shift) throw new NotFoundError("Créneau introuvable");
+      await tx.shift.delete({ where: { id } });
+      if (shift.assigneeId) await syncVolunteerContract(tx, eventId, shift.assigneeId);
+      return { ok: true };
+    });
   }
   saveService(eventId: string, id: string | undefined, data: CateringInput) {
     return transaction(async (tx) => {

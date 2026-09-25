@@ -9,6 +9,7 @@ import { requireCan } from "../lib/permissions.js";
 import { contractMailer } from "../lib/mailer.js";
 import { VolunteerRepository, volunteerTransaction } from "./volunteer.repository.js";
 import { contractInput, signatureInput, SIGNATURE_CONSENT } from "../schemas/volunteer-contract.js";
+import { contractContext, contractContent, isCurrentContract, resolveContractToken } from "../services/volunteer-contract-lifecycle.js";
 import { contractPdf } from "../services/volunteer-contract-pdf.js";
 
 export const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -29,18 +30,23 @@ export class VolunteerContractRepository {
 
   async create(request: FastifyRequest, eventId: string, data: z.infer<typeof contractInput>) {
     const event = await volunteers.authorize(request, eventId);
-    const application = await prisma.volunteerApplication.findFirst({ where: { id: data.applicationId, eventId, status: "APPROVED" }, include: { person: true } });
-    if (!application) throw new ValidationError("Sélectionnez une candidature validée.");
-    const email = application.person.email ?? application.email;
-    if (!email) throw new ValidationError("Renseignez l’email du bénévole dans sa fiche contact.");
-    const content = `${data.title}\n\nOrganisme : ${data.organization}\nReprésentant : ${data.representative}\n\nBénévole : ${application.person.fullName}\nEmail : ${email}\nÉvénement : ${event.name}\nDébut : ${event.startsAt.toISOString()}\nFin : ${event.endsAt?.toISOString() ?? "Non précisée"}\n\n${data.terms}\n\nÉmise par le représentant désigné, qui déclare être habilité à engager l’organisme.\nSignature électronique simple du bénévole par code email.`;
-    const pdf = await contractPdf(content);
-    return prisma.volunteerContract.create({ data: {
-      workspaceId: request.workspaceId, eventId, personId: application.personId, applicationId: application.id,
-      title: data.title, eventName: event.name, signerName: application.person.fullName, signerEmail: email,
-      content, sourcePdf: new Uint8Array(pdf), documentHash: sha256(pdf), createdBy: request.user!.id,
-      tokenHash: sha256(randomBytes(32)), expiresAt: new Date(Date.now() + 30 * 86400000),
-    }, select: selectSummary });
+    return volunteerTransaction(async (tx) => {
+      const application = await tx.volunteerApplication.findFirst({ where: { id: data.applicationId, eventId, status: "APPROVED" }, include: { person: true } });
+      if (!application) throw new ValidationError("Sélectionnez une candidature validée.");
+      const email = application.person.email ?? application.email;
+      if (!email) throw new ValidationError("Renseignez l’email du bénévole dans sa fiche contact.");
+      const context = await contractContext(tx, application.id);
+      if (!context.eligible) throw new ValidationError("Affectez au moins un créneau au bénévole avant de créer sa convention.");
+      const content = contractContent(context) + `\n\nConditions complémentaires\nOrganisme : ${data.organization}\nReprésentant : ${data.representative}\n${data.terms}`;
+      const pdf = await contractPdf(content);
+      return tx.volunteerContract.create({ data: {
+        workspaceId: request.workspaceId, eventId, personId: application.personId, applicationId: application.id,
+        title: data.title, eventName: event.name, signerName: application.person.fullName, signerEmail: email,
+        assignmentHash: context.assignmentHash, snapshot: context.snapshot,
+        content, sourcePdf: new Uint8Array(pdf), documentHash: sha256(pdf), createdBy: request.user!.id,
+        tokenHash: sha256(randomBytes(32)), expiresAt: new Date(Date.now() + 30 * 86400000),
+      }, select: selectSummary });
+    });
   }
 
   async managed(request: FastifyRequest, id: string, scope: { eventId?: string; personId?: string }) {
@@ -52,6 +58,7 @@ export class VolunteerContractRepository {
   }
 
   async invite(contract: VolunteerContract) {
+    if (!await isCurrentContract(prisma, contract)) throw new ConflictError("Le planning a changé. La convention actuelle est disponible dans le portail bénévole.");
     const token = randomBytes(32).toString("base64url");
     const tokenHash = sha256(token);
     const now = new Date();
@@ -75,8 +82,8 @@ export class VolunteerContractRepository {
   }
 
   async publicContract(token: string) {
-    const contract = await prisma.volunteerContract.findUnique({ where: { tokenHash: sha256(token) } });
-    if (!contract || contract.status === "CANCELLED" || contract.expiresAt <= new Date()) throw new NotFoundError("Ce lien est expiré ou indisponible. Contactez l’organisateur.");
+    const contract = await resolveContractToken(prisma, token);
+    if (!contract || !await isCurrentContract(prisma, contract)) throw new NotFoundError("Ce lien est expiré ou indisponible. Contactez l’organisateur.");
     return contract;
   }
 
@@ -86,7 +93,7 @@ export class VolunteerContractRepository {
     const codeHash = sha256(`${token}:${contract.documentHash}:${code}`);
     const now = new Date();
     const updated = await prisma.volunteerContract.updateMany({ where: {
-      id: contract.id, tokenHash: sha256(token), status: "PENDING", codeSends: { lt: 10 },
+      id: contract.id, tokenHash: contract.tokenHash, status: "PENDING", codeSends: { lt: 10 },
       OR: [{ codeSentAt: null }, { codeSentAt: { lte: new Date(Date.now() - 60000) } }],
     }, data: { codeHash, codeSentAt: now, codeExpiresAt: new Date(Date.now() + 10 * 60000), codeAttempts: 0, codeSends: { increment: 1 } } });
     if (!updated.count) throw new ConflictError("Patientez une minute entre deux codes. Maximum 10 envois par convention ; contactez l’organisateur si nécessaire.");
@@ -101,8 +108,8 @@ export class VolunteerContractRepository {
   async sign(token: string, input: z.infer<typeof signatureInput>, request: Pick<FastifyRequest, "ip" | "headers">) {
     // Invalid attempts must commit, not roll back with the HTTP validation error.
     const result = await volunteerTransaction(async (tx) => {
-      const contract = await tx.volunteerContract.findUnique({ where: { tokenHash: sha256(token) } });
-      if (!contract || contract.status !== "PENDING" || contract.expiresAt <= new Date()) return { error: "Convention indisponible ou déjà signée." };
+      const contract = await resolveContractToken(tx, token);
+      if (!contract || contract.status !== "PENDING" || !await isCurrentContract(tx, contract)) return { error: "Convention indisponible ou déjà signée." };
       if (input.documentHash !== contract.documentHash) return { error: "Le document a changé. Rechargez la page." };
       if (!contract.codeHash || !contract.codeExpiresAt || contract.codeExpiresAt <= new Date() || contract.codeAttempts >= 5) return { error: "Code expiré ou bloqué. Demandez un nouveau code." };
       await tx.volunteerContract.update({ where: { id: contract.id }, data: { codeAttempts: { increment: 1 } } });
@@ -111,7 +118,9 @@ export class VolunteerContractRepository {
       if (sha256(Buffer.from(contract.sourcePdf)) !== contract.documentHash) throw new ConflictError("Intégrité du document non vérifiable.");
       const signedAt = new Date();
       const evidence = {
-        version: 1, method: "EMAIL_OTP_SIMPLE", contractId: contract.id, documentHash: contract.documentHash,
+        version: 2, eventId: contract.eventId, applicationId: contract.applicationId,
+        assignmentHash: contract.assignmentHash, snapshot: contract.snapshot,
+        method: "EMAIL_OTP_SIMPLE", contractId: contract.id, documentHash: contract.documentHash,
         documentHashAlgorithm: "SHA-256", signerName: input.name, signerEmail: contract.signerEmail,
         consent: SIGNATURE_CONSENT, signedAt: signedAt.toISOString(), codeSentAt: contract.codeSentAt!.toISOString(),
         invitationSentAt: contract.invitationSentAt?.toISOString() ?? null,
@@ -119,7 +128,7 @@ export class VolunteerContractRepository {
         ip: request.ip, userAgent: (request.headers["user-agent"] ?? "").slice(0, 1000),
         notice: "Signature électronique simple. Horodatage serveur, sans certificat ni horodatage qualifié. L’adresse IP est celle observée par le serveur et peut être celle du proxy.",
       };
-      const proof = `Convention : ${contract.id}\nSignataire : ${input.name}\nEmail vérifié : ${contract.signerEmail}\nSignée le : ${signedAt.toISOString()}\nCode envoyé le : ${evidence.codeSentAt}\n\n${SIGNATURE_CONSENT}\n\nEmpreinte SHA-256 du PDF présenté :\n${contract.documentHash}\n\n${evidence.notice}`;
+      const proof = `Convention : ${contract.id}\nSignataire : ${input.name}\nEmail vérifié : ${contract.signerEmail}\nSignée le : ${signedAt.toISOString()}\nÉmise le : ${evidence.issuedAt}\nÉmise par : ${evidence.issuedBy}\nCode envoyé le : ${evidence.codeSentAt}\nAdresse IP observée : ${evidence.ip}\n\n${SIGNATURE_CONSENT}\n\nEmpreinte SHA-256 du PDF présenté :\n${contract.documentHash}\n\n${evidence.notice}`;
       const pdf = await contractPdf(contract.content, proof);
       await tx.volunteerContract.update({ where: { id: contract.id }, data: { status: "SIGNED", signedAt, evidence, signedPdf: new Uint8Array(pdf), signedPdfHash: sha256(pdf), codeHash: null, codeExpiresAt: null } });
       return { ok: true };

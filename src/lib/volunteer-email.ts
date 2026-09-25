@@ -21,7 +21,7 @@ export function renderVolunteerEmail(data: VolunteerEmailContent) {
     ? data.confirmationMessage || "Votre candidature a bien été reçue. Nous vous écrirons dès qu’elle sera validée."
     : data.kind === "APPROVED"
       ? "Votre candidature est validée. Retrouvez votre planning et votre badge dans votre espace personnel."
-      : data.kind === "SHIFT_UPDATE" ? "Un de vos postes vient d’être affecté ou modifié. Retrouvez les nouveaux horaires dans votre espace personnel."
+      : data.kind === "SHIFT_UPDATE" ? "Un de vos postes vient d’être affecté ou modifié. Retrouvez vos horaires et votre convention de bénévolat à signer dans votre espace personnel. Toute modification de mission nécessite une nouvelle signature."
       : data.kind === "SWAP_REQUEST" ? "Un autre bénévole vous propose d’échanger un créneau. Consultez votre espace personnel pour accepter ou refuser cette demande."
       : "Vos créneaux sont prêts. Rendez-vous dans votre espace personnel pour accepter ou refuser l’ensemble de vos horaires à venir.";
   const cta = data.kind === "PLANNING" ? "Valider mes créneaux" : data.kind === "SWAP_REQUEST" ? "Répondre à la demande" : "Accéder à mon espace";

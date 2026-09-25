@@ -15,13 +15,14 @@ beforeEach(() => {
 async function context() {
   const { authorization, workspace, user } = await seedAdminSession();
   const { event, person } = await seedEventContext(authorization);
-  const application = await prisma.volunteerApplication.create({ data: { eventId: event.id, personId: person.id, fullName: person.fullName, status: "APPROVED" } });
+  const application = await prisma.volunteerApplication.create({ data: { eventId: event.id, personId: person.id, fullName: person.fullName, status: "APPROVED", accessToken: "p".repeat(43), availability: [{ startsAt: "2027-01-01T00:00:00.000Z", endsAt: "2027-01-03T00:00:00.000Z" }] } });
+  const shift = await prisma.shift.create({ data: { eventId: event.id, assigneeId: person.id, position: "Accueil", startsAt: new Date("2027-01-01T10:00:00Z"), endsAt: new Date("2027-01-01T12:00:00Z") } });
   const base = `/api/events/${event.id}/volunteers/contracts`;
   const input = { applicationId: application.id, title: "Convention de bénévolat", organization: "Association Test, 1 rue Test, Paris", representative: "Camille Dupont, présidente", terms: "Mission : accueil des participants. Engagement libre, non rémunéré. Respect des consignes de sécurité.", authorized: true };
   const created = await request("POST", base, authorization, input);
   assert.equal(created.statusCode, 201, created.body);
   const contract = json<{ id: string; documentHash: string }>(created);
-  return { authorization, workspace, user, event, person, application, base, input, contract };
+  return { authorization, workspace, user, event, person, application, shift, base, input, contract };
 }
 async function invite(c: Awaited<ReturnType<typeof context>>) {
   const response = await request("POST", `${c.base}/${c.contract.id}/invite`, c.authorization);
@@ -61,6 +62,11 @@ describe("volunteer contracts", () => {
     const proof = await request("GET", `${path}/proof`);
     assert.equal(proof.body.includes(otp), false);
     assert.equal(json<{ evidence: { method: string } }>(proof).evidence.method, "EMAIL_OTP_SIMPLE");
+    const bundle = proof.json();
+    assert.equal(bundle.evidence.version, 2);
+    assert.equal(bundle.evidence.snapshot.shifts[0].position, "Accueil");
+    assert.equal(bundle.evidence.snapshot.retentionYears, 3);
+    for (const document of bundle.documents) assert.equal(sha256(Buffer.from(document.content, "base64")), document.sha256);
     await prisma.person.update({ where: { id: c.person.id }, data: { fullName: "Changed", email: "changed@example.test" } });
     assert.equal((await request("GET", path)).json().signerName, c.person.fullName);
     await assert.rejects(prisma.volunteerContract.update({ where: { id: c.contract.id }, data: { content: "tampered" } }));
@@ -110,12 +116,54 @@ describe("volunteer contracts", () => {
     const c = await context();
     await assert.rejects(prisma.volunteerContract.update({ where: { id: c.contract.id }, data: { signerEmail: "attacker@example.test" } }));
     assert.equal((await request("POST", c.base, c.authorization, { ...c.input, authorized: false })).statusCode, 400);
-    await prisma.volunteerApplication.update({ where: { id: c.application.id }, data: { status: "REJECTED" } });
-    assert.equal((await request("POST", c.base, c.authorization, c.input)).statusCode, 400);
     mock.method(contractMailer, "send", async () => { throw new EmailDeliveryError("SMTP failure"); });
     assert.equal((await request("POST", `${c.base}/${c.contract.id}/invite`, c.authorization)).statusCode, 502);
     const saved = await prisma.volunteerContract.findUniqueOrThrow({ where: { id: c.contract.id } });
     assert.equal(saved.invitationSentAt, null);
+    await prisma.volunteerApplication.update({ where: { id: c.application.id }, data: { status: "REJECTED" } });
+    assert.equal((await request("POST", c.base, c.authorization, c.input)).statusCode, 400);
+  });
+
+  it("requires an assignment, renews the signed convention and reopens it from the portal without rewriting evidence", async () => {
+    const c = await context();
+    const portal = `/api/public/volunteers/portal/${c.application.accessToken}`;
+    const shiftBase = `/api/events/${c.event.id}/volunteers/shifts`;
+    assert.equal((await request("DELETE", `${shiftBase}/${c.shift.id}`, c.authorization)).statusCode, 200);
+    assert.equal((await request("GET", portal)).json().contract, null);
+    assert.equal((await request("POST", `${portal}/contract`)).statusCode, 404);
+    assert.equal((await request("POST", c.base, c.authorization, c.input)).statusCode, 400);
+    const shiftInput = { position: "Accueil", team: "Public", startsAt: "2027-01-01T10:00:00.000Z", endsAt: "2027-01-01T12:00:00.000Z", assigneeId: c.person.id, notes: "Accueillir et orienter le public." };
+    const created = await request("POST", shiftBase, c.authorization, shiftInput);
+    assert.equal(created.statusCode, 201, created.body);
+    const current = (await request("GET", portal)).json().contract;
+    const access = (await request("POST", `${portal}/contract`)).json().token;
+    const path = `/api/public/volunteers/contracts/${access}`;
+    const source = (await request("GET", path)).json();
+    assert.match(source.content, /Poste : Accueil/);
+    assert.match(source.content, /3 ans à compter/);
+    assert.match(source.content, /admin@abregi.test/);
+    const otp = await code(path);
+    const signed = await request("POST", `${path}/sign`, undefined, { code: otp, name: c.person.fullName, documentHash: source.documentHash, consent: true });
+    assert.equal(signed.statusCode, 200, signed.body);
+    const before = await prisma.volunteerContract.findUniqueOrThrow({ where: { id: current.id } });
+    const reopened = await request("POST", `${portal}/contract`);
+    assert.equal(reopened.statusCode, 200, reopened.body);
+    assert.equal((await request("GET", `/api/public/volunteers/contracts/${reopened.json().token}/pdf`)).statusCode, 200);
+    const after = await prisma.volunteerContract.findUniqueOrThrow({ where: { id: current.id } });
+    assert.deepEqual(after, before);
+    const changed = await request("PUT", `${shiftBase}/${created.json().id}`, c.authorization, { ...shiftInput, position: "Bar" });
+    assert.equal(changed.statusCode, 200, changed.body);
+    assert.equal((await request("GET", path)).statusCode, 404);
+    const replacement = (await request("GET", portal)).json().contract;
+    assert.notEqual(replacement.id, current.id);
+    assert.equal(replacement.status, "PENDING");
+    assert.deepEqual(await prisma.volunteerContract.findUniqueOrThrow({ where: { id: current.id } }), before);
+    assert.equal((await request("GET", `${c.base}/${current.id}/pdf`, c.authorization)).statusCode, 200);
+    const newAccess = (await request("POST", `${portal}/contract`)).json().token;
+    assert.match((await request("GET", `/api/public/volunteers/contracts/${newAccess}`)).json().content, /Poste : Bar/);
+    assert.equal((await request("DELETE", `${shiftBase}/${created.json().id}`, c.authorization)).statusCode, 200);
+    assert.equal((await request("GET", portal)).json().contract, null);
+    assert.equal((await request("POST", `/api/public/volunteers/contracts/${newAccess}/code`)).statusCode, 404);
   });
 
   it("limits event collaborators to their invited event and denies the contact route", async () => {
@@ -129,5 +177,21 @@ describe("volunteer contracts", () => {
     assert.equal((await request("GET", `/api/people/${c.person.id}/volunteers/contracts/${c.contract.id}/source`, c.authorization)).statusCode, 403);
     const other = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Not invited", startsAt: new Date() } });
     assert.equal((await request("GET", `/api/events/${other.id}/volunteers/contracts`, c.authorization)).statusCode, 403);
+  });
+
+  it("does not revive a signature after removing and restoring the same assignment", async () => {
+    const c = await context(); const { path } = await invite(c); const otp = await code(path);
+    assert.equal((await request("POST", `${path}/sign`, undefined, { code: otp, name: c.person.fullName, documentHash: c.contract.documentHash, consent: true })).statusCode, 200);
+    const shiftPath = `/api/events/${c.event.id}/volunteers/shifts/${c.shift.id}`;
+    const input = { position: c.shift.position, team: "", startsAt: c.shift.startsAt.toISOString(), endsAt: c.shift.endsAt.toISOString(), assigneeId: c.person.id, notes: "" };
+    assert.equal((await request("PUT", shiftPath, c.authorization, input)).statusCode, 200);
+    const portal = `/api/public/volunteers/portal/${c.application.accessToken}`;
+    assert.equal((await request("GET", portal)).json().contract.id, c.contract.id);
+    assert.equal((await request("PUT", shiftPath, c.authorization, { ...input, assigneeId: null })).statusCode, 200);
+    assert.equal((await request("GET", path)).statusCode, 404);
+    assert.equal((await request("PUT", shiftPath, c.authorization, input)).statusCode, 200);
+    const current = (await request("GET", portal)).json().contract;
+    assert.notEqual(current.id, c.contract.id);
+    assert.equal(current.status, "PENDING");
   });
 });

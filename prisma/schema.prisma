@@ -943,6 +943,9 @@ enum VolunteerStatus {
 }
 
 model VolunteerForm {
+  contractContact String @default("")
+  contractRepresentative String @default("")
+  contractRetentionYears Int @default(3)
   id          String @id @default(cuid())
   eventId     String @unique
   event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -962,6 +965,7 @@ model VolunteerForm {
 }
 
 model VolunteerApplication {
+  contractRevision Int @default(0)
   contracts VolunteerContract[]
   planningResponse String?
   planningRespondedAt DateTime?
@@ -999,6 +1003,9 @@ model VolunteerApplication {
 }
 
 model VolunteerContract {
+  assignmentHash String?
+  snapshot Json?
+  accesses VolunteerContractAccess[]
   id String @id @default(cuid())
   workspaceId String
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
@@ -1032,6 +1039,15 @@ model VolunteerContract {
   signedPdfHash String?
   @@index([workspaceId, personId])
   @@index([workspaceId, eventId])
+}
+
+model VolunteerContractAccess {
+  tokenHash String @id
+  contractId String
+  contract VolunteerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  portalTokenHash String
+  expiresAt DateTime
+  @@index([contractId])
 }
 
 model VolunteerEmail {
