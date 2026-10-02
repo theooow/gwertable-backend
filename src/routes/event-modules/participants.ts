@@ -5,7 +5,7 @@ import { prisma } from "../../prisma.js";
 import { requireCan } from "../../lib/permissions.js";
 import { NotFoundError, ConflictError } from "../../lib/errors.js";
 import { env } from "../../env.js";
-import { participantSchema } from "../../schemas/participant.js";
+import { participantCreateSchema, participantSchema } from "../../schemas/participant.js";
 import { EventParticipantDao } from "../../dao/event-participant.dao.js";
 import { EventParticipantRepository } from "../../repositories/event-participant.repository.js";
 import { EventParticipantService } from "../../services/event-participant.service.js";
@@ -37,9 +37,9 @@ export async function participantRoutes(fastify: FastifyInstance) {
     return participants.map((p) => toParticipantDTO(p, canSee));
   });
 
-  fastify.post("/api/events/:eventId/participants", { config: { documentation: { params: eventParamsSchema, body: participantSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/events/:eventId/participants", { config: { documentation: { params: eventParamsSchema, body: participantCreateSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
-    const data = participantSchema.parse(request.body);
+    const data = participantCreateSchema.parse(request.body);
     const participant = await service.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
     const canSee = service.canSeeSensitive(request.userRole);
     return reply.status(201).send(toParticipantDTO(participant, canSee));

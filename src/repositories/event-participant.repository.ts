@@ -1,5 +1,5 @@
-import type { PrismaClient, Prisma } from "@prisma/client";
-import type { ParticipantInput } from "../schemas/participant.js";
+import type { PersonType, PrismaClient, Prisma } from "@prisma/client";
+import type { ParticipantCreateInput, ParticipantInput } from "../schemas/participant.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
 import { EventParticipantDao } from "../dao/event-participant.dao.js";
 import { ActivityRepository } from "./activity.repository.js";
@@ -76,6 +76,12 @@ async function syncArtistExpense(
   });
 }
 
+function contactTypeForRoles(roles: string[]): PersonType {
+  if (roles.includes("ARTIST")) return "ARTIST";
+  if (roles.includes("SUPPLIER")) return "SUPPLIER";
+  return "CONTACT";
+}
+
 /**
  * Repository pour le domaine participant d'événement.
  * Orchestre le CRUD et la synchronisation de la dépense artiste.
@@ -140,23 +146,34 @@ export class EventParticipantRepository {
    * @param data - Données validées
    * @throws {ConflictError} Si la personne est déjà participante
    */
-  async create(eventId: string, workspaceId: string, userId: string, data: ParticipantInput) {
+  async create(eventId: string, workspaceId: string, userId: string, data: ParticipantCreateInput) {
     await this.assertEventInWorkspace(eventId, workspaceId);
-    await this.assertPersonInWorkspace(data.personId, workspaceId);
-
-    const existing = await this.participantDao.findByEventAndPerson(
-      eventId,
-      data.personId,
-      workspaceId,
-    );
-    if (existing) throw new ConflictError("Cette personne est deja participante de cet evenement");
+    if (data.personId) {
+      await this.assertPersonInWorkspace(data.personId, workspaceId);
+      const existing = await this.participantDao.findByEventAndPerson(
+        eventId,
+        data.personId,
+        workspaceId,
+      );
+      if (existing) throw new ConflictError("Cette personne est deja participante de cet evenement");
+    }
 
     const fee = normalizeFee(data.fee, data.roles);
     const participant = await volunteerTransaction(async (tx) => {
+      const personId = data.personId ?? (await tx.person.create({
+        data: {
+          workspaceId,
+          fullName: data.newPerson!.fullName,
+          email: data.newPerson!.email || null,
+          phone: data.newPerson!.phone || null,
+          contactType: contactTypeForRoles(data.roles),
+        },
+        select: { id: true },
+      })).id;
       const created = await tx.eventParticipant.create({
         data: {
           eventId,
-          personId: data.personId,
+          personId,
           roles: data.roles,
           rsvpStatus: data.rsvpStatus,
           plusOnes: data.plusOnes,

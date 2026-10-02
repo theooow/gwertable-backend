@@ -48,6 +48,22 @@ describe("event module routes", () => {
     assert.equal(linkedExpense?.amountCents, 1250);
     assert.equal(linkedExpense?.category, "artistes");
 
+    const inlineParticipant = await request("POST", `/api/events/${event.id}/participants`, authorization, {
+      ...participantPayload,
+      personId: undefined,
+      fee: "",
+      newPerson: { fullName: "Inline Artist", email: "inline@example.com" },
+    });
+    assert.equal(inlineParticipant.statusCode, 201);
+    const inlinePerson = json<{ personId: string }>(inlineParticipant);
+    const createdPerson = await prisma.person.findUniqueOrThrow({ where: { id: inlinePerson.personId } });
+    assert.equal(createdPerson.fullName, "Inline Artist");
+    assert.equal(createdPerson.contactType, "ARTIST");
+    assert.equal(
+      (await request("POST", `/api/events/${event.id}/participants`, authorization, { ...participantPayload, newPerson: { fullName: "Both" } })).statusCode,
+      400,
+    );
+
     assert.equal((await request("GET", `/api/events/${event.id}/participants`, authorization)).statusCode, 200);
     assert.equal(
       (await request("GET", `/api/events/${event.id}/participants/persons`, authorization)).statusCode,

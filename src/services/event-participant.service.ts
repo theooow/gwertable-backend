@@ -1,6 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan, can } from "../lib/permissions.js";
-import type { ParticipantInput } from "../schemas/participant.js";
+import type { ParticipantCreateInput, ParticipantInput } from "../schemas/participant.js";
 import { EventParticipantRepository } from "../repositories/event-participant.repository.js";
 
 /**
@@ -37,7 +37,7 @@ export class EventParticipantService {
     workspaceId: string,
     role: UserRole,
     userId: string,
-    data: ParticipantInput,
+    data: ParticipantCreateInput,
   ) {
     requireCan(role, "participant.write");
     return this.participantRepository.create(eventId, workspaceId, userId, data);
