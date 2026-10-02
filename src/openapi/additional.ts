@@ -10,6 +10,7 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/admin/logs", "Rechercher les journaux API (administrateur plateforme)"],
     ["GET /api/admin/logs/:id", "Consulter un journal API (administrateur plateforme)"],
     ["GET /api/admin/overview", "Consulter les statistiques de la plateforme"],
+    ["GET /api/admin/kpis", "Consulter les indicateurs d'usage de l'application"],
     ["PATCH /api/admin/users/:userId/plan", "Modifier l'abonnement d'un utilisateur"],
   ],
   Auth: [

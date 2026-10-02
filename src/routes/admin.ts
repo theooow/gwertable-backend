@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { isAdminEmail } from "../lib/admin.js";
 import { ForbiddenError, NotFoundError } from "../lib/errors.js";
+import { getAdminKpis } from "../repositories/admin-kpi.repository.js";
 
 const userParamsSchema = z.object({ userId: z.string().min(1) });
 const updatePlanSchema = z.object({
@@ -78,6 +79,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
     return { generatedAt: new Date().toISOString(), kpis: { totalUsers, totalWorkspaces, totalEvents, activeSessions,
       requests, errors, serverErrors, averageDurationMs: Math.round(latency._avg.durationMs ?? 0), slowRequests }, users };
   });
+
+  fastify.get("/api/admin/kpis", { config: { documentation: {} } }, async () => getAdminKpis(prisma));
 
   fastify.patch("/api/admin/users/:userId/plan", { config: { documentation: { params: userParamsSchema, body: updatePlanSchema } } }, async (request) => {
     assertAdmin(request);
