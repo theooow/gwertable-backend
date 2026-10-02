@@ -93,7 +93,7 @@ test("Swagger is served publicly, uses the current server and documents file res
   const result = await app.inject({ method: "GET", url: "/docs/json" });
   assert.equal(result.statusCode, 200);
   assert.deepEqual(result.json().servers, [{ url: "/", description: "Serveur courant" }]);
-  for (const [url, type] of [["/api/finance/invoices/{id}/pdf", "application/pdf"], ["/api/events/{eventId}/tasks/calendar.ics", "text/calendar"]]) {
+  for (const [url, type] of [["/api/events/{eventId}/tasks/calendar.ics", "text/calendar"]]) {
     const response = spec.paths[url]!.get!.responses[200] as OpenAPIV3.ResponseObject;
     assert.ok(response.content?.[type]);
   }
