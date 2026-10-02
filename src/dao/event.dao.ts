@@ -1,7 +1,9 @@
 import type { PrismaClient } from "@prisma/client";
-import { TicketSource } from "@prisma/client";
+import { EventStatus, TicketSource } from "@prisma/client";
 import type { EventInput } from "../schemas/event.js";
 import { BaseDao } from "./base.dao.js";
+
+const EVENT_DEFAULT_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const listInclude = {
   venue: { select: { name: true } },
@@ -146,6 +148,27 @@ export class EventDao extends BaseDao {
     return this.prisma.event.findUnique({
       where: { id, workspaceId },
       select: { shotgunEventId: true },
+    });
+  }
+
+  /**
+   * Passe en `DONE` les événements dont la date est dépassée.
+   * Sans date de fin, un événement est considéré terminé 24 h après son début.
+   *
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param now - Date de référence
+   */
+  async completePastEvents(workspaceId: string, now: Date = new Date()) {
+    return this.prisma.event.updateMany({
+      where: {
+        workspaceId,
+        status: { in: [EventStatus.DRAFT, EventStatus.PLANNING, EventStatus.LIVE] },
+        OR: [
+          { endsAt: { lt: now } },
+          { endsAt: null, startsAt: { lt: new Date(now.getTime() - EVENT_DEFAULT_DURATION_MS) } },
+        ],
+      },
+      data: { status: EventStatus.DONE },
     });
   }
 

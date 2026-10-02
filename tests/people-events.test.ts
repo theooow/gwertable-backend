@@ -140,4 +140,26 @@ describe("people and event routes", () => {
     const personById = await request("GET", `/api/people/${otherPerson.id}`, authorization);
     assert.equal(personById.statusCode, 404);
   });
+
+  it("marks events whose date has passed as done", async () => {
+    const { authorization } = await seedAdminSession();
+    const day = 24 * 60 * 60 * 1000;
+    const iso = (offset: number) => new Date(Date.now() + offset).toISOString();
+    const create = async (name: string, startsAt: string, endsAt: string | null, status = "LIVE") =>
+      json<{ id: string }>(await request("POST", "/api/events", authorization, { name, startsAt, status, ...(endsAt ? { endsAt } : {}) })).id;
+
+    const ended = await create("Ended", iso(-2 * day), iso(-day));
+    const startedYesterdayNoEnd = await create("No end, old", iso(-2 * day), null, "PLANNING");
+    const startedRecentlyNoEnd = await create("No end, recent", iso(-60 * 60 * 1000), null);
+    const upcoming = await create("Upcoming", iso(day), iso(2 * day), "PLANNING");
+    const archived = await create("Archived", iso(-2 * day), iso(-day), "ARCHIVED");
+
+    const events = json<Array<{ id: string; status: string }>>(await request("GET", "/api/events", authorization));
+    const statusOf = (id: string) => events.find((event) => event.id === id)?.status;
+    assert.equal(statusOf(ended), "DONE");
+    assert.equal(statusOf(startedYesterdayNoEnd), "DONE");
+    assert.equal(statusOf(startedRecentlyNoEnd), "LIVE");
+    assert.equal(statusOf(upcoming), "PLANNING");
+    assert.equal(statusOf(archived), "ARCHIVED");
+  });
 });
