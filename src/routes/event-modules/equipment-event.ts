@@ -19,6 +19,7 @@ import { ExpenseDao } from "../../dao/expense.dao.js";
 import { BudgetRepository } from "../../repositories/budget.repository.js";
 import { EquipmentRepository } from "../../repositories/equipment.repository.js";
 import { EquipmentService } from "../../services/equipment.service.js";
+import { recordRequestActivity } from "../../lib/activity-recorder.js";
 
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const usageParamsSchema = z.object({ eventId: z.string().min(1), usageId: z.string().min(1) });
@@ -71,6 +72,10 @@ async function storeQuoteFile(workspaceId: string, contentType: string, data: st
 }
 
 const budgetRepository = new BudgetRepository(new ExpenseDao(prisma), prisma);
+function usageName(usage: { name: string | null; item?: { name: string } | null }) {
+  return usage.item?.name ?? usage.name ?? "Matériel";
+}
+
 const service = new EquipmentService(
   new EquipmentRepository(new EquipmentItemDao(prisma), budgetRepository, prisma),
 );
@@ -85,6 +90,10 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentUsageSchema.parse(request.body);
     const usage = await service.createUsage(eventId, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_ADDED", title: `Matériel ajouté : ${usageName(usage)}`,
+      body: `Quantité : ${usage.quantity}`, entityType: "EQUIPMENT", entityId: usage.id,
+    });
     return reply.status(201).send(usage);
   });
 
@@ -92,18 +101,29 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentBulkImportSchema.parse(request.body);
     const result = await service.bulkImportLibraryUsages(eventId, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_IMPORTED", title: `${result.usages.length} matériel(s) ajouté(s) depuis le catalogue`,
+      entityType: "EQUIPMENT",
+    });
     return reply.status(201).send(result);
   });
 
   fastify.put("/api/events/:eventId/equipment/:usageId", { config: { documentation: { params: usageParamsSchema, body: equipmentUsageUpdateSchema } } }, async (request) => {
     const { eventId, usageId } = usageParamsSchema.parse(request.params);
     const data = equipmentUsageUpdateSchema.parse(request.body);
-    return service.updateUsage(usageId, eventId, request.workspaceId, request.userRole, data);
+    const usage = await service.updateUsage(usageId, eventId, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_UPDATED", title: `Matériel modifié : ${usageName(usage)}`,
+      entityType: "EQUIPMENT", entityId: usage.id,
+    });
+    return usage;
   });
 
   fastify.delete("/api/events/:eventId/equipment/:usageId", { config: { documentation: { params: usageParamsSchema } } }, async (request) => {
     const { eventId, usageId } = usageParamsSchema.parse(request.params);
-    return service.deleteUsage(usageId, eventId, request.workspaceId, request.userRole);
+    const result = await service.deleteUsage(usageId, eventId, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, { eventId, type: "EQUIPMENT_REMOVED", title: "Matériel retiré de l'événement", entityType: "EQUIPMENT" });
+    return result;
   });
 
   fastify.get("/api/events/:eventId/equipment-quotes", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
@@ -115,18 +135,29 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = equipmentQuoteSchema.parse(request.body);
     const quote = await service.createQuote(eventId, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_QUOTE_CREATED", title: `Devis matériel créé : ${quote.label}`,
+      entityType: "EQUIPMENT_QUOTE", entityId: quote.id,
+    });
     return reply.status(201).send(quote);
   });
 
   fastify.put("/api/events/:eventId/equipment-quotes/:quoteId", { config: { documentation: { params: quoteParamsSchema, body: equipmentQuoteSchema } } }, async (request) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
     const data = equipmentQuoteSchema.parse(request.body);
-    return service.updateQuote(quoteId, eventId, request.workspaceId, request.userRole, data);
+    const quote = await service.updateQuote(quoteId, eventId, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_QUOTE_UPDATED", title: `Devis matériel modifié : ${data.label}`,
+      entityType: "EQUIPMENT_QUOTE", entityId: quoteId,
+    });
+    return quote;
   });
 
   fastify.delete("/api/events/:eventId/equipment-quotes/:quoteId", { config: { documentation: { params: quoteParamsSchema } } }, async (request) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
-    return service.deleteQuote(quoteId, eventId, request.workspaceId, request.userRole);
+    const result = await service.deleteQuote(quoteId, eventId, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, { eventId, type: "EQUIPMENT_QUOTE_DELETED", title: "Devis matériel supprimé", entityType: "EQUIPMENT_QUOTE" });
+    return result;
   });
 
   fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", { config: { documentation: { params: quoteParamsSchema, body: receiptUploadSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
@@ -149,6 +180,10 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
 
     const fileUrl = `/api/uploads/equipment-quotes/${fileName}`;
     await service.attachQuoteFile(quoteId, eventId, request.workspaceId, request.userRole, fileUrl);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_QUOTE_FILE_ATTACHED", title: `Document joint au devis : ${parsed.fileName}`,
+      entityType: "EQUIPMENT_QUOTE", entityId: quoteId,
+    });
 
     return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
   });
@@ -168,6 +203,10 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     validateQuoteFile(parsed.contentType, buffer, true);
     const fileUrl = await storeQuoteFile(request.workspaceId, parsed.contentType, parsed.data);
     const quote = await service.confirmDocumentImport(eventId, request.workspaceId, request.userRole, parsed, fileUrl);
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_IMPORTED", title: `Matériel importé depuis ${parsed.fileName}`,
+      entityType: "EQUIPMENT_QUOTE",
+    });
     return reply.status(201).send(quote);
   });
 
@@ -198,6 +237,10 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
       ),
     );
 
+    await recordRequestActivity(request, {
+      eventId, type: "EQUIPMENT_IMPORTED", title: `Groupe de matériel ajouté : ${group.name}`,
+      body: `${usages.length} matériel(s)`, entityType: "EQUIPMENT",
+    });
     return reply.status(201).send(usages);
   });
 }

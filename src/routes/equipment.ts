@@ -13,6 +13,7 @@ import { EquipmentService } from "../services/equipment.service.js";
 import { toEquipmentItemDTO } from "../dto/equipment.dto.js";
 import { requireCan } from "../lib/permissions.js";
 import { NotFoundError } from "../lib/errors.js";
+import { recordRequestActivity } from "../lib/activity-recorder.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const groupItemParamsSchema = z.object({ id: z.string().min(1), itemId: z.string().min(1) });
@@ -69,6 +70,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
   fastify.post("/api/equipment", { config: { documentation: { body: equipmentItemSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = equipmentItemSchema.parse(request.body);
     const item = await service.create(request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_ITEM_CREATED", title: `Matériel ajouté au catalogue : ${item.name}`,
+      entityType: "EQUIPMENT_ITEM", entityId: item.id, notify: false,
+    });
     return reply.status(201).send(toEquipmentItemDTO(item));
   });
 
@@ -76,6 +81,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = equipmentItemSchema.parse(request.body);
     const item = await service.update(id, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_ITEM_UPDATED", title: `Matériel du catalogue modifié : ${item.name}`,
+      entityType: "EQUIPMENT_ITEM", entityId: item.id, notify: false,
+    });
     return toEquipmentItemDTO(item);
   });
 
@@ -83,12 +92,21 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = equipmentCellSchema.parse(request.body);
     const item = await service.updateCells(id, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_ITEM_UPDATED", title: `Matériel du catalogue modifié : ${item.name}`,
+      entityType: "EQUIPMENT_ITEM", entityId: item.id, notify: false,
+    });
     return toEquipmentItemDTO(item);
   });
 
   fastify.delete("/api/equipment/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return service.archive(id, request.workspaceId, request.userRole);
+    const result = await service.archive(id, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_ITEM_DELETED", title: "Matériel retiré du catalogue",
+      entityType: "EQUIPMENT_ITEM", entityId: id, notify: false,
+    });
+    return result;
   });
 
   fastify.post("/api/equipment/photo", { config: { documentation: { body: photoUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
@@ -131,6 +149,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
       data: { workspaceId: request.workspaceId, name },
       select: groupSelect,
     });
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_GROUP_CREATED", title: `Groupe de matériel créé : ${name}`,
+      entityType: "EQUIPMENT_GROUP", entityId: group.id, notify: false,
+    });
     return reply.status(201).send(group);
   });
 
@@ -140,13 +162,24 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const { name } = groupBodySchema.parse(request.body);
     const group = await prisma.equipmentGroup.findFirst({ where: { id, workspaceId: request.workspaceId } });
     if (!group) throw new NotFoundError("Groupe introuvable");
-    return prisma.equipmentGroup.update({ where: { id }, data: { name }, select: groupSelect });
+    const updated = await prisma.equipmentGroup.update({ where: { id }, data: { name }, select: groupSelect });
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_GROUP_UPDATED", title: `Groupe de matériel renommé : ${name}`,
+      entityType: "EQUIPMENT_GROUP", entityId: id, notify: false,
+    });
+    return updated;
   });
 
   fastify.delete("/api/equipment/groups/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     requireCan(request.userRole, "equipment.write");
     const { id } = idParamsSchema.parse(request.params);
-    await prisma.equipmentGroup.deleteMany({ where: { id, workspaceId: request.workspaceId } });
+    const { count } = await prisma.equipmentGroup.deleteMany({ where: { id, workspaceId: request.workspaceId } });
+    if (count > 0) {
+      await recordRequestActivity(request, {
+        type: "EQUIPMENT_GROUP_DELETED", title: "Groupe de matériel supprimé",
+        entityType: "EQUIPMENT_GROUP", entityId: id, notify: false,
+      });
+    }
     return { ok: true };
   });
 
@@ -162,6 +195,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
       create: { groupId, itemId, quantity },
     });
     const updated = await prisma.equipmentGroup.findUniqueOrThrow({ where: { id: groupId }, select: groupSelect });
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_GROUP_UPDATED", title: `Groupe de matériel complété : ${group.name}`,
+      entityType: "EQUIPMENT_GROUP", entityId: groupId, notify: false,
+    });
     return reply.status(201).send(updated);
   });
 
@@ -203,6 +240,10 @@ export async function equipmentRoutes(fastify: FastifyInstance) {
     const items = await service.importFromWorkspace(
       request.workspaceId, sourceWorkspaceId, itemIds, request.userRole,
     );
+    await recordRequestActivity(request, {
+      type: "EQUIPMENT_ITEM_CREATED", title: `${items.length} matériel(s) importé(s) dans le catalogue`,
+      entityType: "EQUIPMENT_ITEM", notify: false,
+    });
     return reply.status(201).send(items.map(toEquipmentItemDTO));
   });
 }
