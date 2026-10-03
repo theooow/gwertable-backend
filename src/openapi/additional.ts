@@ -2,9 +2,10 @@ import type { RouteDoc } from "./schemas.js";
 
 const groups: Record<string, [string, string][]> = {
   Activité: [
-    ["GET /api/activity", "Consulter le fil d'activité et les préférences"],
+    ["GET /api/activity", "Consulter le fil d'activité (filtré par droits, paginé) et les préférences"],
     ["PUT /api/activity/preferences", "Modifier les préférences du fil d'activité"],
-    ["POST /api/activity/mark-read", "Marquer les activités comme lues"],
+    ["POST /api/activity/mark-read", "Marquer toutes les notifications comme lues"],
+    ["POST /api/activity/notifications/:id/read", "Marquer une notification comme lue"],
   ],
   Administration: [
     ["GET /api/admin/logs", "Rechercher les journaux API (administrateur plateforme)"],

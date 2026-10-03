@@ -1,52 +1,17 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient, UserRole } from "@prisma/client";
+import {
+  activityCategoryOf,
+  activityPreferenceOf,
+  canSeeActivityCategory,
+  visibleActivityTypes,
+  type ActivityCategory,
+  type ActivityNotificationType,
+  type ActivityPreferenceKey,
+} from "../lib/activity-catalog.js";
 
-export type ActivityNotificationType =
-  | "TASK_CREATED"
-  | "TASK_UPDATED"
-  | "TASK_STATUS_UPDATED"
-  | "TASK_COMMENT"
-  | "TASK_DUE_SOON"
-  | "TASK_DELETED"
-  | "TASK_CATEGORY_CREATED"
-  | "TASK_CATEGORY_UPDATED"
-  | "TASK_CATEGORY_DELETED"
-  | "TASK_ATTACHMENT_CREATED"
-  | "TASK_ATTACHMENT_DELETED"
-  | "EVENT_CREATED"
-  | "EVENT_UPDATED"
-  | "EVENT_DELETED"
-  | "EXPENSE_CREATED"
-  | "EXPENSE_UPDATED"
-  | "EXPENSE_DELETED"
-  | "INCOME_CREATED"
-  | "INCOME_UPDATED"
-  | "INCOME_DELETED"
-  | "TICKET_TIER_CREATED"
-  | "TICKET_TIER_UPDATED"
-  | "TICKET_TIER_DELETED"
-  | "CONSUMABLE_CREATED"
-  | "CONSUMABLE_UPDATED"
-  | "CONSUMABLE_DELETED"
-  | "SHOPPING_CREATED"
-  | "SHOPPING_UPDATED"
-  | "SHOPPING_BOUGHT"
-  | "SHOPPING_DELETED"
-  | "PARTICIPANT_CREATED"
-  | "PARTICIPANT_UPDATED"
-  | "PARTICIPANT_DELETED"
-  | "COLLABORATOR_INVITED"
-  | "COLLABORATOR_REMOVED"
-  | "RUN_OF_SHOW_CREATED"
-  | "RUN_OF_SHOW_UPDATED"
-  | "RUN_OF_SHOW_DELETED"
-  | "RUN_OF_SHOW_TRACK_CREATED"
-  | "RUN_OF_SHOW_TRACK_UPDATED"
-  | "RUN_OF_SHOW_TRACK_DELETED"
-  | "RUN_OF_SHOW_SECTION_CREATED"
-  | "RUN_OF_SHOW_SECTION_UPDATED"
-  | "RUN_OF_SHOW_SECTION_DELETED";
+export type { ActivityNotificationType } from "../lib/activity-catalog.js";
 
-type RecordActivityInput = {
+export type RecordActivityInput = {
   workspaceId: string;
   eventId?: string | null;
   actorId?: string | null;
@@ -59,66 +24,81 @@ type RecordActivityInput = {
   notify?: boolean;
 };
 
-type Preference = {
-  taskCommentsEnabled: boolean;
-  budgetChangesEnabled: boolean;
-  taskDueSoonEnabled: boolean;
+export type ActivityViewer = {
+  userId: string;
+  email: string;
+  role: UserRole;
+  eventScoped: boolean;
 };
+
+export type ActivityListFilters = {
+  eventId?: string;
+  category?: ActivityCategory;
+  cursor?: string;
+  limit: number;
+};
+
+type Preference = Record<ActivityPreferenceKey, boolean>;
+
+type VisibilityFilter = { type: { in: string[] } } | { OR: { eventId: string; type: { in: string[] } }[] };
 
 const defaultPreference: Preference = {
   taskCommentsEnabled: true,
-  budgetChangesEnabled: true,
   taskDueSoonEnabled: true,
+  budgetChangesEnabled: true,
+  equipmentChangesEnabled: true,
+  volunteerChangesEnabled: true,
 };
 
-function isEnabled(type: ActivityNotificationType, preference: Preference) {
-  if (type.startsWith("TASK_") && type !== "TASK_DUE_SOON") return preference.taskCommentsEnabled;
-  if (type.startsWith("EXPENSE_") || type.startsWith("INCOME_") || type.startsWith("SHOPPING_")) {
-    return preference.budgetChangesEnabled;
-  }
-  if (type === "TASK_DUE_SOON") return preference.taskDueSoonEnabled;
-  return true;
-}
+const actorSelect = { id: true, email: true, name: true, firstName: true, lastName: true, image: true } as const;
 
-function isString(value: string | null): value is string {
-  return typeof value === "string";
+function isEnabled(type: ActivityNotificationType, preference: Preference) {
+  const key = activityPreferenceOf(type);
+  return key ? preference[key] : true;
 }
 
 export class ActivityRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async list(workspaceId: string, userId: string, eventId?: string) {
-    const [activities, notifications, unreadCount, preferences] = await Promise.all([
+  async list(workspaceId: string, viewer: ActivityViewer, filters: ActivityListFilters) {
+    const visibility = await this.visibilityFilter(workspaceId, viewer, filters.category);
+    const eventFilter = filters.eventId ? { eventId: filters.eventId } : {};
+    const notificationWhere = { workspaceId, userId: viewer.userId, ...eventFilter, AND: [visibility] };
+
+    const [entries, notifications, unreadCount, preferences] = await Promise.all([
       this.prisma.activityEntry.findMany({
-        where: { workspaceId, ...(eventId ? { eventId } : {}) },
-        orderBy: { createdAt: "desc" },
-        take: 80,
-        include: {
-          actor: { select: { id: true, email: true, name: true, firstName: true, lastName: true, image: true } },
-          event: { select: { id: true, name: true } },
+        where: {
+          workspaceId,
+          ...eventFilter,
+          AND: [visibility],
         },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: filters.limit + 1,
+        ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+        include: { actor: { select: actorSelect }, event: { select: { id: true, name: true } } },
       }),
       this.prisma.inAppNotification.findMany({
-        where: { workspaceId, userId, ...(eventId ? { eventId } : {}) },
+        where: notificationWhere,
         orderBy: { createdAt: "desc" },
         take: 40,
         include: {
           event: { select: { id: true, name: true } },
-          activity: {
-            include: {
-              actor: { select: { id: true, email: true, name: true, firstName: true, lastName: true, image: true } },
-              event: { select: { id: true, name: true } },
-            },
-          },
+          activity: { include: { actor: { select: actorSelect }, event: { select: { id: true, name: true } } } },
         },
       }),
-      this.prisma.inAppNotification.count({
-        where: { workspaceId, userId, readAt: null, ...(eventId ? { eventId } : {}) },
-      }),
-      this.getPreferences(workspaceId, userId),
+      this.prisma.inAppNotification.count({ where: { ...notificationWhere, readAt: null } }),
+      this.getPreferences(workspaceId, viewer.userId),
     ]);
 
-    return { activities, notifications, unreadCount, preferences };
+    const activities = entries.slice(0, filters.limit);
+    const nextCursor = entries.length > filters.limit ? activities.at(-1)?.id ?? null : null;
+    return {
+      activities: activities.map((entry) => ({ ...entry, category: activityCategoryOf(entry.type) })),
+      notifications: notifications.map((notification) => ({ ...notification, category: activityCategoryOf(notification.type) })),
+      unreadCount,
+      preferences,
+      nextCursor,
+    };
   }
 
   async getPreferences(workspaceId: string, userId: string) {
@@ -132,12 +112,7 @@ export class ActivityRepository {
   async updatePreferences(
     workspaceId: string,
     userId: string,
-    data: {
-      taskCommentsEnabled: boolean;
-      budgetChangesEnabled: boolean;
-      taskDueSoonEnabled: boolean;
-      taskDueSoonMinutes: number;
-    },
+    data: Partial<Preference> & { taskDueSoonMinutes: number },
   ) {
     return this.prisma.activityNotificationPreference.upsert({
       where: { workspaceId_userId: { workspaceId, userId } },
@@ -152,6 +127,14 @@ export class ActivityRepository {
       data: { readAt: new Date() },
     });
     return { ok: true };
+  }
+
+  async markRead(workspaceId: string, userId: string, id: string) {
+    const { count } = await this.prisma.inAppNotification.updateMany({
+      where: { id, workspaceId, userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { ok: true, updated: count };
   }
 
   async record(input: RecordActivityInput) {
@@ -172,7 +155,8 @@ export class ActivityRepository {
 
     if (input.notify === false) return activity;
 
-    const recipients = await this.findRecipients(input.workspaceId, input.eventId ?? null);
+    const category = activityCategoryOf(input.type);
+    const recipients = await this.findRecipients(input.workspaceId, input.eventId ?? null, category);
     const userIds = recipients.filter((userId) => userId !== input.actorId);
     if (userIds.length === 0) return activity;
 
@@ -199,18 +183,40 @@ export class ActivityRepository {
     return activity;
   }
 
-  private async findRecipients(workspaceId: string, eventId: string | null) {
+  /** Collaborators only see the events they were invited to, with the role of each invitation. */
+  private async visibilityFilter(workspaceId: string, viewer: ActivityViewer, category?: ActivityCategory): Promise<VisibilityFilter> {
+    const categories = category ? [category] : undefined;
+    if (!viewer.eventScoped) return { type: { in: visibleActivityTypes(viewer.role, categories) } };
+
+    const invitations = await this.prisma.eventCollaborator.findMany({
+      where: { workspaceId, acceptedAt: { not: null }, OR: [{ userId: viewer.userId }, { email: viewer.email }] },
+      select: { eventId: true, role: true },
+    });
+    return {
+      OR: invitations.map((invitation) => ({
+        eventId: invitation.eventId,
+        type: { in: visibleActivityTypes(invitation.role, categories) },
+      })),
+    };
+  }
+
+  private async findRecipients(workspaceId: string, eventId: string | null, category: ActivityCategory | null) {
+    const allowed = ({ role }: { role: UserRole }) => !category || canSeeActivityCategory(role, category);
     const members = await this.prisma.workspaceMember.findMany({
       where: { workspaceId },
-      select: { userId: true },
+      select: { userId: true, role: true },
     });
-    const collaboratorUserIds = eventId
+    const collaborators = eventId
       ? await this.prisma.eventCollaborator.findMany({
           where: { workspaceId, eventId, acceptedAt: { not: null }, userId: { not: null } },
-          select: { userId: true },
+          select: { userId: true, role: true },
         })
       : [];
 
-    return [...new Set([...members.map((member) => member.userId), ...collaboratorUserIds.map((item) => item.userId).filter(isString)])];
+    const userIds = [
+      ...members.filter(allowed).map((member) => member.userId),
+      ...collaborators.filter(allowed).flatMap((collaborator) => (collaborator.userId ? [collaborator.userId] : [])),
+    ];
+    return [...new Set(userIds)];
   }
 }
