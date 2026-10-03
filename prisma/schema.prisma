@@ -1310,6 +1310,7 @@ model Income {
   amountTtcCents Int @default(0)
   category    String   // bar, merch, caisse, sponsor, autre
   receivedAt  DateTime?
+  receiptUrl  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

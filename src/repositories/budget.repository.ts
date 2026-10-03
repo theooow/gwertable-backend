@@ -42,6 +42,7 @@ type IncomeInput = {
   vatRateBasisPoints: number;
   category: string;
   receivedAt?: string | null;
+  receiptUrl?: string | null;
 };
 
 type TicketTierInput = {
@@ -424,6 +425,7 @@ export class BudgetRepository {
         amountTtcCents: amounts.amountTtcCents,
         category: data.category,
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
+        receiptUrl: data.receiptUrl || null,
       },
     });
     await this.activityRepository.record({
@@ -504,6 +506,7 @@ export class BudgetRepository {
         amountTtcCents: amounts.amountTtcCents,
         category: data.category,
         receivedAt: data.receivedAt ? new Date(data.receivedAt) : null,
+        receiptUrl: data.receiptUrl || null,
       },
     });
     await this.activityRepository.record({

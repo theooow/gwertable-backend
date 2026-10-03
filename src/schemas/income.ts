@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIMITS, requiredText } from "./limits.js";
+import { LIMITS, optionalText, requiredText } from "./limits.js";
 
 export const INCOME_CATEGORIES = ["bar", "merch", "caisse", "sponsor", "autre"] as const;
 
@@ -11,6 +11,7 @@ export const incomeSchema = z.object({
   vatRateBasisPoints: z.number().int().min(0).max(10000).default(0),
   category: z.enum(INCOME_CATEGORIES),
   receivedAt: z.string().optional().or(z.literal("")),
+  receiptUrl: optionalText("L'URL du justificatif", LIMITS.url),
 });
 
 export type IncomeInput = z.infer<typeof incomeSchema>;

@@ -12,8 +12,8 @@ export const expenseImportConfirmSchema = budgetImportPreviewSchema.extend({
   lines: z.array(expenseSchema.omit({ receiptUrl: true })).min(1).max(100),
 });
 
-export const incomeImportConfirmSchema = z.object({
-  lines: z.array(incomeSchema).min(1).max(100),
+export const incomeImportConfirmSchema = budgetImportPreviewSchema.extend({
+  lines: z.array(incomeSchema.omit({ receiptUrl: true })).min(1).max(100),
 });
 
 export type BudgetImportPreviewInput = z.infer<typeof budgetImportPreviewSchema>;

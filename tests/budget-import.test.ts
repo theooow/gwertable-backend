@@ -150,6 +150,9 @@ describe("budget document import", () => {
     const { event } = await seedEventContext(authorization);
 
     const response = await request("POST", `/api/events/${event.id}/incomes/import-confirm`, authorization, {
+      fileName: "devis.pdf",
+      contentType: "application/pdf",
+      data: base64("%PDF fake"),
       lines: [{ label: "Sponsoring soirée", amount: "1200", category: "sponsor" }],
     });
 
@@ -157,5 +160,6 @@ describe("budget document import", () => {
     const incomes = await prisma.income.findMany({ where: { eventId: event.id } });
     assert.equal(incomes.length, 1);
     assert.equal(incomes[0]?.amountCents, 120000);
+    assert.ok(incomes[0]?.receiptUrl?.startsWith("/api/uploads/receipts/"));
   });
 });

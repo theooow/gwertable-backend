@@ -131,7 +131,10 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/incomes/import-confirm", { config: { documentation: { params: eventParamsSchema, body: incomeImportConfirmSchema, statusCodes: [201] } } }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = incomeImportConfirmSchema.parse(request.body);
-    const incomes = await service.importIncomes(eventId, request.workspaceId, request.userRole, request.user!.id, data.lines);
+    requireCan(request.userRole, "budget.write");
+    const receiptUrl = await storeImportedReceipt(request.workspaceId, data.contentType, data.data);
+    const lines = data.lines.map((line) => ({ ...line, receiptUrl }));
+    const incomes = await service.importIncomes(eventId, request.workspaceId, request.userRole, request.user!.id, lines);
     return reply.status(201).send(incomes);
   });
 
