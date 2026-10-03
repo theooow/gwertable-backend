@@ -140,7 +140,7 @@ describe("budget document import", () => {
     assert.equal(response.statusCode, 201);
     const expenses = json<Array<{ label: string; receiptUrl: string | null; phase: string }>>(response);
     assert.equal(expenses.length, 2);
-    assert.ok(expenses.every((expense) => expense.receiptUrl?.startsWith("/uploads/receipts/")));
+    assert.ok(expenses.every((expense) => expense.receiptUrl?.startsWith("/api/uploads/receipts/")));
     assert.equal(expenses[0]?.receiptUrl, expenses[1]?.receiptUrl);
     assert.equal(await prisma.expense.count({ where: { eventId: event.id, phase: "FORECAST" } }), 2);
   });

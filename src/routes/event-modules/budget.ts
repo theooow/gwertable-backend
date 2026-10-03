@@ -38,7 +38,7 @@ async function storeImportedReceipt(workspaceId: string, contentType: string, da
   const directory = path.join(uploadRoot, "receipts");
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, fileName), buffer);
-  return `/uploads/receipts/${fileName}`;
+  return `/api/uploads/receipts/${fileName}`;
 }
 
 const service = new BudgetService(
