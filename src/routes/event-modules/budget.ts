@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { ValidationError } from "../../lib/errors.js";
 import { requireCan } from "../../lib/permissions.js";
+import { DOCUMENT_BODY_LIMIT, MAX_DOCUMENT_BYTES } from "../../lib/upload-limits.js";
 import { expenseCellSchema, incomeCellSchema } from "../../schemas/budget-cell.js";
 import { budgetImportPreviewSchema, expenseImportConfirmSchema, incomeImportConfirmSchema } from "../../schemas/budget-import.js";
 import { expenseSchema } from "../../schemas/expense.js";
@@ -33,7 +34,7 @@ async function storeImportedReceipt(workspaceId: string, contentType: string, da
   const ext = receiptExtensions[contentType];
   if (!ext) throw new ValidationError("Format non supporte pour l'analyse automatique (PDF ou image)");
   const buffer = Buffer.from(data, "base64");
-  if (buffer.byteLength > 20 * 1024 * 1024) throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
+  if (buffer.byteLength > MAX_DOCUMENT_BYTES) throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
   const fileName = `${workspaceId}-${crypto.randomUUID()}${ext}`;
   const directory = path.join(uploadRoot, "receipts");
   await mkdir(directory, { recursive: true });
@@ -92,13 +93,13 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     return service.listExpensePersons(eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/expenses/import-preview", { config: { documentation: { params: eventParamsSchema, body: budgetImportPreviewSchema } } }, async (request) => {
+  fastify.post("/api/events/:eventId/expenses/import-preview", { config: { documentation: { params: eventParamsSchema, body: budgetImportPreviewSchema } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request) => {
     eventParamsSchema.parse(request.params);
     const data = budgetImportPreviewSchema.parse(request.body);
     return service.previewDocumentImport("expense", request.userRole, request.user!.usagePlan, data);
   });
 
-  fastify.post("/api/events/:eventId/expenses/import-confirm", { config: { documentation: { params: eventParamsSchema, body: expenseImportConfirmSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/events/:eventId/expenses/import-confirm", { config: { documentation: { params: eventParamsSchema, body: expenseImportConfirmSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = expenseImportConfirmSchema.parse(request.body);
     requireCan(request.userRole, "budget.write");
@@ -122,13 +123,13 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(income);
   });
 
-  fastify.post("/api/events/:eventId/incomes/import-preview", { config: { documentation: { params: eventParamsSchema, body: budgetImportPreviewSchema } } }, async (request) => {
+  fastify.post("/api/events/:eventId/incomes/import-preview", { config: { documentation: { params: eventParamsSchema, body: budgetImportPreviewSchema } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request) => {
     eventParamsSchema.parse(request.params);
     const data = budgetImportPreviewSchema.parse(request.body);
     return service.previewDocumentImport("income", request.userRole, request.user!.usagePlan, data);
   });
 
-  fastify.post("/api/events/:eventId/incomes/import-confirm", { config: { documentation: { params: eventParamsSchema, body: incomeImportConfirmSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/events/:eventId/incomes/import-confirm", { config: { documentation: { params: eventParamsSchema, body: incomeImportConfirmSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const data = incomeImportConfirmSchema.parse(request.body);
     requireCan(request.userRole, "budget.write");

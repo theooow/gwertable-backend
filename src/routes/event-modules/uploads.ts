@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireCan } from "../../lib/permissions.js";
 import { prisma } from "../../prisma.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../lib/errors.js";
+import { DOCUMENT_BODY_LIMIT, MAX_DOCUMENT_BYTES } from "../../lib/upload-limits.js";
 
 const uploadRoot = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 const allowedReceiptTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -137,12 +138,12 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     return reply.send(data);
   });
 
-  fastify.post("/api/uploads/expense-receipts", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/uploads/expense-receipts", { config: { documentation: { body: receiptUploadSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
     requireCan(request.userRole, "expenseClaim.create");
     const parsed = receiptUploadSchema.parse(request.body);
     if (!allowedReceiptTypes.has(parsed.contentType)) throw new ValidationError("Format de justificatif non supporte");
     const buffer = Buffer.from(parsed.data, "base64");
-    if (buffer.byteLength > 8 * 1024 * 1024) throw new ValidationError("Le justificatif ne doit pas depasser 8 Mo");
+    if (buffer.byteLength > MAX_DOCUMENT_BYTES) throw new ValidationError("Le justificatif ne doit pas depasser 20 Mo");
 
     const fileName = `${request.workspaceId}-${crypto.randomUUID()}${extensionForContentType(parsed.contentType)}`;
     const directory = path.join(uploadRoot, "receipts");

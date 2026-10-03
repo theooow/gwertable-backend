@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { ValidationError, NotFoundError } from "../../lib/errors.js";
+import { DOCUMENT_BODY_LIMIT, MAX_DOCUMENT_BYTES } from "../../lib/upload-limits.js";
 import {
   equipmentBulkImportSchema,
   equipmentImportConfirmSchema,
@@ -53,7 +54,7 @@ function validateQuoteFile(contentType: string, buffer: Buffer, analyzableOnly =
       ? "Format non supporte pour l'analyse automatique (PDF ou image)"
       : "Format non supporte (PDF, image, Word)");
   }
-  if (buffer.byteLength > 20 * 1024 * 1024) {
+  if (buffer.byteLength > MAX_DOCUMENT_BYTES) {
     throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
   }
 }
@@ -128,7 +129,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return service.deleteQuote(quoteId, eventId, request.workspaceId, request.userRole);
   });
 
-  fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", { config: { documentation: { params: quoteParamsSchema, body: receiptUploadSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment-quotes/:quoteId/file", { config: { documentation: { params: quoteParamsSchema, body: receiptUploadSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
     const { eventId, quoteId } = quoteParamsSchema.parse(request.params);
     const parsed = receiptUploadSchema.parse(request.body);
 
@@ -136,7 +137,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
       throw new ValidationError("Format non supporté (PDF, image, Word)");
     }
     const buffer = Buffer.from(parsed.data, "base64");
-    if (buffer.byteLength > 20 * 1024 * 1024) {
+    if (buffer.byteLength > MAX_DOCUMENT_BYTES) {
       throw new ValidationError("Le fichier ne doit pas dépasser 20 Mo");
     }
 
@@ -152,7 +153,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: fileUrl, fileName: parsed.fileName, contentType: parsed.contentType });
   });
 
-  fastify.post("/api/events/:eventId/equipment/import-preview", { config: { documentation: { params: eventParamsSchema, body: equipmentImportPreviewSchema } } }, async (request) => {
+  fastify.post("/api/events/:eventId/equipment/import-preview", { config: { documentation: { params: eventParamsSchema, body: equipmentImportPreviewSchema } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request) => {
     eventParamsSchema.parse(request.params);
     const parsed = equipmentImportPreviewSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");
@@ -160,7 +161,7 @@ export async function equipmentEventRoutes(fastify: FastifyInstance) {
     return service.previewDocumentImport(request.workspaceId, request.userRole, request.user!.usagePlan, parsed);
   });
 
-  fastify.post("/api/events/:eventId/equipment/import-confirm", { config: { documentation: { params: eventParamsSchema, body: equipmentImportConfirmSchema, statusCodes: [201] } } }, async (request, reply) => {
+  fastify.post("/api/events/:eventId/equipment/import-confirm", { config: { documentation: { params: eventParamsSchema, body: equipmentImportConfirmSchema, statusCodes: [201] } }, bodyLimit: DOCUMENT_BODY_LIMIT }, async (request, reply) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = equipmentImportConfirmSchema.parse(request.body);
     const buffer = Buffer.from(parsed.data, "base64");

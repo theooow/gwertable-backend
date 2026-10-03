@@ -1,3 +1,4 @@
+import { MAX_DOCUMENT_BYTES } from "../lib/upload-limits.js";
 import { ValidationError } from "../lib/errors.js";
 
 export type DocumentType = "quote" | "invoice" | "unknown";
@@ -202,7 +203,7 @@ function assertAnalyzableDocument(input: DocumentExtractionInput) {
     throw new ValidationError("Format non supporte pour l'analyse automatique (PDF ou image).");
   }
   const buffer = Buffer.from(input.dataBase64, "base64");
-  if (buffer.byteLength > 20 * 1024 * 1024) {
+  if (buffer.byteLength > MAX_DOCUMENT_BYTES) {
     throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
   }
 }

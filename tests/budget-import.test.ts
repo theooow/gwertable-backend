@@ -145,6 +145,20 @@ describe("budget document import", () => {
     assert.equal(await prisma.expense.count({ where: { eventId: event.id, phase: "FORECAST" } }), 2);
   });
 
+  it("accepts documents larger than the default body limit", async () => {
+    const { authorization } = await seedAdminSession();
+    const { event } = await seedEventContext(authorization);
+
+    const response = await request("POST", `/api/events/${event.id}/expenses/import-confirm`, authorization, {
+      fileName: "facture-lourde.pdf",
+      contentType: "application/pdf",
+      data: Buffer.alloc(5 * 1024 * 1024, 1).toString("base64"),
+      lines: [{ label: "Scène", amount: "900", category: "lieu" }],
+    });
+
+    assert.equal(response.statusCode, 201);
+  });
+
   it("confirms incomes", async () => {
     const { authorization } = await seedAdminSession();
     const { event } = await seedEventContext(authorization);
