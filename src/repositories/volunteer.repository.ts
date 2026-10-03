@@ -116,13 +116,13 @@ export class VolunteerRepository {
       // Same response for repeat submissions: never disclose existing personal data
       // and never let an anonymous retry overwrite a reviewed application.
       const existing = await tx.volunteerApplication.findUnique({ where: { eventId_email: { eventId: form.eventId, email: data.email } } });
-      if (existing) return { message: form.confirmationMessage };
+      if (existing) return { message: form.confirmationMessage, application: null };
       let person = await tx.person.findFirst({ where: { workspaceId: form.event.workspaceId, email: { equals: data.email, mode: "insensitive" } } });
       if (!person) person = await tx.person.create({ data: {
         workspaceId: form.event.workspaceId, fullName: data.fullName, email: data.email,
         phone: form.collectPhone ? data.phone : "", tags: ["bénévole"],
       } });
-      if (await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId: form.eventId, personId: person.id } } })) return { message: form.confirmationMessage };
+      if (await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId: form.eventId, personId: person.id } } })) return { message: form.confirmationMessage, application: null };
       const application = await tx.volunteerApplication.create({ data: {
         eventId: form.eventId, personId: person.id, email: data.email, fullName: data.fullName,
         phone: form.collectPhone ? data.phone : "", dietary: form.collectDietary ? data.dietary : "",
@@ -130,7 +130,10 @@ export class VolunteerRepository {
         meals: { create: mealIds.map((serviceId) => ({ serviceId })) },
       } });
       await tx.volunteerEmail.create({ data: { applicationId: application.id, kind: "REGISTERED", dedupeKey: `registered:${application.id}` } });
-      return { message: form.confirmationMessage };
+      return {
+        message: form.confirmationMessage,
+        application: { id: application.id, eventId: form.eventId, workspaceId: form.event.workspaceId, fullName: application.fullName },
+      };
     });
   }
 
@@ -297,6 +300,15 @@ export class VolunteerRepository {
       const updated = await tx.volunteerApplication.update({ where: { id: application.id }, data: { checkedInAt: present ? application.checkedInAt ?? new Date() : null } });
       return { fullName: application.person.fullName, checkedInAt: updated.checkedInAt };
     });
+  }
+
+  /** Identifies who acted through a personal portal link, for the activity feed. */
+  async portalActivityContext(token: string) {
+    const application = await prisma.volunteerApplication.findFirst({
+      where: { accessToken: token },
+      select: { id: true, eventId: true, fullName: true, event: { select: { workspaceId: true } } },
+    });
+    return application && { id: application.id, eventId: application.eventId, fullName: application.fullName, workspaceId: application.event.workspaceId };
   }
 
   private async portalApplication(token: string, tx: Prisma.TransactionClient = prisma) {

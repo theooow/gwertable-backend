@@ -11,6 +11,7 @@ import { VolunteerRepository, volunteerTransaction } from "./volunteer.repositor
 import { contractInput, signatureInput, SIGNATURE_CONSENT } from "../schemas/volunteer-contract.js";
 import { contractContext, contractContent, isCurrentContract, resolveContractToken } from "../services/volunteer-contract-lifecycle.js";
 import { contractPdf } from "../services/volunteer-contract-pdf.js";
+import { recordActivity } from "../lib/activity-recorder.js";
 
 export const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const volunteers = new VolunteerRepository();
@@ -105,7 +106,7 @@ export class VolunteerContractRepository {
     return { ok: true };
   }
 
-  async sign(token: string, input: z.infer<typeof signatureInput>, request: Pick<FastifyRequest, "ip" | "headers">) {
+  async sign(token: string, input: z.infer<typeof signatureInput>, request: Pick<FastifyRequest, "ip" | "headers" | "log">) {
     // Invalid attempts must commit, not roll back with the HTTP validation error.
     const result = await volunteerTransaction(async (tx) => {
       const contract = await resolveContractToken(tx, token);
@@ -131,9 +132,15 @@ export class VolunteerContractRepository {
       const proof = `Convention : ${contract.id}\nSignataire : ${input.name}\nEmail vérifié : ${contract.signerEmail}\nSignée le : ${signedAt.toISOString()}\nÉmise le : ${evidence.issuedAt}\nÉmise par : ${evidence.issuedBy}\nCode envoyé le : ${evidence.codeSentAt}\nAdresse IP observée : ${evidence.ip}\n\n${SIGNATURE_CONSENT}\n\nEmpreinte SHA-256 du PDF présenté :\n${contract.documentHash}\n\n${evidence.notice}`;
       const pdf = await contractPdf(contract.content, proof);
       await tx.volunteerContract.update({ where: { id: contract.id }, data: { status: "SIGNED", signedAt, evidence, signedPdf: new Uint8Array(pdf), signedPdfHash: sha256(pdf), codeHash: null, codeExpiresAt: null } });
-      return { ok: true };
+      return { contract };
     });
     if ("error" in result) throw new ValidationError(result.error!);
-    return result;
+    const { contract } = result;
+    await recordActivity({
+      workspaceId: contract.workspaceId, eventId: contract.eventId,
+      type: "VOLUNTEER_CONTRACT_SIGNED", title: `Convention signée par ${contract.signerName}`, body: contract.title,
+      entityType: "VOLUNTEER_CONTRACT", entityId: contract.id,
+    }, request.log);
+    return { ok: true };
   }
 }

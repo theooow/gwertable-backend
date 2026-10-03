@@ -4,6 +4,7 @@ import { z } from "zod";
 import { VolunteerContractRepository, sha256 } from "../repositories/volunteer-contract.repository.js";
 import { contractInput, signatureInput, SIGNATURE_CONSENT } from "../schemas/volunteer-contract.js";
 import { ConflictError } from "../lib/errors.js";
+import { recordRequestActivity } from "../lib/activity-recorder.js";
 
 const repository = new VolunteerContractRepository();
 const publicParams = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
@@ -54,14 +55,33 @@ export async function volunteerContractRoutes(app: FastifyInstance) {
     const { personId, id, format } = personDownloadParams.parse(req.params);
     return download(await repository.managed(req, id, { personId }), format, reply);
   });
-  app.post("/api/events/:eventId/volunteers/contracts", { config: { documentation: { params: eventParams, body: contractInput, statusCodes: [201] } } }, async (req, reply) => reply.code(201).send(await repository.create(req, eventParams.parse(req.params).eventId, contractInput.parse(req.body))));
+  app.post("/api/events/:eventId/volunteers/contracts", { config: { documentation: { params: eventParams, body: contractInput, statusCodes: [201] } } }, async (req, reply) => {
+    const contract = await repository.create(req, eventParams.parse(req.params).eventId, contractInput.parse(req.body));
+    await recordRequestActivity(req, {
+      eventId: contract.eventId, type: "VOLUNTEER_CONTRACT_CREATED", title: `Convention créée pour ${contract.signerName}`,
+      body: contract.title, entityType: "VOLUNTEER_CONTRACT", entityId: contract.id, notify: false,
+    });
+    return reply.code(201).send(contract);
+  });
   app.post("/api/events/:eventId/volunteers/contracts/:id/invite", { config: { documentation: { params: eventContractParams } } }, async (req) => {
     const { eventId, id } = eventContractParams.parse(req.params);
-    return repository.invite(await repository.managed(req, id, { eventId }));
+    const contract = await repository.managed(req, id, { eventId });
+    const result = await repository.invite(contract);
+    await recordRequestActivity(req, {
+      eventId, type: "VOLUNTEER_CONTRACT_SENT", title: `Convention envoyée à ${contract.signerName}`,
+      body: contract.title, entityType: "VOLUNTEER_CONTRACT", entityId: contract.id, notify: false,
+    });
+    return result;
   });
   app.post("/api/events/:eventId/volunteers/contracts/:id/cancel", { config: { documentation: { params: eventContractParams } } }, async (req) => {
     const { eventId, id } = eventContractParams.parse(req.params);
-    return repository.cancel(await repository.managed(req, id, { eventId }));
+    const contract = await repository.managed(req, id, { eventId });
+    const result = await repository.cancel(contract);
+    await recordRequestActivity(req, {
+      eventId, type: "VOLUNTEER_CONTRACT_CANCELLED", title: `Convention annulée pour ${contract.signerName}`,
+      body: contract.title, entityType: "VOLUNTEER_CONTRACT", entityId: contract.id,
+    });
+    return result;
   });
 
   app.register(async (publicRoutes) => {
