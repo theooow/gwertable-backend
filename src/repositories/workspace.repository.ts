@@ -507,7 +507,7 @@ export class WorkspaceRepository {
       data: { defaultWorkspaceId: collaborator!.workspaceId },
     });
 
-    return { ok: true, workspace: collaborator!.workspace };
+    return { ok: true, workspace: collaborator!.workspace, eventId: collaborator!.event.id };
   }
 
   /**

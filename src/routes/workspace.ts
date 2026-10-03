@@ -7,6 +7,7 @@ import { env } from "../env.js";
 import { prisma } from "../prisma.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
+import { recordActivity, recordRequestActivity } from "../lib/activity-recorder.js";
 import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 import { WorkspaceDao } from "../dao/workspace.dao.js";
 import { WorkspaceMemberDao } from "../dao/workspace-member.dao.js";
@@ -111,7 +112,11 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     if (request.eventScoped) throw new ForbiddenError("Paramètres réservés à l’administrateur de l’espace");
     requireCan(request.userRole, "user.manage");
     const contractIssuer = contractIssuerSchema.parse(request.body);
-    return prisma.workspace.update({ where: { id: request.workspaceId }, data: { contractIssuer }, select: { contractIssuer: true } });
+    const workspace = await prisma.workspace.update({ where: { id: request.workspaceId }, data: { contractIssuer }, select: { contractIssuer: true } });
+    await recordRequestActivity(request, {
+      type: "WORKSPACE_UPDATED", title: "Organisme émetteur des conventions modifié", entityType: "WORKSPACE", notify: false,
+    });
+    return workspace;
   });
   fastify.get("/uploads/profile-images/:fileName", { config: { documentation: { params: z.object({ fileName: z.string().min(1) }) } } }, async (request, reply) => {
     const { fileName } = z.object({ fileName: z.string().min(1) }).parse(request.params);
@@ -266,16 +271,18 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.put("/api/workspace", { config: { documentation: { body: updateWorkspaceSchema } } }, async (request) => {
     const parsed = updateWorkspaceSchema.parse(request.body);
-    return {
-      workspace: await service.updateWorkspace(
-        request.workspaceId,
-        request.userRole,
-        parsed.name,
-        parsed.shotgunOrganizerId || undefined,
-        parsed.shotgunApiToken || undefined,
-        nullableString(parsed.emailPrimaryColor),
-      ),
-    };
+    const workspace = await service.updateWorkspace(
+      request.workspaceId,
+      request.userRole,
+      parsed.name,
+      parsed.shotgunOrganizerId || undefined,
+      parsed.shotgunApiToken || undefined,
+      nullableString(parsed.emailPrimaryColor),
+    );
+    await recordRequestActivity(request, {
+      type: "WORKSPACE_UPDATED", title: "Paramètres de l'espace modifiés", entityType: "WORKSPACE", notify: false,
+    });
+    return { workspace };
   });
 
   fastify.delete("/api/workspace", { config: { documentation: { body: deleteConfirmationSchema } } }, async (request) => {
@@ -314,12 +321,20 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.put("/api/workspace/members/:memberId", { config: { documentation: { params: workspaceMemberParamsSchema, body: updateWorkspaceMemberSchema } } }, async (request) => {
     const { memberId } = workspaceMemberParamsSchema.parse(request.params);
     const { role: newRole } = updateWorkspaceMemberSchema.parse(request.body);
-    return service.updateMemberRole(memberId, request.workspaceId, request.userRole, newRole);
+    const member = await service.updateMemberRole(memberId, request.workspaceId, request.userRole, newRole);
+    await recordRequestActivity(request, {
+      type: "MEMBER_ROLE_UPDATED", title: `Rôle modifié : ${member.user.name ?? member.user.email}`,
+      body: `Nouveau rôle : ${member.role}`, entityType: "MEMBER", entityId: member.id, notify: false,
+    });
+    return member;
   });
 
   fastify.delete("/api/workspace/members/:memberId", { config: { documentation: { params: workspaceMemberParamsSchema } } }, async (request) => {
     const { memberId } = workspaceMemberParamsSchema.parse(request.params);
     await service.removeMember(memberId, request.workspaceId, request.userRole, request.user!.id);
+    await recordRequestActivity(request, {
+      type: "MEMBER_REMOVED", title: "Membre retiré de l'espace", entityType: "MEMBER", entityId: memberId, notify: false,
+    });
     return { ok: true };
   });
 
@@ -334,6 +349,10 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
     const inviteUrl = new URL("/login", env.FRONTEND_URL);
     inviteUrl.searchParams.set("invite", invitation.token);
+    await recordRequestActivity(request, {
+      type: "MEMBER_INVITED", title: `Invitation envoyée : ${invitation.email}`,
+      body: `Rôle : ${invitation.role}`, entityType: "MEMBER", entityId: invitation.id, notify: false,
+    });
 
     return reply.status(201).send({
       id: invitation.id,
@@ -346,6 +365,14 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/workspace/invitations/accept", { config: { documentation: { body: acceptInvitationSchema } } }, async (request) => {
     const { inviteToken } = acceptInvitationSchema.parse(request.body);
-    return service.acceptInvitation(inviteToken, request.user!.id, request.user!.email);
+    const result = await service.acceptInvitation(inviteToken, request.user!.id, request.user!.email);
+    const who = request.user!.name ?? request.user!.email;
+    await recordActivity({
+      workspaceId: result.workspace.id, eventId: result.eventId ?? null, actorId: request.user!.id,
+      type: "MEMBER_JOINED",
+      title: result.eventId ? `${who} a rejoint l'événement en tant que collaborateur` : `${who} a rejoint l'espace`,
+      entityType: "MEMBER",
+    }, request.log);
+    return result;
   });
 }
