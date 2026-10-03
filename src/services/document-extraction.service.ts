@@ -39,12 +39,14 @@ export type EquipmentImportPreview = {
   warnings: string[];
 };
 
+type DocumentExtractionInput = {
+  fileName: string;
+  contentType: string;
+  dataBase64: string;
+};
+
 export interface DocumentExtractionProvider {
-  extract(input: {
-    fileName: string;
-    contentType: string;
-    dataBase64: string;
-  }): Promise<EquipmentImportPreview>;
+  extractText(input: DocumentExtractionInput, instructions: string): Promise<string>;
 }
 
 const ANALYZABLE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -108,12 +110,16 @@ function parseProviderJson(value: unknown, fallbackLabel: string): EquipmentImpo
   };
 }
 
-function parseProviderText(text: string, fallbackLabel: string) {
+function parseProviderText<T>(text: string, parse: (value: unknown) => T): T {
   try {
-    return parseProviderJson(JSON.parse(text), fallbackLabel);
+    return parse(JSON.parse(text));
   } catch {
     throw new ValidationError("Le provider d'extraction n'a pas retourne un JSON valide.");
   }
+}
+
+function fallbackLabelFor(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "");
 }
 
 function openAiOutputText(payload: unknown) {
@@ -122,21 +128,23 @@ function openAiOutputText(payload: unknown) {
   return response.output?.flatMap((item) => item.content ?? []).map((content) => content.text ?? "").join("") ?? "";
 }
 
-function extractionPrompt(input?: { contentType: string; dataBase64: string }) {
-  const pdfPayload = input?.contentType === "application/pdf"
-    ? `PDF base64:\n${input.dataBase64}`
-    : "";
+function withPdfPayload(instructions: string, input: DocumentExtractionInput) {
+  return input.contentType === "application/pdf"
+    ? `${instructions}\n\nPDF base64:\n${input.dataBase64}`
+    : instructions;
+}
+
+function equipmentExtractionPrompt() {
   return [
     "Extract equipment rental quote/invoice lines as strict JSON.",
     "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',supplierName:string|null,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,discountCents:number|null,discountPct:number|null,lines:[{name:string,category:string,quantity:number,unitPriceCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,rentalCoef:number,notes:string|null,confidence:number}],warnings:string[]}.",
     "For each line, put the human-readable product description in name. If the document has a short reference/code and a longer designation, put the longer designation in name and put the reference/code in notes.",
     "Use cents for money. Detect supplierName when visible. Detect whether document line prices are HT or TTC; most French supplier quotes/invoices list TTC totals, so choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Do not create catalog matches. Invoices are treated as equipment quotes.",
-    pdfPayload,
-  ].filter(Boolean).join("\n\n");
+  ].join("\n\n");
 }
 
 class OpenAiDocumentExtractionProvider implements DocumentExtractionProvider {
-  async extract(input: { fileName: string; contentType: string; dataBase64: string }) {
+  async extractText(input: DocumentExtractionInput, instructions: string) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new ValidationError("Provider OpenAI non configure: OPENAI_API_KEY est requis.");
     const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
@@ -149,7 +157,7 @@ class OpenAiDocumentExtractionProvider implements DocumentExtractionProvider {
         input: [{
           role: "user",
           content: [
-            { type: "input_text", text: extractionPrompt() },
+            { type: "input_text", text: instructions },
             { type: "input_file", filename: input.fileName, file_data: `data:${input.contentType};base64,${input.dataBase64}` },
           ],
         }],
@@ -157,13 +165,12 @@ class OpenAiDocumentExtractionProvider implements DocumentExtractionProvider {
       }),
     });
     if (!response.ok) throw new ValidationError(`Extraction OpenAI impossible (${response.status}).`);
-    const payload = await response.json();
-    return parseProviderText(openAiOutputText(payload), input.fileName.replace(/\.[^.]+$/, ""));
+    return openAiOutputText(await response.json());
   }
 }
 
 class OllamaDocumentExtractionProvider implements DocumentExtractionProvider {
-  async extract(input: { fileName: string; contentType: string; dataBase64: string }) {
+  async extractText(input: DocumentExtractionInput, instructions: string) {
     const model = process.env.OLLAMA_MODEL || "llava";
     const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/generate`, {
@@ -171,7 +178,7 @@ class OllamaDocumentExtractionProvider implements DocumentExtractionProvider {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        prompt: extractionPrompt(input),
+        prompt: withPdfPayload(instructions, input),
         images: input.contentType.startsWith("image/") ? [input.dataBase64] : undefined,
         stream: false,
         format: "json",
@@ -179,7 +186,7 @@ class OllamaDocumentExtractionProvider implements DocumentExtractionProvider {
     });
     if (!response.ok) throw new ValidationError(`Extraction Ollama impossible (${response.status}).`);
     const payload = await response.json() as { response?: string };
-    return parseProviderText(payload.response ?? "{}", input.fileName.replace(/\.[^.]+$/, ""));
+    return payload.response ?? "{}";
   }
 }
 
@@ -190,11 +197,7 @@ function providerFromEnv(): DocumentExtractionProvider {
   throw new ValidationError("DOCUMENT_AI_PROVIDER doit valoir openai ou ollama.");
 }
 
-export async function previewEquipmentDocument(input: {
-  fileName: string;
-  contentType: string;
-  dataBase64: string;
-}): Promise<EquipmentImportPreview> {
+function assertAnalyzableDocument(input: DocumentExtractionInput) {
   if (!ANALYZABLE_TYPES.has(input.contentType)) {
     throw new ValidationError("Format non supporte pour l'analyse automatique (PDF ou image).");
   }
@@ -202,8 +205,12 @@ export async function previewEquipmentDocument(input: {
   if (buffer.byteLength > 20 * 1024 * 1024) {
     throw new ValidationError("Le fichier ne doit pas depasser 20 Mo");
   }
+}
 
-  const result = await providerFromEnv().extract(input);
+export async function previewEquipmentDocument(input: DocumentExtractionInput): Promise<EquipmentImportPreview> {
+  assertAnalyzableDocument(input);
+  const text = await providerFromEnv().extractText(input, equipmentExtractionPrompt());
+  const result = parseProviderText(text, (value) => parseProviderJson(value, fallbackLabelFor(input.fileName)));
   if (result.lines.length === 0) result.warnings.push("Aucune ligne materiel fiable detectee.");
   return result;
 }
