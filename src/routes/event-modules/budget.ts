@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { ValidationError } from "../../lib/errors.js";
 import { requireCan } from "../../lib/permissions.js";
+import { recordRequestActivity } from "../../lib/activity-recorder.js";
 import { DOCUMENT_BODY_LIMIT, MAX_DOCUMENT_BYTES } from "../../lib/upload-limits.js";
 import { expenseCellSchema, incomeCellSchema } from "../../schemas/budget-cell.js";
 import { budgetImportPreviewSchema, expenseImportConfirmSchema, incomeImportConfirmSchema } from "../../schemas/budget-import.js";
@@ -106,6 +107,10 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     const receiptUrl = await storeImportedReceipt(request.workspaceId, data.contentType, data.data);
     const lines = data.lines.map((line) => ({ ...line, receiptUrl }));
     const expenses = await service.importExpenses(eventId, request.workspaceId, request.userRole, request.user!.id, lines);
+    await recordRequestActivity(request, {
+      eventId, type: "EXPENSE_IMPORTED", title: `Import de ${expenses.length} ligne(s) de dépense depuis ${data.fileName}`,
+      entityType: "EXPENSE", notify: false,
+    });
     return reply.status(201).send(expenses);
   });
 
@@ -136,6 +141,10 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     const receiptUrl = await storeImportedReceipt(request.workspaceId, data.contentType, data.data);
     const lines = data.lines.map((line) => ({ ...line, receiptUrl }));
     const incomes = await service.importIncomes(eventId, request.workspaceId, request.userRole, request.user!.id, lines);
+    await recordRequestActivity(request, {
+      eventId, type: "INCOME_IMPORTED", title: `Import de ${incomes.length} ligne(s) de recette depuis ${data.fileName}`,
+      entityType: "INCOME", notify: false,
+    });
     return reply.status(201).send(incomes);
   });
 
@@ -183,6 +192,9 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.post("/api/events/:eventId/shotgun/sync", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     await service.syncShotgunTiers(eventId, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, {
+      eventId, type: "TICKETING_SYNCED", title: "Billetterie Shotgun synchronisée", entityType: "TICKET_TIER", notify: false,
+    });
     return { ok: true };
   });
 
