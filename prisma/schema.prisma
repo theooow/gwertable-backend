@@ -819,6 +819,8 @@ model ActivityNotificationPreference {
   budgetChangesEnabled Boolean @default(true)
   taskDueSoonEnabled Boolean @default(true)
   taskDueSoonMinutes Int @default(1440)
+  equipmentChangesEnabled Boolean @default(true)
+  volunteerChangesEnabled Boolean @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
