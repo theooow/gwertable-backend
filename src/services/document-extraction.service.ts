@@ -162,6 +162,7 @@ class OpenAiDocumentExtractionProvider implements DocumentExtractionProvider {
             { type: "input_file", filename: input.fileName, file_data: `data:${input.contentType};base64,${input.dataBase64}` },
           ],
         }],
+        store: false,
         text: { format: { type: "json_object" } },
       }),
     });
