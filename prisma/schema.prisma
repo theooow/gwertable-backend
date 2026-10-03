@@ -237,6 +237,8 @@ model User {
   themePreset       UserThemePreset @default(default)
   themePrimaryColor String?
   emailVerified DateTime?
+  termsAcceptedAt DateTime?
+  termsVersion    String?
   // Legacy account-level field. It is no longer used for authorisation:
   // permissions are granted exclusively by WorkspaceMember.role.
   role          UserRole  @default(VIEWER)
