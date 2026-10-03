@@ -6,6 +6,7 @@ import { AccountingRepository } from "../repositories/accounting.repository.js";
 import { AccountingService } from "../services/accounting.service.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
+const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 
 const service = new AccountingService(new AccountingRepository(prisma));
 
@@ -49,5 +50,10 @@ export async function accountingRoutes(fastify: FastifyInstance) {
       .header("content-disposition", `attachment; filename="${fileName}"`)
       .header("cache-control", "no-store")
       .send(content);
+  });
+
+  fastify.get("/api/events/:eventId/accounting", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    return service.getEventStatement(eventId, request.workspaceId, request.userRole);
   });
 }

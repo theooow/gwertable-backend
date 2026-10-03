@@ -53,6 +53,7 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/accounting/fiscal-years/:id/report", "Générer le compte de résultat, le bilan simplifié et les contrôles d'un exercice"],
     ["POST /api/accounting/fiscal-years/:id/close", "Clôturer un exercice et figer ses états comptables"],
     ["GET /api/accounting/fiscal-years/:id/fec", "Télécharger le fichier des écritures comptables (FEC)"],
+    ["GET /api/events/:eventId/accounting", "Consulter le compte de résultat réalisé et projeté d'un événement"],
   ],
   Notifications: [
     ["GET /api/events/:eventId/notifications", "Consulter les notifications d'un événement"],

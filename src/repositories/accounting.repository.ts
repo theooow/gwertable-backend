@@ -52,6 +52,11 @@ export class AccountingRepository {
     });
   }
 
+  findFiscalYearCovering(workspaceId: string, date: Date) {
+    const day = asDate(date.toISOString().slice(0, 10));
+    return this.prisma.fiscalYear.findFirst({ where: { workspaceId, startsOn: { lte: day }, endsOn: { gte: day } }, select: { id: true, label: true, framework: true } });
+  }
+
   async getIssuer(workspaceId: string) {
     const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { name: true, contractIssuer: true } });
     return workspace;

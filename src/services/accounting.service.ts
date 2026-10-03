@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import type { FiscalYear, Prisma, UserRole } from "@prisma/client";
 import {
-  balanceSheet, buildOperations, cashFlowCents, encodeLatin9, fecRows, inPeriod, incomeStatement, toDay, vatSummary,
+  balanceSheet, buildOperations, cashFlowCents, encodeLatin9, fecRows, inPeriod, incomeStatement, positionsAt, toDay, vatSummary,
   type BalanceSheet, type IncomeStatement, type LedgerData, type Operation, type Period, type Vat,
 } from "../lib/accounting.js";
-import { ConflictError, ValidationError } from "../lib/errors.js";
+import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
 import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 import type { FiscalYearInput } from "../schemas/fiscal-year.js";
@@ -276,5 +276,43 @@ export class AccountingService {
     if (blocking.length) throw new ConflictError(`Clôture impossible : ${blocking.map((check) => check.message).join(" ")}`);
     const snapshot: Snapshot = { report: { ...report, fiscalYear: { ...report.fiscalYear, closedAt: null } }, fec };
     return this.repository.closeFiscalYear(id, userId, snapshot as unknown as Prisma.InputJsonValue, hash(snapshot));
+  }
+
+  /** Actual and projected income statement of one event, by account. */
+  async getEventStatement(eventId: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "finance.read");
+    const ledger = await this.repository.loadLedger(workspaceId, eventId);
+    const event = ledger.events[0];
+    if (!event) throw new NotFoundError("Evenement introuvable");
+    const fiscalYear = await this.repository.findFiscalYearCovering(workspaceId, event.startsAt);
+    const framework = fiscalYear?.framework ?? "ASSOCIATION";
+    const actualOperations = buildOperations(ledger, framework, ["ACTUAL"]);
+    const projectedOperations = [...actualOperations, ...buildOperations(ledger, framework, ["FORECAST"])];
+    const actual = incomeStatement(actualOperations, framework);
+    const projected = incomeStatement(projectedOperations, framework);
+
+    const accounts = new Map<string, { account: string; label: string; kind: "PRODUCT" | "CHARGE"; actualCents: number; projectedCents: number }>();
+    for (const [statement, field] of [[actual, "actualCents"], [projected, "projectedCents"]] as const) {
+      for (const section of statement.sections) {
+        for (const line of section.lines) {
+          const entry = accounts.get(line.account) ?? { account: line.account, label: line.label, kind: section.kind, actualCents: 0, projectedCents: 0 };
+          entry[field] += line.amountCents;
+          accounts.set(line.account, entry);
+        }
+      }
+    }
+    const positions = positionsAt(actualOperations, toDay(new Date()));
+    const missingReceipts = actualOperations.filter((o) => o.kind === "expense" && !o.hasReceipt);
+    return {
+      event: { id: event.id, name: event.name, date: toDay(event.startsAt), vatMode: event.vatMode },
+      framework,
+      fiscalYear: fiscalYear ? { id: fiscalYear.id, label: fiscalYear.label } : null,
+      actual,
+      projected,
+      accounts: [...accounts.values()].sort((a, b) => b.kind.localeCompare(a.kind) || a.account.localeCompare(b.account)),
+      vat: vatSummary(actualOperations),
+      outstanding: { receivablesCents: positions.receivablesCents, suppliersCents: positions.suppliersCents, membersCents: positions.membersCents },
+      missingReceipts: { count: missingReceipts.length, amountCents: missingReceipts.reduce((total, o) => total + o.ttcCents, 0) },
+    };
   }
 }

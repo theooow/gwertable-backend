@@ -85,6 +85,19 @@ describe("accounting", () => {
     assert.equal(report.liveMatchesSnapshot, false);
   });
 
+  it("details the actual and projected statement of an event", async () => {
+    const { authorization, base } = await seed();
+    const response = await request("GET", `${base}/accounting`, authorization);
+    assert.equal(response.statusCode, 200, response.body);
+    const statement = response.json();
+    assert.equal(statement.fiscalYear.label, "Exercice 2026");
+    assert.equal(statement.actual.resultCents, 30000);
+    assert.equal(statement.projected.resultCents, 10000);
+    assert.deepEqual(statement.accounts.map((a: { account: string }) => a.account), ["707", "6132", "6288"]);
+    assert.equal(statement.missingReceipts.count, 0);
+    assert.equal((await request("GET", "/api/events/unknown/accounting", authorization)).statusCode, 404);
+  });
+
   it("restricts accounting to finance roles", async () => {
     const { authorization, fiscalYear: { id } } = await seed();
     await prisma.workspaceMember.updateMany({ data: { role: "VOLUNTEER" } });
