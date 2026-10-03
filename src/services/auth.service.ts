@@ -4,6 +4,7 @@ import { sendMagicLinkEmail } from "../lib/mailer.js";
 import { randomToken } from "../lib/token.js";
 import { UnauthorizedError } from "../lib/errors.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { CURRENT_TERMS_VERSION } from "../lib/terms.js";
 import { AuthRepository, type RegisterUserInput } from "../repositories/auth.repository.js";
 import type { AuthSessionDTO } from "../dto/auth.dto.js";
 
@@ -63,7 +64,7 @@ export class AuthService {
   }
 
   async register(
-    input: Omit<RegisterUserInput, "passwordHash"> & { password: string },
+    input: Omit<RegisterUserInput, "passwordHash" | "termsAcceptedAt" | "termsVersion"> & { password: string },
     inviteToken: string | undefined,
     registrationToken: string,
   ): Promise<AuthSessionDTO> {
@@ -85,6 +86,8 @@ export class AuthService {
       {
         ...userInput,
         passwordHash: await hashPassword(password),
+        termsAcceptedAt: now,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
       invitation,
     );
@@ -303,6 +306,7 @@ export class AuthService {
         themeMode: user.themeMode,
         themePreset: user.themePreset,
         themePrimaryColor: user.themePrimaryColor,
+        termsAccepted: user.termsVersion === CURRENT_TERMS_VERSION,
         role,
         workspaceRole: role,
         usagePlan: user.usagePlan,

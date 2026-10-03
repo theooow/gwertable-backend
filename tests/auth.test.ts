@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { prisma } from "../src/prisma.js";
+import { CURRENT_TERMS_VERSION } from "../src/lib/terms.js";
 import { json, request, setupTestApp } from "./helpers.js";
 
 setupTestApp();
@@ -41,6 +42,7 @@ describe("auth and health routes", () => {
     const passwordSetup = await request("POST", "/api/auth/register", undefined, {
       email: "admin@abregi.test",
       registrationToken: verifiedPayload.registrationToken,
+      acceptTerms: true,
       password: "correct-password",
       firstName: "Admin",
       lastName: "Abregi",
@@ -93,6 +95,7 @@ describe("auth and health routes", () => {
     await request("POST", "/api/auth/register", undefined, {
       email: "code@abregi.test",
       registrationToken: setup.registrationToken,
+      acceptTerms: true,
       password: "correct-password",
       firstName: "Code",
       lastName: "User",
@@ -138,6 +141,7 @@ describe("auth and health routes", () => {
     const registered = await request("POST", "/api/auth/register", undefined, {
       email: "new-user@abregi.test",
       registrationToken: registration.registrationToken,
+      acceptTerms: true,
       password: "correct-password",
       firstName: "Nora",
       lastName: "Martin",
@@ -173,6 +177,10 @@ describe("auth and health routes", () => {
     assert.equal(payload.user.billingEmail, "billing@abregi.test");
     assert.equal(payload.user.workspaceName, "Nora Events");
     assert.equal(payload.user.role, "ADMIN");
+    assert.equal(json<{ user: { termsAccepted: boolean } }>(registered).user.termsAccepted, true);
+    const stored = await prisma.user.findUniqueOrThrow({ where: { email: "new-user@abregi.test" } });
+    assert.ok(stored.termsAcceptedAt);
+    assert.equal(stored.termsVersion, CURRENT_TERMS_VERSION);
 
     const additionalWorkspace = await request("POST", "/api/workspaces", `Bearer ${payload.sessionToken}`, {
       name: "Deuxieme espace",
@@ -192,6 +200,19 @@ describe("auth and health routes", () => {
     const me = await request("GET", "/api/auth/me", `Bearer ${payload.sessionToken}`);
     assert.equal(me.statusCode, 200);
     assert.equal(json<{ user: { email: string } }>(me).user.email, "new-user@abregi.test");
+  });
+
+  it("rejects registration without terms acceptance", async () => {
+    await request("POST", "/api/auth/login-link", undefined, { email: "no-terms@abregi.test" });
+    const token = await prisma.verificationToken.findFirstOrThrow({ where: { identifier: "no-terms@abregi.test" } });
+    const verified = await request("POST", "/api/auth/verify", undefined, { email: "no-terms@abregi.test", token: token.token });
+    const registered = await request("POST", "/api/auth/register", undefined, {
+      email: "no-terms@abregi.test",
+      registrationToken: json<{ registrationToken: string }>(verified).registrationToken,
+      password: "correct-password",
+    });
+    assert.equal(registered.statusCode, 400);
+    assert.equal(await prisma.user.count({ where: { email: "no-terms@abregi.test", passwordHash: { not: null } } }), 0);
   });
 
   it("shows registration for incomplete magic-link accounts", async () => {
@@ -231,6 +252,7 @@ describe("auth and health routes", () => {
     const registered = await request("POST", "/api/auth/register", undefined, {
       email: "partial@abregi.test",
       registrationToken: registration.registrationToken,
+      acceptTerms: true,
       password: "correct-password",
       firstName: "Paul",
       lastName: "Durand",
@@ -340,6 +362,7 @@ describe("auth and health routes", () => {
     const passwordSetup = await request("POST", "/api/auth/register", undefined, {
       email: "collab@abregi.test",
       registrationToken: verifiedPayload.registrationToken,
+      acceptTerms: true,
       password: "correct-password",
       firstName: "Collab",
       lastName: "Invited",

@@ -192,8 +192,8 @@ L'API combine **mot de passe** et **code / lien envoyé par email**.
    → crée une session et retourne { sessionToken, expires, user }
    → pour un nouvel email, fournit le jeton d'inscription
 
-3. POST /api/auth/register        { email, password, registrationToken, … }
-   → crée le compte (profil, société, préférences) et ouvre une session
+3. POST /api/auth/register        { email, password, registrationToken, acceptTerms: true, … }
+   → crée le compte (profil, société, préférences), enregistre l'acceptation des CGU et ouvre une session
 
 4. Toutes les requêtes authentifiées :
    Authorization: Bearer <sessionToken>

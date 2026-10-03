@@ -49,6 +49,7 @@ const registerSchema = z.object({
   password: z.string().min(8),
   registrationToken: z.string().min(1),
   inviteToken: z.string().optional(),
+  acceptTerms: z.literal(true),
   name: shortText,
   firstName: shortText,
   lastName: shortText,

@@ -3,6 +3,7 @@ import type { User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { UnauthorizedError, ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { isAdminEmail } from "../lib/admin.js";
+import { CURRENT_TERMS_VERSION } from "../lib/terms.js";
 
 /**
  * Authenticated account in a workspace context.
@@ -39,6 +40,7 @@ type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "personId"> & {
   themeMode: User["themeMode"];
   themePreset: User["themePreset"];
   themePrimaryColor: User["themePrimaryColor"];
+  termsAccepted: boolean;
   role: UserRole;
   workspaceRole: UserRole;
   workspaceId: string;
@@ -153,6 +155,7 @@ export const authPlugin = fp(async (fastify) => {
             themeMode: true,
             themePreset: true,
             themePrimaryColor: true,
+            termsVersion: true,
             usagePlan: true,
             personId: true,
             defaultWorkspaceId: true,
@@ -167,11 +170,12 @@ export const authPlugin = fp(async (fastify) => {
     }
 
     if (isAdminRoute(request.url) && isAdminEmail(session.user.email)) {
-      const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
+      const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = session.user;
       request.workspaceId = defaultWorkspaceId ?? "";
       request.eventScoped = false;
       request.user = {
         ...user,
+        termsAccepted: termsVersion === CURRENT_TERMS_VERSION,
         role: "VIEWER",
         workspaceRole: "VIEWER",
         workspaceId: defaultWorkspaceId ?? "",
@@ -229,11 +233,12 @@ export const authPlugin = fp(async (fastify) => {
       throw new ForbiddenError("Aucun acces associe a ce compte");
     }
 
-    const { archivedAt: _archivedAt, defaultWorkspaceId, ...user } = session.user;
+    const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = session.user;
     request.workspaceId = workspaceId;
     request.eventScoped = eventScoped;
     request.user = {
       ...user,
+      termsAccepted: termsVersion === CURRENT_TERMS_VERSION,
       role: membership.role,
       workspaceRole: membership.role,
       workspaceId,

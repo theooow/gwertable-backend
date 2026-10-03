@@ -56,6 +56,8 @@ export type RegisterUserInput = {
   locale: string;
   currency: string;
   timezone: string;
+  termsAcceptedAt: Date;
+  termsVersion: string;
 };
 
 /**
@@ -285,6 +287,8 @@ export class AuthRepository {
       locale: input.locale,
       currency: input.currency,
       timezone: input.timezone,
+      termsAcceptedAt: input.termsAcceptedAt,
+      termsVersion: input.termsVersion,
       emailVerified: new Date(),
       // Never promote an account globally through an invitation or signup.
       // The granted role is written exclusively to WorkspaceMember below.

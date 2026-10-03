@@ -35,6 +35,8 @@ export type UserSessionDTO = {
   themeMode: UserThemeMode;
   themePreset: UserThemePreset;
   themePrimaryColor: string | null;
+  /** False when the user has not accepted the current terms version yet. */
+  termsAccepted: boolean;
   /** @deprecated Use workspaceRole. Kept while clients migrate. */
   role: UserRole;
   /** Role granted by the currently selected workspace. */
