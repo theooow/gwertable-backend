@@ -1,6 +1,6 @@
 # Abregi Backend
 
-API REST pour la plateforme Abregi — gestion d'événements, participants, budget, matériel et conducteur de show.
+API REST pour la plateforme Abregi — gestion d'événements, participants, bénévoles, budget, comptabilité, matériel et conducteur de show.
 
 ## Sommaire
 
@@ -16,6 +16,7 @@ API REST pour la plateforme Abregi — gestion d'événements, participants, bud
 - [Structure du projet](#structure-du-projet)
 - [Tests](#tests)
 - [Base de données](#base-de-données)
+- [Déploiement](#déploiement)
 
 ---
 
@@ -30,6 +31,8 @@ API REST pour la plateforme Abregi — gestion d'événements, participants, bud
 | Validation | [Zod](https://zod.dev) 4 |
 | Langage | TypeScript 6 (strict) |
 | Emails | Nodemailer |
+| PDF | PDFKit (conventions de bénévolat, comptes annuels) |
+| Extraction de documents | OpenAI ou Ollama |
 | Documentation | OpenAPI 3.0 / Swagger UI |
 
 ---
@@ -71,7 +74,7 @@ Prisma / PostgreSQL
 ```bash
 # 1. Cloner le dépôt
 git clone <url-du-repo>
-cd abregi-backend
+cd gwertable-backend
 
 # 2. Installer les dépendances
 npm install
@@ -120,6 +123,25 @@ Interface web MailHog : `http://localhost:8025`
 | `SMTP_SECURE` | `false` | TLS SMTP |
 | `SMTP_USER` | — | Identifiant SMTP (optionnel) |
 | `SMTP_PASSWORD` | — | Mot de passe SMTP (optionnel) |
+| `DOCUMENT_AI_PROVIDER` | `openai` | Fournisseur IA d'import de documents et d'affectation des bénévoles : `openai` ou `ollama` |
+| `OPENAI_API_KEY` | — | Clé API OpenAI |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | Modèle OpenAI |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | URL du serveur Ollama |
+| `OLLAMA_MODEL` | `llava` | Modèle Ollama |
+| `DISCORD_BOT_TOKEN` | — | Token du bot Discord par défaut pour les notifications |
+| `WHATSAPP_ACCESS_TOKEN` | — | Token de l'API WhatsApp Cloud |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Identifiant du numéro WhatsApp émetteur |
+| `WHATSAPP_TEMPLATE_NAME` | — | Modèle de message WhatsApp |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | `fr` | Langue du modèle WhatsApp |
+| `NOTIFICATION_WORKER_ENABLED` | `true` en production, `false` sinon | Active le worker de rappels |
+| `NOTIFICATION_WORKER_INTERVAL_MS` | `60000` | Intervalle du worker de rappels |
+| `NOTIFICATION_REMINDER_LOOKBACK_MINUTES` | `5` | Fenêtre de rattrapage des rappels |
+| `SUPER_PDP_CLIENT_ID` / `SUPER_PDP_CLIENT_SECRET` | — | Identifiants OAuth Super PDP (facturation électronique) |
+| `SUPER_PDP_AUTHORIZATION_URL` / `SUPER_PDP_TOKEN_URL` | URLs Super PDP | Endpoints OAuth Super PDP |
+| `SUPER_PDP_REDIRECT_URI` | `https://www.abregi.com/api/integrations/super-pdp/oauth/callback` | URL de retour OAuth |
+| `SUPER_PDP_SCOPES` | — | Scopes OAuth demandés |
+| `PDP_CREDENTIAL_ENCRYPTION_KEY` | — | Clé de chiffrement des tokens OAuth (32 octets base64 ou 64 caractères hex) |
+| `DISABLE_ERD` | — | `true` désactive la génération du diagramme ERD (CI, Docker) |
 
 ---
 
@@ -141,9 +163,11 @@ npm run typecheck:tests    # types des fichiers de test
 
 # Tests (Node.js test runner natif)
 npm run test
+npm run test:swagger-ui    # essais navigateur de Swagger UI (Puppeteer)
 
 # Base de données
 npm run db:generate        # régénère le client Prisma après un changement de schéma
+npm run db:erd             # régénère docs/erd.svg
 npm run db:migrate         # applique les migrations en développement
 npm run db:deploy          # applique les migrations en production (sans prompt)
 npm run db:studio          # ouvre Prisma Studio (UI de la base)
@@ -153,29 +177,41 @@ npm run db:studio          # ouvre Prisma Studio (UI de la base)
 
 ## Authentification
 
-L'API utilise un système de **lien magique par email** (magic link), sans mot de passe.
+L'API combine **mot de passe** et **code / lien envoyé par email**.
 
 ### Flux de connexion
 
 ```
-1. POST /api/auth/login-link   { email }
-   → génère un token, envoie un email avec un lien de connexion
+1. POST /api/auth/login-options   { email }
+   → compte avec mot de passe : { hasPassword: true, accountName }
+   → sinon : envoie un email (code à 6 chiffres + lien), { hasPassword: false, codeSent: true }
 
-2. POST /api/auth/verify       { email, token }
-   → valide le token, crée une session
-   → retourne { sessionToken, expires, user }
+2a. POST /api/auth/password/login { email, password }
+2b. POST /api/auth/verify-code    { email, code }
+2c. POST /api/auth/verify         { email, token }       (lien de l'email)
+   → crée une session et retourne { sessionToken, expires, user }
+   → pour un nouvel email, fournit le jeton d'inscription
 
-3. Toutes les requêtes authentifiées :
+3. POST /api/auth/register        { email, password, registrationToken, … }
+   → crée le compte (profil, société, préférences) et ouvre une session
+
+4. Toutes les requêtes authentifiées :
    Authorization: Bearer <sessionToken>
    (ou cookie abregi_session=<sessionToken>)
 
-4. POST /api/auth/logout
+5. POST /api/auth/logout
    → invalide la session
 ```
 
+`POST /api/auth/password/setup` définit un mot de passe à partir d'un token reçu par email. `POST /api/auth/login-link` renvoie un email de connexion. `GET /api/auth/me` retourne l'utilisateur courant.
+
 ### Invitations
 
-Un `inviteToken` optionnel peut être fourni à `/login-link` et `/verify` pour rejoindre un espace de travail ou accepter une invitation à un événement.
+Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscription pour rejoindre un espace de travail ou accepter une invitation à un événement.
+
+### Routes publiques
+
+Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
 
 ### Multi-tenant
 
@@ -194,13 +230,13 @@ La documentation OpenAPI 3.0 est générée automatiquement et disponible à deu
 | Interface Swagger UI | `http://localhost:4000/docs` |
 | Spécification JSON | `http://localhost:4000/docs/json` |
 
-Toutes les routes applicatives sont documentées (218 opérations), avec leurs paramètres, leur authentification et les schémas de saisie issus des validateurs Zod.
+Toutes les routes applicatives sont documentées (226 opérations), avec leurs paramètres, leur authentification et les schémas de saisie issus des validateurs Zod.
 
 Les corps de requête se remplissent dans des formulaires : listes de choix, nombres, dates, objets imbriqués et tableaux avec ajout/suppression de lignes. Cochez les champs facultatifs à envoyer ; les autres sont omis. Les uploads disposent d'un sélecteur de fichier qui prépare automatiquement le contenu base64 attendu par l'API.
 
 Les essais utilisent le serveur qui héberge Swagger. Connectez-vous dans la rubrique Auth pour obtenir une session navigateur, ou utilisez **Authorize** avec un token Bearer. Les opérations exécutées ont leurs effets réels (emails, factures, suppressions).
 
-Pour documenter une nouvelle route, ajoutez son titre et son domaine dans `src/openapi/schemas.ts` ou `additional.ts`, puis référencez les mêmes validateurs que son handler dans `config.documentation` (`body`, `params`, `querystring`). Ces métadonnées ne modifient pas la validation ni la sérialisation de l'API. Les tests de couverture détectent les routes ou entrées manquantes.
+Pour documenter une nouvelle route, ajoutez son titre et son domaine dans `src/openapi/schemas.ts` ou `additional.ts`, puis référencez les mêmes validateurs que son handler dans `config.documentation` (`body`, `params`, `querystring`). Ces métadonnées ne modifient pas la validation ni la sérialisation de l'API. `tests/swagger.test.ts` échoue si une route n'a pas d'opération documentée (résumé, tag, `operationId`, sécurité, paramètres, corps et query) ou si la spécification contient des opérations orphelines : toute route ajoutée ou modifiée doit être documentée dans le même commit.
 
 Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/swagger.test.ts`, puis `npm run test:swagger-ui` pour les essais navigateur sans base de données ni actions métier. Définissez `CHROME_PATH` si vous souhaitez utiliser un navigateur déjà installé.
 
@@ -209,10 +245,13 @@ Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/sw
 ## Domaines fonctionnels
 
 ### Espaces de travail & membres
-Gestion multi-tenant : création d'espaces, gestion des membres avec rôles (`ADMIN`, `ORGANIZER`, `TREASURER`, `VOLUNTEER`, `ARTIST`, `VIEWER`), invitations par email, transfert de contacts entre espaces.
+Gestion multi-tenant : création d'espaces, gestion des membres avec rôles (`ADMIN`, `ORGANIZER`, `TREASURER`, `VOLUNTEER`, `ARTIST`, `VIEWER`), invitations par email, transfert de contacts entre espaces, logo et couleur des emails, identité légale de la structure (émetteur des conventions). La matrice des permissions par rôle est définie dans `lib/permissions.ts`.
+
+### Compte & offres
+Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST`, `PLATINIUM`) qui conditionne l'import de documents par IA et les notifications WhatsApp (`lib/usage-plans.ts`).
 
 ### Personnes
-Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, archivage logique.
+Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique de notes par contact, archivage logique.
 
 ### Événements
 CRUD d'événements avec gestion des lieux. Deux modes d'accès : membres de l'espace (accès complet) ou collaborateurs externes (accès limité à leurs événements).
@@ -223,29 +262,44 @@ Ajout de personnes du répertoire à un événement avec rôles (`GUEST`, `VOLUN
 ### Collaborateurs d'événement
 Invitation d'utilisateurs externes sur un événement spécifique via un lien unique, sans compte dans l'espace de travail.
 
+### Bénévoles
+Formulaire public d'inscription, candidatures à valider, postes et créneaux, repas (catering) et réservations, affectations (manuelles ou proposées par IA), badges et pointage, emails envoyés par un worker dédié. Chaque bénévole dispose d'un portail personnel (planning, demandes d'échange de créneaux) et signe sa convention de bénévolat en ligne (PDF). Voir [`docs/volunteers.md`](docs/volunteers.md) et [`docs/volunteer-contracts.md`](docs/volunteer-contracts.md).
+
 ### Tâches & conducteur de show
-Gestion des tâches par événement avec statuts et priorités. Synchronisation bidirectionnelle tâche ↔ élément du conducteur de show (si la tâche est planifiée le même jour que l'événement). Export calendrier ICS avec abonnement via token public.
+Gestion des tâches par événement avec statuts, priorités, catégories, assignés, commentaires et pièces jointes. Conducteur de show organisé en pistes et sections, avec dépendances entre éléments. Synchronisation bidirectionnelle tâche ↔ élément du conducteur de show (si la tâche est planifiée le même jour que l'événement). Export calendrier ICS avec abonnement via token public.
+
+### Notifications & activité
+Paramètres de notification par événement (email, Discord, WhatsApp) et rappels envoyés par un worker périodique. Fil d'activité de l'espace, notifications in-app et préférences par utilisateur.
 
 ### Budget
-- **Dépenses** : avec rattachement de justificatifs, catégories libres, suivi des remboursements
-- **Revenus** : catégories prédéfinies (bar, merch, caisse, sponsor, autre)
+- **Dépenses** : avec rattachement de justificatifs, catégories libres, TVA, suivi des remboursements et notes de frais
+- **Revenus** : catégories prédéfinies (bar, merch, caisse, sponsor, autre), justificatifs
+- **Import de documents** : prévisualisation puis confirmation des dépenses et revenus extraits par IA
 - **Tarifs billets** : manuels ou synchronisés depuis l'API Shotgun
 - **Consommables** : articles avec prix unitaire et quantité estimée
+
+### Comptabilité
+Exercices comptables de l'espace : états financiers, clôture, export FEC et comptes annuels en PDF. Compte de résultat par événement.
 
 ### Courses
 Liste de courses collaborative avec statut acheté/non acheté, création automatique d'une dépense lors de l'achat.
 
 ### Matériel
-Catalogue d'équipements de l'espace de travail avec gestion des conflits de disponibilité (chevauchement d'événements). Usages one-off ou depuis le catalogue. Devis avec remise et attachement de fichiers. Synchronisation automatique des dépenses équipement.
+Catalogue d'équipements de l'espace de travail avec photos, groupes et TVA, gestion des conflits de disponibilité (chevauchement d'événements). Usages one-off ou depuis le catalogue, import en masse ou depuis un document (IA). Devis avec remise et attachement de fichiers. Synchronisation automatique des dépenses équipement.
 
 ### Intégration Shotgun
 Synchronisation des tarifs billets depuis l'API Shotgun (billetterie) : récupération des deals, comptage des ventes.
 
+### Administration
+Journal des appels API, vue d'ensemble, KPI et gestion des offres utilisateurs, réservés à l'administrateur de la plateforme. Voir [`docs/admin-journal.md`](docs/admin-journal.md).
+
 ### Uploads
-- Justificatifs de dépenses (PDF, images, max 8 Mo)
+Les fichiers sont envoyés en base64 dans un corps JSON.
+- Justificatifs de dépenses et de revenus, devis équipement (PDF, images, max 20 Mo)
+- Pièces jointes de tâches (max 12 Mo)
+- Documents de contacts (max 8 Mo)
 - Bannières d'événements (images, max 5 Mo)
-- Fichiers de devis équipement (PDF, images, Word, max 20 Mo)
-- Images de profil utilisateur (images, max 2 Mo)
+- Images de profil et logos d'espace (images, max 2 Mo)
 
 ---
 
@@ -254,71 +308,70 @@ Synchronisation des tarifs billets depuis l'API Shotgun (billetterie) : récupé
 ```
 src/
 ├── app.ts                        # Bootstrap Fastify + enregistrement des plugins et routes
-├── server.ts                     # Point d'entrée, listen + graceful shutdown
+├── server.ts                     # Point d'entrée, listen, workers + graceful shutdown
 ├── env.ts                        # Validation et typage des variables d'environnement
 ├── prisma.ts                     # Singleton PrismaClient
 │
 ├── plugins/
-│   ├── auth.ts                   # Middleware de session, décoration des requêtes
+│   ├── api-logs.ts               # Journal des appels API (administration)
+│   ├── auth.ts                   # Middleware de session, routes publiques
 │   ├── errors.ts                 # Gestionnaire d'erreurs centralisé
 │   └── swagger.ts                # Plugin OpenAPI 3.0 / Swagger UI
 │
-├── lib/
-│   ├── errors.ts                 # Classes d'erreurs typées (AppError et sous-classes)
-│   ├── calendar.ts               # Helpers génération ICS
-│   ├── token.ts                  # Génération de tokens aléatoires
-│   ├── permissions.ts            # Matrice de permissions par rôle
-│   ├── money.ts                  # Conversion euros → centimes
-│   ├── mailer.ts                 # Envoi d'emails (magic link)
-│   └── shotgun.ts                # Client API Shotgun
+├── lib/                          # Helpers transverses : erreurs, permissions, offres, comptabilité,
+│                                 # calendrier ICS, emails, Discord, WhatsApp, Shotgun, chiffrement…
 │
 ├── dao/                          # Data Access Objects — une classe par modèle Prisma
-│   └── *.dao.ts                  # (17 fichiers)
-│
 ├── repositories/                 # Requêtes domaine-spécifiques, orchestration des DAOs
-│   └── *.repository.ts           # (10 fichiers)
-│
-├── services/                     # Logique métier, contrôle des permissions
-│   └── *.service.ts              # (10 fichiers)
-│
+├── services/                     # Logique métier, contrôle des permissions, génération PDF
 ├── dto/                          # Types de réponse publics (découplés de Prisma)
-│   └── *.dto.ts                  # (8 fichiers)
-│
 ├── schemas/                      # Schémas Zod de validation des entrées
-│   └── *.ts                      # (12 fichiers)
 │
 ├── openapi/
-│   └── schemas.ts                # Documentation OpenAPI centralisée (76 endpoints)
+│   ├── schemas.ts                # Titres et domaines des opérations documentées
+│   ├── additional.ts             # Documentation des routes complémentaires
+│   ├── contracts.ts              # Schémas de réponse partagés
+│   └── forms.ts                  # Formulaires Swagger UI (corps de requête, uploads)
+│
+├── workers/
+│   ├── notification-worker.ts    # Rappels de notifications
+│   └── volunteer-email-worker.ts # Envoi des emails bénévoles
 │
 └── routes/
     ├── health.ts
     ├── auth.ts
+    ├── admin.ts
+    ├── accounting.ts
+    ├── activity.ts
     ├── events.ts
+    ├── event-modules.ts
     ├── people.ts
     ├── workspace.ts
     ├── equipment.ts
     ├── shotgun.ts
+    ├── volunteer-contracts.ts
     └── event-modules/
         ├── participants.ts
+        ├── volunteers.ts
         ├── tasks.ts
         ├── run-of-show.ts
+        ├── notifications.ts
         ├── budget.ts
         ├── shopping.ts
         ├── equipment-event.ts
         └── uploads.ts
 
 prisma/
-├── schema.prisma                 # Source de vérité du modèle de données (28 modèles)
-└── migrations/                   # 16 migrations
+├── schema.prisma                 # Source de vérité du modèle de données
+└── migrations/
+
+docs/                             # ERD et documentation fonctionnelle
 
 tests/
 ├── helpers.ts                    # Utilitaires de test (setup, reset DB, seeders)
 ├── setup-env.ts                  # Configuration de l'environnement de test
-├── auth.test.ts
-├── event-modules.test.ts
-├── people-events.test.ts
-├── workspace.test.ts
-└── shotgun.test.ts
+├── browser/swagger-ui.mjs        # Essais navigateur de Swagger UI
+└── *.test.ts                     # Tests par domaine
 ```
 
 ---
@@ -329,26 +382,31 @@ La suite de tests utilise le **runner natif Node.js** (`node:test`), sans Jest n
 
 ```bash
 npm run test
+npm run test:swagger-ui
 ```
 
-Les tests sont des **tests d'intégration** : ils démarrent l'application complète et frappent une vraie base de données (variable `TEST_DATABASE_URL`). La base est tronquée entre chaque suite de tests (`--test-concurrency=1` pour éviter les conflits).
+Les tests sont principalement des **tests d'intégration** : ils démarrent l'application complète et frappent une vraie base PostgreSQL. `tests/setup-env.ts` charge `.env.test` puis `.env` ; à défaut, `DATABASE_URL` pointe sur `postgresql://postgres:postgres@localhost:5432/abregi_test`. La base est tronquée entre les suites (`--test-concurrency=1` pour éviter les conflits).
 
-**20 tests** couvrent les domaines auth, événements, personnes, workspace et Shotgun.
+Les fichiers de test couvrent l'authentification, les espaces, les événements et leurs modules, les bénévoles et conventions, la comptabilité, le matériel, les imports, les notifications, l'administration et la couverture OpenAPI (`swagger.test.ts`).
 
 ---
 
 ## Base de données
 
-Le modèle de données comprend **28 modèles Prisma**, organisés en plusieurs couches :
+Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plusieurs couches :
 
 - **Auth** : `User`, `Session`, `VerificationToken`, `Account`
-- **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`
-- **Répertoire** : `Person`, `Venue`, `Supplier`
+- **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `LegalEntity`
+- **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote`, `Venue`, `Supplier`
 - **Événements** : `Event`, `EventCollaborator`, `EventParticipant`
-- **Tâches** : `Task`, `Shift`, `RunOfShowItem`, `TaskCalendarSubscription`
-- **Budget** : `Expense`, `Income`, `TicketTier`, `ConsumableItem`
+- **Bénévoles** : `VolunteerForm`, `VolunteerApplication`, `VolunteerContract`, `VolunteerContractAccess`, `VolunteerEmail`, `VolunteerSwap`, `Shift`, `CateringService`, `CateringBooking`
+- **Tâches** : `Task`, `TaskComment`, `TaskCategory`, `TaskAttachment`, `TaskAssignee`, `TaskCalendarSubscription`
+- **Conducteur** : `RunOfShowTrack`, `RunOfShowSection`, `RunOfShowItem`, `RunOfShowDependency`
+- **Notifications & activité** : `EventNotificationSettings`, `NotificationDelivery`, `ActivityEntry`, `InAppNotification`, `ActivityNotificationPreference`
+- **Budget & finance** : `Expense`, `ExpenseClaim`, `Income`, `TicketTier`, `ConsumableItem`, `Invoice`, `InvoiceLine`, `FiscalYear`, `ElectronicInvoicingConnection`, `ElectronicInvoicingOAuthState`
 - **Courses** : `ShoppingItem`
-- **Matériel** : `EquipmentItem`, `EquipmentUsage`, `EquipmentQuote`
+- **Matériel** : `EquipmentItem`, `EquipmentGroup`, `EquipmentGroupItem`, `EquipmentUsage`, `EquipmentQuote`, `EquipmentImportMatchMemory`
+- **Administration** : `ApiLog`
 - **Divers** : `Document`, `Channel`, `Announcement`
 
 ### Schéma ERD
@@ -359,10 +417,22 @@ Un diagramme entité-relation est généré automatiquement depuis `schema.prism
 npm run db:erd          # génère docs/erd.svg
 ```
 
-Le fichier `docs/erd.svg` est versionné — il est mis à jour à chaque modification du schéma.
+Le fichier `docs/erd.svg` est versionné — il est mis à jour à chaque modification du schéma. `DISABLE_ERD=true` désactive cette génération (CI, Docker).
 
 ### Conventions
 
 - Ne **jamais modifier** une migration déjà commitée — toujours créer une nouvelle migration.
 - Avant `npm run db:migrate` sur une base partagée, vérifier l'impact avec l'équipe.
 - Le client Prisma est régénéré automatiquement après chaque migration (`db:generate`).
+
+---
+
+## Déploiement
+
+Chaque push sur `main` déclenche `.github/workflows/deploy.yml` :
+
+1. **test** — PostgreSQL 17 éphémère, `npm ci`, `db:generate`, `db:deploy`, `typecheck`, `typecheck:tests`, `npm test`, `test:swagger-ui`
+2. **build** — image Docker publiée sur GHCR (`latest` et SHA du commit)
+3. **deploy** — via SSH sur le VPS : mise à jour du `.env` et du `docker-compose.yml` (PostgreSQL, MailHog, backend, frontend), puis redémarrage
+
+Chaque commit poussé doit donc passer la suite complète, y compris la couverture OpenAPI. Au démarrage, le conteneur applique les migrations (`npm run db:deploy`) puis lance `node dist/server.js` sur le port 4000.
