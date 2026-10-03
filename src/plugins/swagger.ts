@@ -67,6 +67,7 @@ export const swaggerPlugin = fp(async (fastify) => {
         { name: "Fichiers", description: "Upload et téléchargement de fichiers" },
         { name: "Bénévoles", description: "Candidatures, planning, badges et restauration" },
         { name: "Finance", description: "Factures et notes de frais" },
+        { name: "Comptabilité", description: "Exercices, états comptables et export FEC" },
         { name: "Facturation électronique", description: "Identité légale et connexion Super PDP" },
         { name: "Activité", description: "Fil d'activité et préférences" },
         { name: "Notifications", description: "Notifications des événements" },
@@ -86,8 +87,9 @@ export const swaggerPlugin = fp(async (fastify) => {
       const declaredParams = contract.params ? inputSchema(contract.params) : undefined;
       const isCalendar = url.startsWith("/calendar/") || url.endsWith("/calendar.ics");
       const isContractDownload = url.includes("/volunteers/contracts/") && url.endsWith("/:format");
-      const isFile = url.startsWith("/uploads/") || url.endsWith("/pdf") || isCalendar;
-      const contentType = url.endsWith("/pdf") ? "application/pdf" : isCalendar ? "text/calendar" : "application/octet-stream";
+      const isFec = url.endsWith("/fec");
+      const isFile = url.startsWith("/uploads/") || url.endsWith("/pdf") || isCalendar || isFec;
+      const contentType = url.endsWith("/pdf") ? "application/pdf" : isCalendar ? "text/calendar" : isFec ? "text/plain" : "application/octet-stream";
       const error = (description: string) => ({ description, type: "object", properties: { error: { type: "string" }, message: { type: "string" }, issues: { type: "array", items: { type: "object", additionalProperties: true } } } });
       const response = Object.fromEntries((contract.statusCodes ?? [200]).map((status) => [status, status >= 400 ? error("Requête refusée") : status === 204 ? { description: "Opération effectuée, sans contenu" } : isContractDownload ? {
         description: "PDF pour source/pdf ; dossier de preuve JSON pour proof",

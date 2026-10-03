@@ -45,6 +45,15 @@ const groups: Record<string, [string, string][]> = {
     ["POST /api/events/:eventId/incomes/import-confirm", "Créer les revenus extraits d'un devis ou d'une facture"],
     ["PATCH /api/incomes/:id", "Modifier une seule cellule d'un revenu"],
   ],
+  Comptabilité: [
+    ["GET /api/accounting/fiscal-years", "Lister les exercices comptables"],
+    ["POST /api/accounting/fiscal-years", "Créer un exercice comptable"],
+    ["PUT /api/accounting/fiscal-years/:id", "Modifier un exercice comptable non clôturé"],
+    ["DELETE /api/accounting/fiscal-years/:id", "Supprimer un exercice comptable non clôturé"],
+    ["GET /api/accounting/fiscal-years/:id/report", "Générer le compte de résultat, le bilan simplifié et les contrôles d'un exercice"],
+    ["POST /api/accounting/fiscal-years/:id/close", "Clôturer un exercice et figer ses états comptables"],
+    ["GET /api/accounting/fiscal-years/:id/fec", "Télécharger le fichier des écritures comptables (FEC)"],
+  ],
   Notifications: [
     ["GET /api/events/:eventId/notifications", "Consulter les notifications d'un événement"],
     ["PUT /api/events/:eventId/notifications", "Configurer les notifications d'un événement"],

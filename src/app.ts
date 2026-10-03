@@ -25,6 +25,7 @@ import { shotgunRoutes } from "./routes/shotgun.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 import { equipmentRoutes } from "./routes/equipment.js";
 import { activityRoutes } from "./routes/activity.js";
+import { accountingRoutes } from "./routes/accounting.js";
 
 export async function buildApp() {
   const app = fastify({
@@ -58,6 +59,7 @@ export async function buildApp() {
   await app.register(runOfShowRoutes);
   await app.register(notificationRoutes);
   await app.register(budgetRoutes);
+  await app.register(accountingRoutes);
   await app.register(shoppingRoutes);
   await app.register(equipmentEventRoutes);
   await app.register(uploadRoutes);
