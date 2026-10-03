@@ -39,6 +39,10 @@ const groups: Record<string, [string, string][]> = {
   ],
   Budget: [
     ["PATCH /api/expenses/:id", "Modifier une seule cellule d'une dépense"],
+    ["POST /api/events/:eventId/expenses/import-preview", "Extraire les dépenses d'un devis ou d'une facture"],
+    ["POST /api/events/:eventId/expenses/import-confirm", "Créer les dépenses extraites d'un devis ou d'une facture"],
+    ["POST /api/events/:eventId/incomes/import-preview", "Extraire les revenus d'un devis ou d'une facture"],
+    ["POST /api/events/:eventId/incomes/import-confirm", "Créer les revenus extraits d'un devis ou d'une facture"],
     ["PATCH /api/incomes/:id", "Modifier une seule cellule d'un revenu"],
   ],
   Notifications: [

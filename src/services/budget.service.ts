@@ -1,9 +1,12 @@
 import type { ExpenseCellInput, IncomeCellInput } from "../schemas/budget-cell.js";
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 import type { z } from "zod";
-import type { expenseSchema } from "../schemas/expense.js";
-import type { incomeSchema } from "../schemas/income.js";
+import type { BudgetImportPreviewInput } from "../schemas/budget-import.js";
+import { EXPENSE_CATEGORIES, type expenseSchema } from "../schemas/expense.js";
+import { INCOME_CATEGORIES, type incomeSchema } from "../schemas/income.js";
+import { previewBudgetDocument, type BudgetDocumentKind } from "./document-extraction.service.js";
 import type { ticketTierSchema } from "../schemas/ticket-tier.js";
 import type { consumableSchema } from "../schemas/consumable.js";
 import { BudgetRepository } from "../repositories/budget.repository.js";
@@ -48,6 +51,34 @@ export class BudgetService {
   async listExpensePersons(eventId: string, workspaceId: string, role: UserRole) {
     requireCan(role, "budget.read");
     return this.budgetRepository.listExpensePersons(eventId, workspaceId);
+  }
+
+  async previewDocumentImport(kind: BudgetDocumentKind, role: UserRole, usagePlan: UsagePlan, data: BudgetImportPreviewInput) {
+    requireCan(role, "budget.write");
+    requirePlanFeature(usagePlan, "ai.documentImport");
+    return previewBudgetDocument(kind, kind === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES, {
+      fileName: data.fileName,
+      contentType: data.contentType,
+      dataBase64: data.data,
+    });
+  }
+
+  async importExpenses(eventId: string, workspaceId: string, role: UserRole, userId: string, lines: ExpenseInput[]) {
+    requireCan(role, "budget.write");
+    const expenses = [];
+    for (const line of lines) {
+      expenses.push(await this.budgetRepository.createExpense(eventId, workspaceId, userId, line));
+    }
+    return expenses;
+  }
+
+  async importIncomes(eventId: string, workspaceId: string, role: UserRole, userId: string, lines: IncomeInput[]) {
+    requireCan(role, "budget.write");
+    const incomes = [];
+    for (const line of lines) {
+      incomes.push(await this.budgetRepository.createIncome(eventId, workspaceId, userId, line));
+    }
+    return incomes;
   }
 
   async listIncomes(eventId: string, workspaceId: string, role: UserRole) {

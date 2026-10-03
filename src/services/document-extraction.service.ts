@@ -214,3 +214,95 @@ export async function previewEquipmentDocument(input: DocumentExtractionInput): 
   if (result.lines.length === 0) result.warnings.push("Aucune ligne materiel fiable detectee.");
   return result;
 }
+
+export type BudgetDocumentKind = "expense" | "income";
+
+export type ExtractedBudgetLine = {
+  label: string;
+  category: string;
+  amountCents: number;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
+  notes: string | null;
+  confidence?: number;
+};
+
+export type BudgetImportPreview = {
+  label: string;
+  documentType: DocumentType;
+  counterpartyName: string | null;
+  documentDate: string | null;
+  amountInputMode: "HT" | "TTC";
+  vatRateBasisPoints: number;
+  totalCents: number;
+  lines: ExtractedBudgetLine[];
+  warnings: string[];
+};
+
+function clampVatRate(value: unknown, fallback: number) {
+  return typeof value === "number" ? Math.min(10000, Math.max(0, Math.round(value))) : fallback;
+}
+
+function nonEmptyString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseBudgetProviderJson(value: unknown, fallbackLabel: string, categories: readonly string[]): BudgetImportPreview {
+  const parsed = value as Record<string, unknown>;
+  const amountInputMode: "HT" | "TTC" = parsed.amountInputMode === "HT" ? "HT" : "TTC";
+  const vatRateBasisPoints = clampVatRate(parsed.vatRateBasisPoints, 2000);
+  const fallbackCategory = categories.includes("autre") ? "autre" : categories[0];
+  const lines = (Array.isArray(parsed.lines) ? parsed.lines : []).map((line): ExtractedBudgetLine => {
+    const item = line as Record<string, unknown>;
+    const category = String(item.category ?? "").trim().toLowerCase();
+    return {
+      label: String(item.label ?? "").trim(),
+      category: categories.includes(category) ? category : fallbackCategory,
+      amountCents: Math.max(0, Math.round(Number(item.amountCents ?? 0)) || 0),
+      amountInputMode: item.amountInputMode === "HT" ? "HT" : item.amountInputMode === "TTC" ? "TTC" : amountInputMode,
+      vatRateBasisPoints: clampVatRate(item.vatRateBasisPoints, vatRateBasisPoints),
+      notes: nonEmptyString(item.notes),
+      confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : undefined,
+    };
+  }).filter((line) => line.label);
+  const documentDate = nonEmptyString(parsed.documentDate);
+  const totalCents = typeof parsed.totalCents === "number" && parsed.totalCents > 0
+    ? Math.round(parsed.totalCents)
+    : lines.reduce((sum, line) => sum + line.amountCents, 0);
+  return {
+    label: nonEmptyString(parsed.label) ?? fallbackLabel,
+    documentType: parsed.documentType === "quote" || parsed.documentType === "invoice" ? parsed.documentType : "unknown",
+    counterpartyName: nonEmptyString(parsed.counterpartyName),
+    documentDate: documentDate && /^\d{4}-\d{2}-\d{2}$/.test(documentDate) ? documentDate : null,
+    amountInputMode,
+    vatRateBasisPoints,
+    totalCents,
+    lines,
+    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : [],
+  };
+}
+
+function budgetExtractionPrompt(kind: BudgetDocumentKind, categories: readonly string[]) {
+  const context = kind === "expense"
+    ? "The document is a quote, invoice or receipt received by an event organiser from a supplier. Extract the expense lines. counterpartyName is the supplier."
+    : "The document is a quote or invoice issued by an event organiser to a client, partner or sponsor. Extract the revenue lines. counterpartyName is the client, partner or sponsor.";
+  return [
+    `Extract event budget ${kind} lines from this quote/invoice as strict JSON.`,
+    context,
+    "Schema: {label:string,documentType:'quote'|'invoice'|'unknown',counterpartyName:string|null,documentDate:string|null,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,totalCents:number,lines:[{label:string,category:string,amountCents:number,amountInputMode:'HT'|'TTC',vatRateBasisPoints:number,notes:string|null,confidence:number}],warnings:string[]}.",
+    `label is a short title for the whole document. Each line amountCents is the line total (quantity x unit price, after line discounts). totalCents is the final document total after global discounts, expressed in amountInputMode. category must be one of: ${categories.join(", ")}.`,
+    "Use cents for money. documentDate uses YYYY-MM-DD. Detect whether amounts are HT or TTC; choose TTC unless clearly marked HT. Use VAT basis points (20% = 2000). Put quantities or references in notes.",
+  ].join("\n\n");
+}
+
+export async function previewBudgetDocument(
+  kind: BudgetDocumentKind,
+  categories: readonly string[],
+  input: DocumentExtractionInput,
+): Promise<BudgetImportPreview> {
+  assertAnalyzableDocument(input);
+  const text = await providerFromEnv().extractText(input, budgetExtractionPrompt(kind, categories));
+  const result = parseProviderText(text, (value) => parseBudgetProviderJson(value, fallbackLabelFor(input.fileName), categories));
+  if (result.lines.length === 0) result.warnings.push("Aucune ligne budgetaire fiable detectee.");
+  return result;
+}

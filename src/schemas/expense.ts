@@ -1,6 +1,23 @@
 import { z } from "zod";
 import { LIMITS, optionalText, requiredText } from "./limits.js";
 
+export const EXPENSE_CATEGORIES = [
+  "lieu",
+  "son",
+  "lumière",
+  "boissons",
+  "nourriture",
+  "déco",
+  "artistes",
+  "communication",
+  "transport",
+  "assurance",
+  "sécurité",
+  "vestiaire",
+  "safer",
+  "autre",
+] as const;
+
 export const expenseSchema = z.object({
   label: requiredText("Le libelle", LIMITS.name),
   amount: requiredText("Le montant", LIMITS.money),
