@@ -52,6 +52,16 @@ export async function accountingRoutes(fastify: FastifyInstance) {
       .send(content);
   });
 
+  fastify.get("/api/accounting/fiscal-years/:id/pdf", { config: { documentation: { params: idParamsSchema } } }, async (request, reply) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const { fileName, content } = await service.exportPdf(id, request.workspaceId, request.userRole);
+    return reply
+      .type("application/pdf")
+      .header("content-disposition", `attachment; filename="${fileName}"`)
+      .header("cache-control", "no-store")
+      .send(content);
+  });
+
   fastify.get("/api/events/:eventId/accounting", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.getEventStatement(eventId, request.workspaceId, request.userRole);

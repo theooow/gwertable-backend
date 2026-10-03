@@ -9,6 +9,7 @@ import { requireCan } from "../lib/permissions.js";
 import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 import type { FiscalYearInput } from "../schemas/fiscal-year.js";
 import type { AccountingRepository } from "../repositories/accounting.repository.js";
+import { accountsPdf } from "./accounting-pdf.js";
 
 export type CheckSeverity = "error" | "warning" | "info";
 export type AccountingCheck = { code: string; severity: CheckSeverity; message: string; count?: number; amountCents?: number };
@@ -264,6 +265,12 @@ export class AccountingService {
     const fec = fiscalYear.closedSnapshot ? (fiscalYear.closedSnapshot as unknown as Snapshot).fec : (await this.live(fiscalYear, workspaceId)).fec;
     const siren = (await this.issuer(workspaceId)).siret.slice(0, 9) || "000000000";
     return { fileName: `${siren}FEC${day(fiscalYear.endsOn).replaceAll("-", "")}.txt`, content: encodeLatin9(`${fec.join("\r\n")}\r\n`) };
+  }
+
+  async exportPdf(id: string, workspaceId: string, role: UserRole) {
+    const report = await this.getReport(id, workspaceId, role);
+    const slug = report.fiscalYear.label.normalize("NFD").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+    return { fileName: `comptes-${slug || "exercice"}.pdf`, content: await accountsPdf(report) };
   }
 
   async closeFiscalYear(id: string, workspaceId: string, role: UserRole, userId: string) {

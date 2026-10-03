@@ -64,6 +64,15 @@ describe("accounting", () => {
     assert.ok(rows.some((row) => row.startsWith("AC|") && row.includes("|6132|")));
   });
 
+  it("renders the annual accounts as a PDF", async () => {
+    const { authorization, fiscalYear: { id } } = await seed();
+    const response = await request("GET", `/api/accounting/fiscal-years/${id}/pdf`, authorization);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["content-type"], "application/pdf");
+    assert.match(String(response.headers["content-disposition"]), /comptes-exercice-2026\.pdf/);
+    assert.equal(response.rawPayload.subarray(0, 5).toString(), "%PDF-");
+  });
+
   it("closes a reconciled fiscal year and freezes its statements", async () => {
     const { authorization, base, fiscalYear: { id } } = await seed();
     const close = () => request("POST", `/api/accounting/fiscal-years/${id}/close`, authorization);
