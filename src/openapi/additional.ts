@@ -20,6 +20,7 @@ const groups: Record<string, [string, string][]> = {
     ["POST /api/auth/verify-code", "Se connecter avec le code reçu par email"],
     ["POST /api/auth/password/login", "Se connecter avec un mot de passe"],
     ["POST /api/auth/password/setup", "Définir un mot de passe avec un jeton valide"],
+    ["POST /api/auth/terms/accept", "Accepter la version courante des CGU et de la politique de confidentialité"],
   ],
   Matériel: [
     ["PATCH /api/equipment/:id", "Modifier des cellules du catalogue matériel"],

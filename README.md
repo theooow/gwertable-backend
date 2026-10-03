@@ -203,7 +203,7 @@ L'API combine **mot de passe** et **code / lien envoyé par email**.
    → invalide la session
 ```
 
-`POST /api/auth/password/setup` définit un mot de passe à partir d'un token reçu par email. `POST /api/auth/login-link` renvoie un email de connexion. `GET /api/auth/me` retourne l'utilisateur courant.
+`POST /api/auth/password/setup` définit un mot de passe à partir d'un token reçu par email. `POST /api/auth/login-link` renvoie un email de connexion. `GET /api/auth/me` retourne l'utilisateur courant, dont `termsAccepted` (faux tant que la version courante des CGU, définie dans `src/lib/terms.ts`, n'a pas été acceptée). `POST /api/auth/terms/accept` enregistre cette acceptation.
 
 ### Invitations
 

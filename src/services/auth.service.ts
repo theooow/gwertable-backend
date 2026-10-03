@@ -318,6 +318,14 @@ export class AuthService {
   }
 
   /**
+   * Enregistre l'acceptation de la version courante des CGU et de la politique de confidentialité.
+   */
+  async acceptTerms(userId: string): Promise<{ termsAccepted: true; termsVersion: string }> {
+    await this.authRepository.acceptTerms(userId, CURRENT_TERMS_VERSION, new Date());
+    return { termsAccepted: true, termsVersion: CURRENT_TERMS_VERSION };
+  }
+
+  /**
    * Supprime la session courante (déconnexion).
    *
    * @param sessionToken - Token de la session à invalider, ou `null`

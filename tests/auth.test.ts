@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { prisma } from "../src/prisma.js";
 import { CURRENT_TERMS_VERSION } from "../src/lib/terms.js";
-import { json, request, setupTestApp } from "./helpers.js";
+import { json, request, seedAdminSession, setupTestApp } from "./helpers.js";
 
 setupTestApp();
 
@@ -200,6 +200,21 @@ describe("auth and health routes", () => {
     const me = await request("GET", "/api/auth/me", `Bearer ${payload.sessionToken}`);
     assert.equal(me.statusCode, 200);
     assert.equal(json<{ user: { email: string } }>(me).user.email, "new-user@abregi.test");
+  });
+
+  it("asks existing users to accept new terms versions", async () => {
+    const { authorization, user } = await seedAdminSession();
+    await prisma.user.update({ where: { id: user.id }, data: { termsVersion: "2000-01-01" } });
+
+    const before = await request("GET", "/api/auth/me", authorization);
+    assert.equal(json<{ user: { termsAccepted: boolean } }>(before).user.termsAccepted, false);
+
+    const accepted = await request("POST", "/api/auth/terms/accept", authorization);
+    assert.equal(accepted.statusCode, 200);
+    assert.deepEqual(json(accepted), { termsAccepted: true, termsVersion: CURRENT_TERMS_VERSION });
+
+    const after = await request("GET", "/api/auth/me", authorization);
+    assert.equal(json<{ user: { termsAccepted: boolean } }>(after).user.termsAccepted, true);
   });
 
   it("rejects registration without terms acceptance", async () => {

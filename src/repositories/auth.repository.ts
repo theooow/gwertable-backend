@@ -361,6 +361,13 @@ export class AuthRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  async acceptTerms(userId: string, termsVersion: string, acceptedAt: Date) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { termsAcceptedAt: acceptedAt, termsVersion },
+    });
+  }
+
   async updatePasswordHash(userId: string, passwordHash: string) {
     return this.prisma.user.update({
       where: { id: userId },
