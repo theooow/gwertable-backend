@@ -271,6 +271,12 @@ Gestion des tâches par événement avec statuts, priorités, catégories, assig
 ### Notifications & activité
 Paramètres de notification par événement (email, Discord, WhatsApp) et rappels envoyés par un worker périodique. Fil d'activité de l'espace, notifications in-app et préférences par utilisateur.
 
+Le fil couvre toutes les actions métier : événements, tâches, budget (y compris imports et synchronisation Shotgun), courses, participants et collaborateurs, conducteur, matériel (événement et catalogue), bénévoles (candidatures, plannings, échanges, pointage, repas, conventions), contacts, équipe et exercices comptables. Le catalogue des types, leur catégorie, la permission requise pour les lire et la préférence qui filtre leurs notifications sont centralisés dans `lib/activity-catalog.ts`. Les routes enregistrent l'activité via `lib/activity-recorder.ts`, sans jamais faire échouer l'action si l'écriture du fil échoue.
+
+- `GET /api/activity?category=&eventId=&cursor=&limit=` ne renvoie que les catégories autorisées par le rôle ; un collaborateur d'événement ne voit que les événements auxquels il est invité. Pagination par `nextCursor`.
+- Les notifications in-app ne sont créées que pour les membres autorisés à lire la catégorie, selon leurs préférences (tâches, échéances, budget, matériel, bénévoles).
+- `POST /api/activity/notifications/:id/read` marque une notification, `POST /api/activity/mark-read` les marque toutes.
+
 ### Budget
 - **Dépenses** : avec rattachement de justificatifs, catégories libres, TVA, suivi des remboursements et notes de frais
 - **Revenus** : catégories prédéfinies (bar, merch, caisse, sponsor, autre), justificatifs
