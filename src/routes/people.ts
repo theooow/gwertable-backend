@@ -8,6 +8,7 @@ import { PersonService } from "../services/person.service.js";
 import { toPersonDTO, toPersonDetailDTO } from "../dto/person.dto.js";
 import { requireCan } from "../lib/permissions.js";
 import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { recordRequestActivity } from "../lib/activity-recorder.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const workspaceIdParamsSchema = z.object({ workspaceId: z.string().min(1) });
@@ -78,6 +79,9 @@ export async function peopleRoutes(fastify: FastifyInstance) {
   fastify.post("/api/people", { config: { documentation: { body: personSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = personSchema.parse(request.body);
     const person = await service.create(request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      type: "PERSON_CREATED", title: `Contact ajouté : ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
     return reply.status(201).send(toPersonDTO(person));
   });
 
@@ -102,6 +106,9 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = personSchema.parse(request.body);
     const person = await service.update(id, request.workspaceId, request.userRole, data);
+    await recordRequestActivity(request, {
+      type: "PERSON_UPDATED", title: `Contact modifié : ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
     return toPersonDTO(person);
   });
 
@@ -109,27 +116,40 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "person.write");
     if (request.eventScoped) throw new ForbiddenError("La modification du carnet nécessite un accès à l’espace de travail");
     const { id } = idParamsSchema.parse(request.params);
-    return toPersonDTO(await dao.updateCells(id, request.workspaceId, personCellSchema.parse(request.body)));
+    const person = await dao.updateCells(id, request.workspaceId, personCellSchema.parse(request.body));
+    await recordRequestActivity(request, {
+      type: "PERSON_UPDATED", title: `Contact modifié : ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
+    return toPersonDTO(person);
   });
 
   fastify.post("/api/people/:id/archive", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const person = await service.archive(id, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, {
+      type: "PERSON_ARCHIVED", title: `Contact archivé : ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
     return toPersonDTO(person);
   });
 
   fastify.post("/api/people/:id/restore", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const person = await service.restore(id, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, {
+      type: "PERSON_RESTORED", title: `Contact restauré : ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
     return toPersonDTO(person);
   });
 
   fastify.post("/api/people/:id/documents", { config: { documentation: { params: idParamsSchema, body: documentBodySchema, statusCodes: [201] } } }, async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
     requireCan(request.userRole, "person.write");
-    await dao.findByIdOrThrow(id, request.workspaceId);
+    const person = await dao.findByIdOrThrow(id, request.workspaceId);
     const data = documentBodySchema.parse(request.body);
     const doc = await dao.createDocument(id, data);
+    await recordRequestActivity(request, {
+      type: "PERSON_DOCUMENT_ADDED", title: `Document ajouté à ${person.fullName} : ${data.label}`, entityType: "PERSON", entityId: person.id, notify: false,
+    });
     return reply.status(201).send(doc);
   });
 
@@ -141,17 +161,23 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     });
     if (!existing) throw new NotFoundError("Document introuvable");
     await dao.deleteDocument(documentId, existing.personId);
+    await recordRequestActivity(request, {
+      type: "PERSON_DOCUMENT_DELETED", title: `Document retiré d'un contact : ${existing.label}`, entityType: "PERSON", entityId: existing.personId, notify: false,
+    });
     return reply.status(204).send();
   });
 
   fastify.post("/api/people/:id/history", { config: { documentation: { params: idParamsSchema, body: historyNoteBodySchema, statusCodes: [201] } } }, async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
     requireCan(request.userRole, "person.write");
-    await dao.findByIdOrThrow(id, request.workspaceId);
+    const person = await dao.findByIdOrThrow(id, request.workspaceId);
     const { body, eventDate } = historyNoteBodySchema.parse(request.body);
     const note = await dao.createHistoryNote(id, {
       body,
       eventDate: eventDate ? new Date(eventDate) : null,
+    });
+    await recordRequestActivity(request, {
+      type: "PERSON_NOTE_ADDED", title: `Note ajoutée à l'historique de ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
     });
     return reply.status(201).send(note);
   });
@@ -164,6 +190,9 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     });
     if (!existing) throw new NotFoundError("Note introuvable");
     await dao.deleteHistoryNote(noteId, existing.personId);
+    await recordRequestActivity(request, {
+      type: "PERSON_NOTE_DELETED", title: `Note retirée de l'historique d'un contact`, entityType: "PERSON", entityId: existing.personId, notify: false,
+    });
     return reply.status(204).send();
   });
 }
