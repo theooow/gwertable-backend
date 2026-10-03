@@ -189,6 +189,11 @@ enum VatMode {
   ASSUJETTI
 }
 
+enum AccountingFramework {
+  ASSOCIATION
+  COMPANY
+}
+
 enum SacemBase {
   TICKETING
   TOTAL_REVENUE
@@ -292,6 +297,7 @@ model Workspace {
   electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
   invoices        Invoice[]
   expenseClaims   ExpenseClaim[]
+  fiscalYears     FiscalYear[]
 }
 
 /// Legal issuer/recipient identity. A workspace has one entity in this first
@@ -319,6 +325,28 @@ model LegalEntity {
 }
 
 /// Provider credentials are encrypted at rest. They are never returned by the API.
+/// Accounting period used to produce the income statement and the simplified
+/// balance sheet. Closing freezes a hashed snapshot of the generated statements.
+model FiscalYear {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  label            String
+  startsOn         DateTime            @db.Date
+  endsOn           DateTime            @db.Date
+  framework        AccountingFramework @default(ASSOCIATION)
+  openingCashCents Int                 @default(0)
+  closingBankBalanceCents Int?
+  closedAt         DateTime?
+  closedById       String?
+  closedSnapshot   Json?
+  closedHash       String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([workspaceId, startsOn])
+}
+
 model ElectronicInvoicingConnection {
   id              String   @id @default(cuid())
   workspaceId     String
