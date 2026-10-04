@@ -10,6 +10,7 @@ import type {
 import type { ExpenseCellInput, IncomeCellInput } from "../schemas/budget-cell.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { parseEuros } from "../lib/money.js";
+import { artistFeePhase } from "../lib/artist-fee.js";
 import {
   fetchShotgunEvents,
   fetchShotgunTickets,
@@ -269,6 +270,9 @@ export class BudgetRepository {
       if (data.paidById !== undefined) patch.paidById = data.paidById || null;
       if (data.notes !== undefined) patch.notes = data.notes || null;
       if (paidAt !== undefined) patch.paidAt = paidAt ? new Date(paidAt) : null;
+      if (current.sourceParticipantId && (data.phase !== undefined || data.reimbursement !== undefined)) {
+        patch.phase = artistFeePhase(data.reimbursement ?? current.reimbursement);
+      }
       const financial = amount !== undefined || data.amountInputMode !== undefined || data.vatRateBasisPoints !== undefined;
       if (financial) {
         const original = current.amountInputMode === "HT" ? current.amountHtCents : current.amountTtcCents;
@@ -308,7 +312,7 @@ export class BudgetRepository {
         data: {
           label: data.label,
           amountCents: amounts.amountCents,
-          phase: data.phase,
+          phase: existingExpense.sourceParticipantId ? artistFeePhase(data.reimbursement) : data.phase,
           amountInputMode: data.amountInputMode,
           vatRateBasisPoints: data.vatRateBasisPoints,
           amountHtCents: amounts.amountHtCents,

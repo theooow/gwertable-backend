@@ -1,6 +1,7 @@
 import type { PersonType, PrismaClient, Prisma } from "@prisma/client";
 import type { ParticipantCreateInput, ParticipantInput } from "../schemas/participant.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
+import { artistFeePhase } from "../lib/artist-fee.js";
 import { EventParticipantDao } from "../dao/event-participant.dao.js";
 import { ActivityRepository } from "./activity.repository.js";
 import { VolunteerRepository, volunteerTransaction } from "./volunteer.repository.js";
@@ -63,6 +64,7 @@ async function syncArtistExpense(
       amountHtCents: Math.round(amountCents * 100),
       amountTtcCents: Math.round(amountCents * 100),
       category: "artistes",
+      phase: artistFeePhase("PENDING"),
       reimbursement: "PENDING",
     },
     update: {

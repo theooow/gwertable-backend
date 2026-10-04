@@ -257,7 +257,7 @@ Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/ema
 CRUD d'événements avec gestion des lieux. Deux modes d'accès : membres de l'espace (accès complet) ou collaborateurs externes (accès limité à leurs événements).
 
 ### Participants
-Ajout de personnes du répertoire à un événement avec rôles (`GUEST`, `VOLUNTEER`, `ARTIST`, `STAFF`, `SUPPLIER`), RSVP, informations de set (artistes), cachet avec synchronisation automatique de la dépense associée.
+Ajout de personnes du répertoire à un événement avec rôles (`GUEST`, `VOLUNTEER`, `ARTIST`, `STAFF`, `SUPPLIER`), RSVP, informations de set (artistes), cachet avec synchronisation automatique de la dépense associée (prévisionnelle tant que le cachet est « à rembourser », réelle une fois réglé).
 
 ### Collaborateurs d'événement
 Invitation d'utilisateurs externes sur un événement spécifique via un lien unique, sans compte dans l'espace de travail.

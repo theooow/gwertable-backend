@@ -41,12 +41,19 @@ describe("event module routes", () => {
     const participant = json<{ id: string }>(createdParticipant);
 
     const expensesAfterCreate = json<
-      Array<{ id: string; sourceParticipantId: string | null; amountCents: number; category: string }>
+      Array<{ id: string; sourceParticipantId: string | null; amountCents: number; category: string; phase: string }>
     >(await request("GET", `/api/events/${event.id}/expenses`, authorization));
     const linkedExpense = expensesAfterCreate.find((expense) => expense.sourceParticipantId === participant.id);
     assert.ok(linkedExpense);
     assert.equal(linkedExpense?.amountCents, 1250);
     assert.equal(linkedExpense?.category, "artistes");
+    assert.equal(linkedExpense?.phase, "FORECAST");
+
+    const paidFee = await request("PATCH", `/api/expenses/${linkedExpense?.id}`, authorization, { reimbursement: "DONE" });
+    assert.equal(json<{ phase: string }>(paidFee).phase, "ACTUAL");
+    await request("PATCH", `/api/expenses/${linkedExpense?.id}`, authorization, { reimbursement: "PENDING" });
+    const forcedActualFee = await request("PATCH", `/api/expenses/${linkedExpense?.id}`, authorization, { phase: "ACTUAL" });
+    assert.equal(json<{ phase: string }>(forcedActualFee).phase, "FORECAST");
 
     const inlineParticipant = await request("POST", `/api/events/${event.id}/participants`, authorization, {
       ...participantPayload,
