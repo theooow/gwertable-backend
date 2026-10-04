@@ -596,12 +596,13 @@ describe("event module routes", () => {
     );
     assert.deepEqual(collectiveB.members.map((member) => member.participantId), [second!.id]);
 
-    const split = await request("PUT", `/api/events/${event.id}/profit-split`, authorization, { profitSplitMode: "CUSTOM" });
+    const split = await request("PUT", `/api/events/${event.id}/profit-split`, authorization, { profitSplitMode: "CUSTOM", stakesFirst: true });
     assert.equal(split.statusCode, 200);
-    const listed = json<{ profitSplitMode: string; collectives: Array<{ id: string; members: unknown[] }> }>(
+    const listed = json<{ profitSplitMode: string; stakesFirst: boolean; collectives: Array<{ id: string; members: unknown[] }> }>(
       await request("GET", `/api/events/${event.id}/collectives`, authorization),
     );
     assert.equal(listed.profitSplitMode, "CUSTOM");
+    assert.equal(listed.stakesFirst, true);
     assert.equal(listed.collectives.find((collective) => collective.id === collectiveA.id)?.members.length, 1);
 
     const outsider = await prisma.event.create({ data: { workspaceId: event.workspaceId, name: "Other", startsAt: new Date() } });

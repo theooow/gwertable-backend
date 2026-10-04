@@ -1,6 +1,6 @@
-import type { Prisma, PrismaClient, ProfitSplitMode } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
-import type { CollectiveInput } from "../schemas/collective.js";
+import type { CollectiveInput, ProfitSplitInput } from "../schemas/collective.js";
 import { ActivityRepository, type ActivityNotificationType } from "./activity.repository.js";
 
 const collectiveInclude = {
@@ -25,7 +25,7 @@ export class CollectiveRepository {
   private async findEvent(eventId: string, workspaceId: string) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, workspaceId },
-      select: { id: true, profitSplitMode: true },
+      select: { id: true, profitSplitMode: true, stakesFirst: true },
     });
     if (!event) throw new NotFoundError("Evenement introuvable");
     return event;
@@ -71,12 +71,12 @@ export class CollectiveRepository {
       include: collectiveInclude,
       orderBy: { createdAt: "asc" },
     });
-    return { profitSplitMode: event.profitSplitMode, collectives };
+    return { profitSplitMode: event.profitSplitMode, stakesFirst: event.stakesFirst, collectives };
   }
 
-  async updateProfitSplit(eventId: string, workspaceId: string, userId: string, profitSplitMode: ProfitSplitMode) {
+  async updateProfitSplit(eventId: string, workspaceId: string, userId: string, data: ProfitSplitInput) {
     await this.findEvent(eventId, workspaceId);
-    await this.prisma.event.update({ where: { id: eventId }, data: { profitSplitMode } });
+    await this.prisma.event.update({ where: { id: eventId }, data: { profitSplitMode: data.profitSplitMode, stakesFirst: data.stakesFirst } });
     await this.record(workspaceId, eventId, userId, "COLLECTIVE_UPDATED", "Partage du résultat modifié", eventId);
     return this.list(eventId, workspaceId);
   }

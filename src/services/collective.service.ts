@@ -13,7 +13,7 @@ export class CollectiveService {
 
   async updateProfitSplit(eventId: string, workspaceId: string, role: UserRole, userId: string, data: ProfitSplitInput) {
     requireCan(role, "budget.write");
-    return this.collectiveRepository.updateProfitSplit(eventId, workspaceId, userId, data.profitSplitMode);
+    return this.collectiveRepository.updateProfitSplit(eventId, workspaceId, userId, data);
   }
 
   async create(eventId: string, workspaceId: string, role: UserRole, userId: string, data: CollectiveInput) {

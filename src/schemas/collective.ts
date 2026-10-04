@@ -9,6 +9,7 @@ export const collectiveSchema = z.object({
 
 export const profitSplitSchema = z.object({
   profitSplitMode: z.enum(["EQUAL", "PRO_RATA_INVESTMENT", "CUSTOM"]),
+  stakesFirst: z.boolean().optional(),
 });
 
 export type CollectiveInput = z.infer<typeof collectiveSchema>;
