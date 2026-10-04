@@ -93,6 +93,9 @@ export async function sendMagicLinkEmail({
 
 export async function sendInvoiceEmail({ email, customerName, number, pdf }: { email: string; customerName: string; number: string; pdf: Buffer }) {
   if (env.MAIL_TRANSPORT === "log") { console.info({ email, number }, "Invoice email skipped"); return; }
-  try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject: `Facture ${number}`, text: `Bonjour ${customerName},\n\nVeuillez trouver votre facture ${number} en pièce jointe.`, attachments: [{ filename: `${number}.pdf`, content: pdf, contentType: "application/pdf" }] }); }
+  const greeting = `Bonjour ${customerName},`;
+  const message = `Vous trouverez votre facture ${number} en pièce jointe.`;
+  const html = renderEmailHtml({ preheader: message, title: `Facture ${number}`, greeting, paragraphs: [message] });
+  try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject: `Facture ${number}`, text: `${greeting}\n\n${message}`, html, attachments: [{ filename: `${number}.pdf`, content: pdf, contentType: "application/pdf" }] }); }
   catch { throw new EmailDeliveryError("Impossible d'envoyer la facture par email"); }
 }
