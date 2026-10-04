@@ -436,10 +436,24 @@ Le fichier `docs/erd.svg` est versionné — il est mis à jour à chaque modifi
 
 ## Déploiement
 
-Chaque push sur `main` déclenche `.github/workflows/deploy.yml` :
+`.github/workflows/deploy.yml` enchaîne :
 
 1. **test** — PostgreSQL 17 éphémère, `npm ci`, `db:generate`, `db:deploy`, `typecheck`, `typecheck:tests`, `npm test`, `test:swagger-ui`
-2. **build** — image Docker publiée sur GHCR (`latest` et SHA du commit)
+2. **build** — image Docker publiée sur GHCR (`staging` ou `latest`, SHA du commit, version du tag)
 3. **deploy** — via SSH sur le VPS : mise à jour du `.env` et du `docker-compose.yml` (PostgreSQL, MailHog, backend, frontend), puis redémarrage
+
+### Branches et environnements
+
+| Déclencheur | Tests | Déploiement |
+|-------------|-------|-------------|
+| push sur `dev` | oui | **staging** — https://staging.abregi.com (`~/gwertable-staging`, images `:staging`) |
+| pull request vers `main` | oui | aucun |
+| push sur `main` (merge de PR) ou tag `v*` | oui | **production** — https://www.abregi.com (`~/gwertable`, images `:latest`) |
+
+On développe sur `dev`, on valide sur le staging, puis on ouvre une PR `dev` → `main`. Un tag `vX.Y.Z` (optionnel) publie aussi l'image `:X.Y.Z`, ce qui permet de revenir à une version précise.
+
+Staging et production tournent sur le même VPS dans deux projets Docker Compose isolés (base PostgreSQL, uploads et MailHog distincts). Le staging est protégé par une authentification basique nginx et utilise le cookie `abregi_staging_session` pour ne pas entrer en collision avec le cookie `.abregi.com` de production. Avant chaque migration en production, un dump PostgreSQL est écrit dans `~/backups/predeploy-*.sql.gz` (conservé 14 jours).
+
+Le `docker-compose.yml` est réécrit par les workflows des deux dépôts : il doit rester identique dans `gwertable-backend` et `gwertable-frontend`.
 
 Chaque commit poussé doit donc passer la suite complète, y compris la couverture OpenAPI. Au démarrage, le conteneur applique les migrations (`npm run db:deploy`) puis lance `node dist/server.js` sur le port 4000.
