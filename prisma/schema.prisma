@@ -59,16 +59,6 @@ enum UsagePlan {
   PLATINIUM
 }
 
-enum ElectronicInvoicingProvider {
-  SUPER_PDP
-}
-
-enum ElectronicInvoicingConnectionStatus {
-  DISCONNECTED
-  CONNECTED
-  ERROR
-}
-
 enum InvoiceDirection {
   OUTGOING
   INCOMING
@@ -267,7 +257,6 @@ model User {
   activityEntries       ActivityEntry[]
   notifications         InAppNotification[]
   notificationPreferences ActivityNotificationPreference[]
-  electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
   submittedExpenseClaims ExpenseClaim[] @relation("ExpenseClaimSubmitter")
 
   @@index([defaultWorkspaceId])
@@ -301,15 +290,13 @@ model Workspace {
   notifications   InAppNotification[]
   notificationPreferences ActivityNotificationPreference[]
   legalEntity     LegalEntity?
-  electronicInvoicingConnections ElectronicInvoicingConnection[]
-  electronicInvoicingOAuthStates ElectronicInvoicingOAuthState[]
   invoices        Invoice[]
   expenseClaims   ExpenseClaim[]
   fiscalYears     FiscalYear[]
 }
 
 /// Legal issuer/recipient identity. A workspace has one entity in this first
-/// iteration; this keeps a PDP connection strictly isolated per customer.
+/// iteration.
 model LegalEntity {
   id             String   @id @default(cuid())
   workspaceId    String   @unique
@@ -332,7 +319,6 @@ model LegalEntity {
   @@index([siret])
 }
 
-/// Provider credentials are encrypted at rest. They are never returned by the API.
 /// Accounting period used to produce the income statement and the simplified
 /// balance sheet. Closing freezes a hashed snapshot of the generated statements.
 model FiscalYear {
@@ -353,41 +339,6 @@ model FiscalYear {
   updatedAt        DateTime            @updatedAt
 
   @@index([workspaceId, startsOn])
-}
-
-model ElectronicInvoicingConnection {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  provider        ElectronicInvoicingProvider
-  status          ElectronicInvoicingConnectionStatus @default(DISCONNECTED)
-  providerOrgId   String?
-  accessToken     String?
-  refreshToken    String?
-  tokenExpiresAt  DateTime?
-  lastError       String?
-  connectedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([workspaceId, provider])
-}
-
-/// Short-lived, one-time OAuth state bound to an Abregi user and workspace.
-model ElectronicInvoicingOAuthState {
-  id          String   @id @default(cuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider    ElectronicInvoicingProvider
-  state       String   @unique
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime @default(now())
-
-  @@index([workspaceId, provider])
-  @@index([userId])
 }
 
 model EventCollaborator {
@@ -1251,8 +1202,7 @@ model Expense {
   @@index([paidById])
 }
 
-/// Workspace-wide invoice register. OUTGOING documents are composed in Abregi;
-/// transmission through a PDP is deliberately tracked separately in a later step.
+/// Workspace-wide invoice register. OUTGOING documents are composed in Abregi.
 model Invoice {
   id              String           @id @default(cuid())
   workspaceId     String
@@ -1276,10 +1226,6 @@ model Invoice {
   totalVatCents   Int              @default(0)
   totalTtcCents   Int              @default(0)
   documentUrl     String?
-  superPdpInvoiceId Int? @unique
-  superPdpStatus  String?
-  superPdpError   String?
-  superPdpSentAt  DateTime?
   notes           String?
   lines           InvoiceLine[]
   createdAt       DateTime         @default(now())
