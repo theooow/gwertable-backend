@@ -574,4 +574,44 @@ describe("event module routes", () => {
     assert.equal(keptAdvance?.paidById, null);
     assert.equal(keptAdvance?.reimbursement, "NOT_OWED");
   });
+
+  it("manages collectives, their members and the profit split mode", async () => {
+    const { authorization } = await seedAdminSession();
+    const { person, event } = await seedEventContext(authorization);
+    const otherPerson = await prisma.person.create({
+      data: { workspaceId: event.workspaceId, fullName: "Carla Crew", email: "carla@example.test", phone: "", tags: [] },
+    });
+    const [first, second] = await Promise.all([person.id, otherPerson.id].map((personId) =>
+      prisma.eventParticipant.create({ data: { eventId: event.id, personId, roles: ["STAFF"] } })));
+
+    const created = await request("POST", `/api/events/${event.id}/collectives`, authorization, {
+      name: "Collectif A", shareBasisPoints: 6000, participantIds: [first!.id, second!.id],
+    });
+    assert.equal(created.statusCode, 201);
+    const collectiveA = json<{ id: string; members: Array<{ participantId: string; participant: { personId: string } }> }>(created);
+    assert.equal(collectiveA.members.length, 2);
+
+    const collectiveB = json<{ id: string; members: Array<{ participantId: string }> }>(
+      await request("POST", `/api/events/${event.id}/collectives`, authorization, { name: "Collectif B", participantIds: [second!.id] }),
+    );
+    assert.deepEqual(collectiveB.members.map((member) => member.participantId), [second!.id]);
+
+    const split = await request("PUT", `/api/events/${event.id}/profit-split`, authorization, { profitSplitMode: "CUSTOM" });
+    assert.equal(split.statusCode, 200);
+    const listed = json<{ profitSplitMode: string; collectives: Array<{ id: string; members: unknown[] }> }>(
+      await request("GET", `/api/events/${event.id}/collectives`, authorization),
+    );
+    assert.equal(listed.profitSplitMode, "CUSTOM");
+    assert.equal(listed.collectives.find((collective) => collective.id === collectiveA.id)?.members.length, 1);
+
+    const outsider = await prisma.event.create({ data: { workspaceId: event.workspaceId, name: "Other", startsAt: new Date() } });
+    const foreignParticipant = await prisma.eventParticipant.create({ data: { eventId: outsider.id, personId: person.id } });
+    const rejected = await request("PUT", `/api/collectives/${collectiveA.id}`, authorization, {
+      name: "Collectif A", participantIds: [foreignParticipant.id],
+    });
+    assert.equal(rejected.statusCode, 400);
+
+    assert.equal((await request("DELETE", `/api/collectives/${collectiveB.id}`, authorization)).statusCode, 200);
+    assert.equal(await prisma.eventCollectiveMember.count({ where: { participantId: second!.id } }), 0);
+  });
 });

@@ -283,6 +283,7 @@ Le fil couvre toutes les actions métier : événements, tâches, budget (y comp
 - **Import de documents** : prévisualisation puis confirmation des dépenses et revenus extraits par IA
 - **Tarifs billets** : manuels ou synchronisés depuis l'API Shotgun
 - **Consommables** : articles avec prix unitaire et quantité estimée
+- **Collectifs** : collectifs co-organisateurs avec leurs membres (participants de l'événement, un collectif max par participant) et mode de partage du résultat (`EQUAL`, `PRO_RATA_INVESTMENT`, `CUSTOM` avec parts en points de base)
 
 ### Comptabilité
 Exercices comptables de l'espace : états financiers, clôture, export FEC et comptes annuels en PDF. Compte de résultat par événement.
@@ -409,7 +410,7 @@ Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plu
 - **Tâches** : `Task`, `TaskComment`, `TaskCategory`, `TaskAttachment`, `TaskAssignee`, `TaskCalendarSubscription`
 - **Conducteur** : `RunOfShowTrack`, `RunOfShowSection`, `RunOfShowItem`, `RunOfShowDependency`
 - **Notifications & activité** : `EventNotificationSettings`, `NotificationDelivery`, `ActivityEntry`, `InAppNotification`, `ActivityNotificationPreference`
-- **Budget & finance** : `Expense`, `ExpenseClaim`, `Income`, `TicketTier`, `ConsumableItem`, `Invoice`, `InvoiceLine`, `FiscalYear`, `ElectronicInvoicingConnection`, `ElectronicInvoicingOAuthState`
+- **Budget & finance** : `Expense`, `ExpenseClaim`, `Income`, `TicketTier`, `ConsumableItem`, `EventCollective`, `EventCollectiveMember`, `Invoice`, `InvoiceLine`, `FiscalYear`, `ElectronicInvoicingConnection`, `ElectronicInvoicingOAuthState`
 - **Courses** : `ShoppingItem`
 - **Matériel** : `EquipmentItem`, `EquipmentGroup`, `EquipmentGroupItem`, `EquipmentUsage`, `EquipmentQuote`, `EquipmentImportMatchMemory`
 - **Administration** : `ApiLog`

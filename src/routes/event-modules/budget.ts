@@ -14,9 +14,12 @@ import { expenseSchema } from "../../schemas/expense.js";
 import { incomeSchema } from "../../schemas/income.js";
 import { ticketTierSchema } from "../../schemas/ticket-tier.js";
 import { consumableSchema } from "../../schemas/consumable.js";
+import { collectiveSchema, profitSplitSchema } from "../../schemas/collective.js";
 import { ExpenseDao } from "../../dao/expense.dao.js";
 import { BudgetRepository } from "../../repositories/budget.repository.js";
 import { BudgetService } from "../../services/budget.service.js";
+import { CollectiveRepository } from "../../repositories/collective.repository.js";
+import { CollectiveService } from "../../services/collective.service.js";
 
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const eventItemParamsSchema = z.object({ eventId: z.string().min(1), id: z.string().min(1) });
@@ -46,6 +49,8 @@ async function storeImportedReceipt(workspaceId: string, contentType: string, da
 const service = new BudgetService(
   new BudgetRepository(new ExpenseDao(prisma), prisma),
 );
+
+const collectiveService = new CollectiveService(new CollectiveRepository(prisma));
 
 export async function budgetRoutes(fastify: FastifyInstance) {
   // ── Expenses ─────────────────────────────────────────────────────────────────
@@ -221,5 +226,36 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/consumables/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteConsumable(id, request.workspaceId, request.userRole, request.user!.id);
+  });
+
+  // ── Collectives ───────────────────────────────────────────────────────────────
+
+  fastify.get("/api/events/:eventId/collectives", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    return collectiveService.list(eventId, request.workspaceId, request.userRole);
+  });
+
+  fastify.put("/api/events/:eventId/profit-split", { config: { documentation: { params: eventParamsSchema, body: profitSplitSchema } } }, async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = profitSplitSchema.parse(request.body);
+    return collectiveService.updateProfitSplit(eventId, request.workspaceId, request.userRole, request.user!.id, data);
+  });
+
+  fastify.post("/api/events/:eventId/collectives", { config: { documentation: { params: eventParamsSchema, body: collectiveSchema, statusCodes: [201] } } }, async (request, reply) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = collectiveSchema.parse(request.body);
+    const collective = await collectiveService.create(eventId, request.workspaceId, request.userRole, request.user!.id, data);
+    return reply.status(201).send(collective);
+  });
+
+  fastify.put("/api/collectives/:id", { config: { documentation: { params: idParamsSchema, body: collectiveSchema } } }, async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = collectiveSchema.parse(request.body);
+    return collectiveService.update(id, request.workspaceId, request.userRole, request.user!.id, data);
+  });
+
+  fastify.delete("/api/collectives/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    return collectiveService.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 }

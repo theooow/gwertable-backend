@@ -602,6 +602,36 @@ export const routeDocs: Record<string, RouteDoc> = {
     ],
     "summary": "Supprimer un consommable"
   },
+  "GET /api/events/:eventId/collectives": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Lister les collectifs et le mode de partage du résultat"
+  },
+  "PUT /api/events/:eventId/profit-split": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Modifier le mode de partage du résultat entre collectifs"
+  },
+  "POST /api/events/:eventId/collectives": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Créer un collectif"
+  },
+  "PUT /api/collectives/:id": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Mettre à jour un collectif et ses membres"
+  },
+  "DELETE /api/collectives/:id": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Supprimer un collectif"
+  },
   "GET /api/events/:eventId/shopping": {
     "tags": [
       "Courses"
