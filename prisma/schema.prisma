@@ -194,6 +194,12 @@ enum AccountingFramework {
   COMPANY
 }
 
+enum ProfitSplitMode {
+  EQUAL
+  PRO_RATA_INVESTMENT
+  CUSTOM
+}
+
 enum SacemBase {
   TICKETING
   TOTAL_REVENUE
@@ -676,6 +682,7 @@ model Event {
   defaultVatRateBasisPoints Int @default(2000)
   sacemRateBasisPoints Int @default(1150)
   sacemBase          SacemBase @default(TICKETING)
+  profitSplitMode    ProfitSplitMode @default(EQUAL)
 
   participants    EventParticipant[]
   volunteerForm   VolunteerForm?
@@ -701,6 +708,7 @@ model Event {
   notificationDeliveries NotificationDelivery[]
   ticketTiers      TicketTier[]
   consumables      ConsumableItem[]
+  collectives      EventCollective[]
   equipmentQuotes  EquipmentQuote[]
   collaborators    EventCollaborator[]
   activityEntries  ActivityEntry[]
@@ -854,6 +862,7 @@ model EventParticipant {
   // Notes internes orga (sensibles)
   internalNotes String?
   autoExpense   Expense?
+  collectiveMembership EventCollectiveMember?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1390,6 +1399,29 @@ model ConsumableItem {
   estimatedQty   Decimal @default(0) @db.Decimal(10, 2)
 
   @@index([eventId])
+}
+
+model EventCollective {
+  id               String  @id @default(cuid())
+  eventId          String
+  event            Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name             String
+  shareBasisPoints Int     @default(0)
+  members          EventCollectiveMember[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+model EventCollectiveMember {
+  id            String           @id @default(cuid())
+  collectiveId  String
+  collective    EventCollective  @relation(fields: [collectiveId], references: [id], onDelete: Cascade)
+  participantId String           @unique
+  participant   EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([collectiveId])
 }
 
 model ShoppingItem {
