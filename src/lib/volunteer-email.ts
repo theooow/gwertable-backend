@@ -10,7 +10,7 @@ export type VolunteerEmailContent = {
 const copy = {
   REGISTERED: { title: "Inscription reçue", cta: "", message: "Votre candidature a bien été reçue. Vous recevrez un email dès qu’elle sera validée." },
   APPROVED: { title: "Candidature validée", cta: "Ouvrir mon espace", message: "Votre planning et votre badge sont disponibles dans votre espace bénévole." },
-  PLANNING: { title: "Vos créneaux sont prêts", cta: "Voir mes créneaux", message: "Acceptez ou refusez vos prochains horaires depuis votre espace bénévole." },
+  PLANNING: { title: "Vos créneaux sont prêts", cta: "Voir mes créneaux", message: "Ouvrez votre espace bénévole pour accepter ou refuser vos prochains horaires." },
   SHIFT_UPDATE: { title: "Planning modifié", cta: "Ouvrir mon espace", message: "Un de vos postes a été affecté ou modifié. Vérifiez vos horaires et signez la convention mise à jour : chaque changement de mission demande une nouvelle signature." },
   SWAP_REQUEST: { title: "Demande d’échange de créneau", cta: "Répondre à la demande", message: "Un autre bénévole vous propose d’échanger un créneau. Acceptez ou refusez depuis votre espace bénévole." },
 };
