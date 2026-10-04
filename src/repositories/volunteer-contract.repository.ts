@@ -7,6 +7,7 @@ import { env } from "../env.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
 import { contractMailer } from "../lib/mailer.js";
+import { renderContractCodeEmail, renderContractInvitationEmail } from "../lib/contract-email.js";
 import { VolunteerRepository, volunteerTransaction } from "./volunteer.repository.js";
 import { contractInput, signatureInput, SIGNATURE_CONSENT } from "../schemas/volunteer-contract.js";
 import { contractContext, contractContent, isCurrentContract, resolveContractToken } from "../services/volunteer-contract-lifecycle.js";
@@ -68,7 +69,8 @@ export class VolunteerContractRepository {
     }, data: { tokenHash, expiresAt: new Date(Date.now() + 30 * 86400000), invitationSentAt: now, codeHash: null, codeExpiresAt: null } });
     if (!changed.count) throw new ConflictError("Convention déjà signée, annulée ou invitation envoyée il y a moins d’une minute.");
     try {
-      await contractMailer.send(contract.signerEmail, "Votre convention de bénévolat à signer", `Bonjour ${contract.signerName},\n\n${contract.title} — ${contract.eventName}\n\nLisez et signez votre convention :\n${env.FRONTEND_URL}/volunteers/contracts/${token}\n\nCe lien personnel est valable 30 jours. Ne le partagez pas. Vous pourrez télécharger votre exemplaire après signature.`);
+      const email = renderContractInvitationEmail(contract, `${env.FRONTEND_URL}/volunteers/contracts/${token}`);
+      await contractMailer.send(contract.signerEmail, email.subject, email.text, email.html);
     } catch (error) {
       await prisma.volunteerContract.updateMany({ where: { id: contract.id, status: "PENDING", tokenHash }, data: { invitationSentAt: null, tokenHash: sha256(randomBytes(32)) } });
       throw error;
@@ -98,7 +100,8 @@ export class VolunteerContractRepository {
       OR: [{ codeSentAt: null }, { codeSentAt: { lte: new Date(Date.now() - 60000) } }],
     }, data: { codeHash, codeSentAt: now, codeExpiresAt: new Date(Date.now() + 10 * 60000), codeAttempts: 0, codeSends: { increment: 1 } } });
     if (!updated.count) throw new ConflictError("Patientez une minute entre deux codes. Maximum 10 envois par convention ; contactez l’organisateur si nécessaire.");
-    try { await contractMailer.send(contract.signerEmail, "Code de signature de votre convention", `Votre code : ${code}\n\nConvention : ${contract.title}\nÉvénement : ${contract.eventName}\nEmpreinte SHA-256 du PDF : ${contract.documentHash}\n\nValable 10 minutes pour signer cette convention. Ne communiquez ce code à personne. Si vous n’avez pas demandé à signer, ignorez ce message.`); }
+    const email = renderContractCodeEmail(contract, code);
+    try { await contractMailer.send(contract.signerEmail, email.subject, email.text, email.html); }
     catch (error) {
       await prisma.volunteerContract.updateMany({ where: { id: contract.id, status: "PENDING", codeHash }, data: { codeHash: null, codeExpiresAt: null } });
       throw error;

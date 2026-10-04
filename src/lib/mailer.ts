@@ -23,10 +23,10 @@ function createTransport() {
 }
 
 export const contractMailer = {
-  async send(email: string, subject: string, text: string) {
+  async send(email: string, subject: string, text: string, html?: string) {
     // Never pretend that a verification code was delivered in production.
     if (env.MAIL_TRANSPORT === "log") throw new EmailDeliveryError("L’envoi SMTP doit être configuré pour signer une convention.");
-    try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text }); }
+    try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text, html }); }
     catch { throw new EmailDeliveryError("Email non envoyé. Réessayez depuis la convention."); }
   },
 };
