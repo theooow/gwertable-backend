@@ -561,13 +561,17 @@ describe("event module routes", () => {
       (await request("DELETE", `/api/participants/${secondParticipantJson.id}`, authorization)).statusCode,
       200,
     );
-    const expensesAfterParticipantDelete = json<Array<{ id: string; sourceParticipantId: string | null }>>(
+    const expensesAfterParticipantDelete = json<
+      Array<{ id: string; sourceParticipantId: string | null; paidById: string | null; reimbursement: string }>
+    >(
       await request("GET", `/api/events/${event.id}/expenses`, authorization),
     );
     assert.equal(
       expensesAfterParticipantDelete.some((expense) => expense.sourceParticipantId === secondParticipantJson.id),
       false,
     );
-    assert.equal(expensesAfterParticipantDelete.some((expense) => expense.id === advanceId), false);
+    const keptAdvance = expensesAfterParticipantDelete.find((expense) => expense.id === advanceId);
+    assert.equal(keptAdvance?.paidById, null);
+    assert.equal(keptAdvance?.reimbursement, "NOT_OWED");
   });
 });

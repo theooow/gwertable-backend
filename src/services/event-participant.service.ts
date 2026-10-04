@@ -77,7 +77,7 @@ export class EventParticipantService {
   }
 
   /**
-   * Liste les dépenses qui seront supprimées avec le participant.
+   * Liste les dépenses impactées par la suppression du participant.
    * Les montants sont masqués sans droit de lecture du budget.
    *
    * @param id - Identifiant du participant

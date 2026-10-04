@@ -267,8 +267,8 @@ export class EventParticipantRepository {
   }
 
   /**
-   * Liste les dépenses supprimées avec le participant : son cachet et les avances
-   * qu'il a payées sur l'événement.
+   * Liste les dépenses impactées par la suppression du participant : son cachet (supprimé)
+   * et les avances qu'il a payées sur l'événement (passées à la charge de l'organisation).
    *
    * @param id - Identifiant du participant
    * @param workspaceId - Identifiant de l'espace de travail
@@ -292,7 +292,8 @@ export class EventParticipantRepository {
   }
 
   /**
-   * Supprime un participant, son cachet et les avances qu'il a payées sur l'événement.
+   * Supprime un participant et son cachet. Ses avances sur l'événement sont conservées
+   * mais détachées de la personne et marquées comme non dues.
    *
    * @param id - Identifiant du participant
    * @param workspaceId - Identifiant de l'espace de travail
@@ -305,13 +306,10 @@ export class EventParticipantRepository {
     });
     if (!participant) throw new NotFoundError("Participant introuvable");
     const deleted = await volunteerTransaction(async (tx) => {
-      const advances = await tx.expense.findMany({
+      await tx.expense.updateMany({
         where: { ...linkedExpensesWhere(participant), sourceParticipantId: null },
-        select: { id: true },
+        data: { paidById: null, reimbursement: "NOT_OWED" },
       });
-      const advanceIds = advances.map((expense) => expense.id);
-      await tx.shoppingItem.updateMany({ where: { expenseId: { in: advanceIds } }, data: { expenseId: null } });
-      await tx.expense.deleteMany({ where: { id: { in: advanceIds } } });
       // Delete first so volunteer cancellation cannot delete the same participant twice.
       const deleted = await tx.eventParticipant.delete({ where: { id } });
       await this.volunteers.syncParticipant(tx, { ...deleted, roles: [] });

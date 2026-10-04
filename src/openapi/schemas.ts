@@ -278,21 +278,21 @@ export const routeDocs: Record<string, RouteDoc> = {
       "Participants"
     ],
     "summary": "Retirer un participant d'un événement",
-    "description": "Supprime aussi le cachet du participant et les avances qu'il a payées sur l'événement."
+    "description": "Supprime aussi le cachet du participant. Ses avances sur l'événement sont conservées, détachées de la personne et marquées comme non dues (`NOT_OWED`)."
   },
   "DELETE /api/participants/:id": {
     "tags": [
       "Participants"
     ],
     "summary": "Supprimer un participant (accès direct par id)",
-    "description": "Supprime aussi le cachet du participant et les avances qu'il a payées sur l'événement."
+    "description": "Supprime aussi le cachet du participant. Ses avances sur l'événement sont conservées, détachées de la personne et marquées comme non dues (`NOT_OWED`)."
   },
   "GET /api/participants/:id/linked-expenses": {
     "tags": [
       "Participants"
     ],
-    "summary": "Lister les dépenses supprimées avec un participant",
-    "description": "Retourne le cachet (`FEE`) et les avances payées par la personne sur l'événement (`ADVANCE`). `amountCents` vaut `null` sans droit de lecture du budget."
+    "summary": "Lister les dépenses impactées par la suppression d'un participant",
+    "description": "Retourne le cachet (`FEE`, supprimé avec le participant) et les avances payées par la personne sur l'événement (`ADVANCE`, conservées et passées à la charge de l'organisation). `amountCents` vaut `null` sans droit de lecture du budget."
   },
   "GET /api/events/:eventId/participants/persons": {
     "tags": [
