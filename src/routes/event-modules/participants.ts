@@ -71,6 +71,11 @@ export async function participantRoutes(fastify: FastifyInstance) {
     return service.delete(id, request.workspaceId, request.userRole, request.user!.id);
   });
 
+  fastify.get("/api/participants/:id/linked-expenses", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    return service.listLinkedExpenses(id, request.workspaceId, request.userRole);
+  });
+
   fastify.get("/api/events/:eventId/participants/persons", { config: { documentation: { params: eventParamsSchema } } }, async (request) => {
     const { eventId } = eventParamsSchema.parse(request.params);
     return service.listPersons(eventId, request.workspaceId, request.userRole);

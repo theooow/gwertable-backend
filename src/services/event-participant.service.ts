@@ -77,6 +77,21 @@ export class EventParticipantService {
   }
 
   /**
+   * Liste les dépenses qui seront supprimées avec le participant.
+   * Les montants sont masqués sans droit de lecture du budget.
+   *
+   * @param id - Identifiant du participant
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   */
+  async listLinkedExpenses(id: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "participant.write");
+    const expenses = await this.participantRepository.listLinkedExpenses(id, workspaceId);
+    const canSeeAmounts = this.canSeeSensitive(role);
+    return expenses.map((expense) => ({ ...expense, amountCents: canSeeAmounts ? expense.amountCents : null }));
+  }
+
+  /**
    * Retourne si l'utilisateur peut voir les champs sensibles (cachet, notes internes).
    *
    * @param role - Rôle de l'utilisateur courant

@@ -277,13 +277,22 @@ export const routeDocs: Record<string, RouteDoc> = {
     "tags": [
       "Participants"
     ],
-    "summary": "Retirer un participant d'un événement"
+    "summary": "Retirer un participant d'un événement",
+    "description": "Supprime aussi le cachet du participant et les avances qu'il a payées sur l'événement."
   },
   "DELETE /api/participants/:id": {
     "tags": [
       "Participants"
     ],
-    "summary": "Supprimer un participant (accès direct par id)"
+    "summary": "Supprimer un participant (accès direct par id)",
+    "description": "Supprime aussi le cachet du participant et les avances qu'il a payées sur l'événement."
+  },
+  "GET /api/participants/:id/linked-expenses": {
+    "tags": [
+      "Participants"
+    ],
+    "summary": "Lister les dépenses supprimées avec un participant",
+    "description": "Retourne le cachet (`FEE`) et les avances payées par la personne sur l'événement (`ADVANCE`). `amountCents` vaut `null` sans droit de lecture du budget."
   },
   "GET /api/events/:eventId/participants/persons": {
     "tags": [

@@ -545,15 +545,29 @@ describe("event module routes", () => {
       ).some((expense) => expense.sourceParticipantId === secondParticipantJson.id),
       true,
     );
+    const advance = await request("POST", `/api/events/${event.id}/expenses`, authorization, {
+      ...expensePayload,
+      label: "Train",
+    });
+    assert.equal(advance.statusCode, 201);
+    const advanceId = json<{ id: string }>(advance).id;
+    const linkedExpenses = await request("GET", `/api/participants/${secondParticipantJson.id}/linked-expenses`, authorization);
+    assert.equal(linkedExpenses.statusCode, 200);
+    assert.deepEqual(
+      json<Array<{ id: string; kind: string; amountCents: number | null }>>(linkedExpenses).map(({ kind, amountCents }) => ({ kind, amountCents })),
+      [{ kind: "FEE", amountCents: 900 }, { kind: "ADVANCE", amountCents: 4250 }],
+    );
     assert.equal(
       (await request("DELETE", `/api/participants/${secondParticipantJson.id}`, authorization)).statusCode,
       200,
     );
+    const expensesAfterParticipantDelete = json<Array<{ id: string; sourceParticipantId: string | null }>>(
+      await request("GET", `/api/events/${event.id}/expenses`, authorization),
+    );
     assert.equal(
-      json<Array<{ sourceParticipantId: string | null }>>(
-        await request("GET", `/api/events/${event.id}/expenses`, authorization),
-      ).some((expense) => expense.sourceParticipantId === secondParticipantJson.id),
+      expensesAfterParticipantDelete.some((expense) => expense.sourceParticipantId === secondParticipantJson.id),
       false,
     );
+    assert.equal(expensesAfterParticipantDelete.some((expense) => expense.id === advanceId), false);
   });
 });

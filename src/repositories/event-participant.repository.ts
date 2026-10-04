@@ -88,6 +88,13 @@ function contactTypeForRoles(roles: string[]): PersonType {
  * Repository pour le domaine participant d'événement.
  * Orchestre le CRUD et la synchronisation de la dépense artiste.
  */
+function linkedExpensesWhere(participant: { id: string; eventId: string; personId: string }): Prisma.ExpenseWhereInput {
+  return {
+    eventId: participant.eventId,
+    OR: [{ sourceParticipantId: participant.id }, { paidById: participant.personId }],
+  };
+}
+
 export class EventParticipantRepository {
   private readonly activityRepository: ActivityRepository;
   private readonly volunteers = new VolunteerRepository();
@@ -260,7 +267,32 @@ export class EventParticipantRepository {
   }
 
   /**
-   * Supprime un participant.
+   * Liste les dépenses supprimées avec le participant : son cachet et les avances
+   * qu'il a payées sur l'événement.
+   *
+   * @param id - Identifiant du participant
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @throws {NotFoundError} Si le participant est introuvable
+   */
+  async listLinkedExpenses(id: string, workspaceId: string) {
+    const participant = await this.prisma.eventParticipant.findFirst({
+      where: { id, event: { workspaceId } },
+      select: { id: true, eventId: true, personId: true },
+    });
+    if (!participant) throw new NotFoundError("Participant introuvable");
+    const expenses = await this.prisma.expense.findMany({
+      where: linkedExpensesWhere(participant),
+      orderBy: { createdAt: "asc" },
+      select: { id: true, label: true, amountCents: true, sourceParticipantId: true },
+    });
+    return expenses.map(({ sourceParticipantId, ...expense }) => ({
+      ...expense,
+      kind: sourceParticipantId === participant.id ? ("FEE" as const) : ("ADVANCE" as const),
+    }));
+  }
+
+  /**
+   * Supprime un participant, son cachet et les avances qu'il a payées sur l'événement.
    *
    * @param id - Identifiant du participant
    * @param workspaceId - Identifiant de l'espace de travail
@@ -273,6 +305,13 @@ export class EventParticipantRepository {
     });
     if (!participant) throw new NotFoundError("Participant introuvable");
     const deleted = await volunteerTransaction(async (tx) => {
+      const advances = await tx.expense.findMany({
+        where: { ...linkedExpensesWhere(participant), sourceParticipantId: null },
+        select: { id: true },
+      });
+      const advanceIds = advances.map((expense) => expense.id);
+      await tx.shoppingItem.updateMany({ where: { expenseId: { in: advanceIds } }, data: { expenseId: null } });
+      await tx.expense.deleteMany({ where: { id: { in: advanceIds } } });
       // Delete first so volunteer cancellation cannot delete the same participant twice.
       const deleted = await tx.eventParticipant.delete({ where: { id } });
       await this.volunteers.syncParticipant(tx, { ...deleted, roles: [] });
