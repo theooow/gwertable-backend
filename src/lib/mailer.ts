@@ -1,16 +1,8 @@
 import nodemailer from "nodemailer";
 import { env } from "../env.js";
 import { EmailDeliveryError } from "./errors.js";
+import { renderEmailHtml } from "./email-layout.js";
 import { renderVolunteerEmail, type VolunteerEmailContent } from "./volunteer-email.js";
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
 
 function createTransport() {
   return nodemailer.createTransport({
@@ -64,31 +56,27 @@ export async function sendMagicLinkEmail({
     return;
   }
 
-  const escapedUrl = escapeHtml(url);
-  const escapedCode = escapeHtml(code);
-  const subject = "Ton code de connexion Abregi";
+  const validity = `Valable ${env.AUTH_TOKEN_TTL_MINUTES} minutes`;
+  const ignore = "Si vous n’êtes pas à l’origine de cette demande, ignorez cet email.";
+  const subject = "Votre code de connexion Abregi";
   const text = [
-    "Bonjour,",
+    "Votre code de connexion Abregi :",
     "",
-    "Voici ton code de connexion Abregi :",
     code,
     "",
-    "Tu peux aussi utiliser ce lien :",
+    `${validity}. Vous pouvez aussi vous connecter avec ce lien :`,
     url,
     "",
-    `Ce code expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.`,
-    "",
-    "Si tu n'es pas a l'origine de cette demande, ignore cet email.",
+    ignore,
   ].join("\n");
-  const html = `
-    <p>Bonjour,</p>
-    <p>Voici ton code de connexion Abregi :</p>
-    <p style="font-size:24px;font-weight:700;letter-spacing:4px">${escapedCode}</p>
-    <p>Tu peux aussi utiliser ce lien :</p>
-    <p><a href="${escapedUrl}">Se connecter a Abregi</a></p>
-    <p>Ce code expire dans ${env.AUTH_TOKEN_TTL_MINUTES} minutes.</p>
-    <p>Si tu n'es pas a l'origine de cette demande, ignore cet email.</p>
-  `;
+  const html = renderEmailHtml({
+    preheader: `${validity}.`,
+    title: "Votre code de connexion",
+    paragraphs: ["Saisissez ce code sur la page de connexion."],
+    code: { value: code, caption: validity },
+    action: { label: "Se connecter directement", url },
+    notes: [ignore],
+  });
 
   try {
     await createTransport().sendMail({
