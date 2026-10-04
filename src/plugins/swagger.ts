@@ -68,7 +68,7 @@ export const swaggerPlugin = fp(async (fastify) => {
         { name: "Bénévoles", description: "Candidatures, planning, badges et restauration" },
         { name: "Finance", description: "Factures et notes de frais" },
         { name: "Comptabilité", description: "Exercices, états comptables et export FEC" },
-        { name: "Facturation électronique", description: "Identité légale et connexion Super PDP" },
+        { name: "Facturation électronique", description: "Identité légale" },
         { name: "Activité", description: "Fil d'activité et préférences" },
         { name: "Notifications", description: "Notifications des événements" },
         { name: "Administration", description: "Accès réservé aux administrateurs de la plateforme" },

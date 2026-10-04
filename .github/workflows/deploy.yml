@@ -1,16 +1,22 @@
-name: Build & Deploy
+name: CI/CD
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, dev]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
 
 concurrency:
-  group: backend-deploy-${{ github.ref }}
-  cancel-in-progress: true
+  group: backend-${{ github.ref }}
+  # Only superseded PR checks are cancelled; an interrupted deployment could leave a half-applied migration.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # dev deploys to staging; main and v* tags deploy to production.
+  IS_STAGING: ${{ github.ref == 'refs/heads/dev' }}
 
 jobs:
   test:
@@ -56,6 +62,7 @@ jobs:
 
   build:
     needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,7 +85,9 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,prefix=
-            type=raw,value=latest
+            type=raw,value=staging,enable=${{ env.IS_STAGING == 'true' }}
+            type=raw,value=latest,enable=${{ env.IS_STAGING != 'true' }}
+            type=semver,pattern={{version}}
 
       - uses: docker/build-push-action@v6
         with:
@@ -92,24 +101,30 @@ jobs:
 
   deploy:
     needs: build
+    concurrency:
+      group: deploy-${{ github.ref == 'refs/heads/dev' && 'staging' || 'production' }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref == 'refs/heads/dev' && 'staging' || 'production' }}
+      url: ${{ github.ref == 'refs/heads/dev' && 'https://staging.abregi.com' || 'https://www.abregi.com' }}
 
     steps:
       - uses: appleboy/ssh-action@v1
         env:
-          SUPER_PDP_CLIENT_ID: ${{ secrets.SUPER_PDP_CLIENT_ID }}
-          SUPER_PDP_CLIENT_SECRET: ${{ secrets.SUPER_PDP_CLIENT_SECRET }}
-          PDP_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.PDP_CREDENTIAL_ENCRYPTION_KEY }}
+          DEPLOY_DIR: ${{ env.IS_STAGING == 'true' && 'gwertable-staging' || 'gwertable' }}
+          IMAGE_TAG: ${{ env.IS_STAGING == 'true' && 'staging' || 'latest' }}
+          BACKUP_BEFORE_MIGRATE: ${{ env.IS_STAGING != 'true' }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: SUPER_PDP_CLIENT_ID,SUPER_PDP_CLIENT_SECRET,PDP_CREDENTIAL_ENCRYPTION_KEY
+          envs: DEPLOY_DIR,IMAGE_TAG,BACKUP_BEFORE_MIGRATE
           timeout: 120s
           command_timeout: 15m
           script: |
             set -eu
-            cd ~/gwertable
+            cd ~/"$DEPLOY_DIR"
             upsert_env() {
               key="$1"
               value="$2"
@@ -128,22 +143,12 @@ jobs:
                 printf '%s=%s\n' "$key" "$value" >> .env
               fi
             }
-            upsert_secret_env() {
-              key="$1"
-              value="$2"
-              # A missing GitHub secret must not erase a working production value.
-              if [ -n "$value" ]; then
-                upsert_env "$key" "$value"
-              fi
-            }
 
-            upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:latest"
-            upsert_secret_env SUPER_PDP_CLIENT_ID "$SUPER_PDP_CLIENT_ID"
-            upsert_secret_env SUPER_PDP_CLIENT_SECRET "$SUPER_PDP_CLIENT_SECRET"
-            upsert_secret_env PDP_CREDENTIAL_ENCRYPTION_KEY "$PDP_CREDENTIAL_ENCRYPTION_KEY"
-            upsert_env SUPER_PDP_REDIRECT_URI "https://www.abregi.com/api/integrations/super-pdp/oauth/callback"
+            upsert_env BACKEND_IMAGE "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
+            ensure_env FRONTEND_IMAGE "${{ env.REGISTRY }}/${{ github.repository_owner }}/gwertable-frontend:$IMAGE_TAG"
 
+            # Keep this compose file identical in gwertable-backend and gwertable-frontend:
+            # each deployment rewrites it and recreates both services.
             cat > docker-compose.yml <<'COMPOSE'
             services:
               db:
@@ -165,7 +170,7 @@ jobs:
                 image: mailhog/mailhog:v1.0.1
                 restart: unless-stopped
                 ports:
-                  - "127.0.0.1:8025:8025"
+                  - "127.0.0.1:${MAILHOG_PORT:-8025}:8025"
 
               backend:
                 image: ${BACKEND_IMAGE}
@@ -180,8 +185,8 @@ jobs:
                   DATABASE_URL: postgresql://gwertable:${POSTGRES_PASSWORD}@db:5432/gwertable
                   PORT: 4000
                   HOST: 0.0.0.0
-                  CORS_ORIGIN: ${FRONTEND_URL}
-                  FRONTEND_URL: ${FRONTEND_URL}
+                  CORS_ORIGIN: ${FRONTEND_URL:-https://www.abregi.com}
+                  FRONTEND_URL: ${FRONTEND_URL:-https://www.abregi.com}
                   DOCUMENT_AI_PROVIDER: ${DOCUMENT_AI_PROVIDER:-ollama}
                   OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
                   OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
@@ -196,10 +201,6 @@ jobs:
                   SMTP_SECURE: "${SMTP_SECURE:-false}"
                   SMTP_USER: "${SMTP_USER:-}"
                   SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
-                  SUPER_PDP_CLIENT_ID: "${SUPER_PDP_CLIENT_ID:-}"
-                  SUPER_PDP_CLIENT_SECRET: "${SUPER_PDP_CLIENT_SECRET:-}"
-                  PDP_CREDENTIAL_ENCRYPTION_KEY: "${PDP_CREDENTIAL_ENCRYPTION_KEY:-}"
-                  SUPER_PDP_REDIRECT_URI: "${SUPER_PDP_REDIRECT_URI:-https://www.abregi.com/api/integrations/super-pdp/oauth/callback}"
                 expose:
                   - "4000"
                 volumes:
@@ -214,8 +215,10 @@ jobs:
                   NODE_ENV: production
                   BACKEND_API_URL: http://backend:4000
                   NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+                  # Production shares the session between abregi.com and www.abregi.com.
+                  SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-.abregi.com}
                 ports:
-                  - "127.0.0.1:3000:3000"
+                  - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
 
             volumes:
               pgdata:
@@ -235,6 +238,13 @@ jobs:
 
             docker compose up -d db mailhog
             retry docker compose pull backend frontend
+            if [ "$BACKUP_BEFORE_MIGRATE" = "true" ]; then
+              mkdir -p ~/backups
+              dump=~/backups/predeploy-$(date +%Y%m%d-%H%M%S).sql
+              docker compose exec -T db pg_dump -U gwertable gwertable > "$dump"
+              gzip "$dump"
+              find ~/backups -name 'predeploy-*.sql.gz' -mtime +14 -delete
+            fi
             docker compose run --rm backend npx prisma migrate deploy
             for attempt in 1 2 3; do
               if docker compose up -d --force-recreate --remove-orphans backend frontend; then
