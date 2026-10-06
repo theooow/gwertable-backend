@@ -77,6 +77,7 @@ export function isPublicRoute(url: string): boolean {
     url === "/health" ||
     url.startsWith("/api/public/volunteers/") ||
     url.startsWith("/api/public/tracking/") ||
+    url.startsWith("/api/public/budget-trial") ||
     url.startsWith("/docs") ||
     url.startsWith("/documentation") ||
     url.startsWith("/uploads/receipts/") ||

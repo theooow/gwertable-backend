@@ -120,6 +120,13 @@ const groups: Record<string, [string, string][]> = {
       [`DELETE /api/events/:eventId/volunteers/${resource}/:id`, `Supprimer ${resource === "shifts" ? "un créneau bénévole" : "un service de restauration"}`],
     ]),
   ],
+  "Essai du budget": [
+    ["POST /api/public/budget-trial", "Démarrer un essai du dashboard budget avec une adresse email"],
+    ["GET /api/public/budget-trial/:token", "Reprendre un essai du dashboard budget"],
+    ["PUT /api/public/budget-trial/:token", "Enregistrer les informations saisies dans l'essai"],
+    ["POST /api/public/budget-trial/:token/unsubscribe", "Ne plus recevoir de rappel pour l'essai"],
+    ["POST /api/budget-trial/:token/claim", "Créer le premier événement et son budget prévisionnel depuis l'essai"],
+  ],
   "Suivi produit": [
     ["POST /api/public/tracking/landing", "Enregistrer une visite anonyme de la page d'accueil et sa provenance"],
     ["POST /api/tracking/events", "Enregistrer un signal d'usage du budget (ouverture, simulation, export)"],

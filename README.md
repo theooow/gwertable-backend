@@ -211,7 +211,7 @@ Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscri
 
 ### Routes publiques
 
-Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, la mesure d'audience de la page d'accueil `/api/public/tracking/landing`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
+Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, la mesure d'audience de la page d'accueil `/api/public/tracking/landing`, l'essai du dashboard budget `/api/public/budget-trial/*`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
 
 ### Multi-tenant
 
@@ -308,6 +308,12 @@ Journal des appels API, vue d'ensemble, KPI et gestion des offres utilisateurs, 
 - **Revenue (proxy)** : export du budget ou de la compta, budget sur 2 événements ou plus
 
 Les étapes métier sont lues dans `ActivityEntry` (historique complet) ; visites, ouvertures, simulations et exports dans `TrackingEvent` (depuis `trackingSince`).
+
+### Essai du budget
+Parcours de la landing `/budget-evenement` : un prospect laisse son email (non vérifié, sans code) et obtient un jeton d'essai (`BudgetLead`, une ligne par essai).
+- `POST /api/public/budget-trial` démarre l'essai ; `GET`/`PUT /api/public/budget-trial/:token` reprend et enregistre les informations saisies (tarif, jauge, salle, artistes, technique & communication, panier bar)
+- `POST /api/public/budget-trial/:token/unsubscribe` arrête les rappels pour cette adresse
+- `POST /api/budget-trial/:token/claim` (authentifié, idempotent) crée le premier événement avec un tarif, les dépenses prévisionnelles et le panier moyen, puis marque l'essai converti
 
 ### Suivi produit
 Signaux d'usage qu'aucune table métier n'enregistre, stockés dans `TrackingEvent` sans clé étrangère :
