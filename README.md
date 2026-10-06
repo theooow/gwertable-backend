@@ -315,6 +315,8 @@ Parcours de la landing `/budget-evenement` : un prospect laisse son email (non v
 - `POST /api/public/budget-trial/:token/unsubscribe` arrête les rappels pour cette adresse
 - `POST /api/budget-trial/:token/claim` (authentifié, idempotent) crée le premier événement avec un tarif, les dépenses prévisionnelles et le panier moyen, puis marque l'essai converti
 
+Un worker (toutes les 15 min) envoie **un seul rappel par adresse** « Vous n’avez pas finalisé votre création de compte », 24 h après l'essai le plus récent, s'il n'y a ni compte, ni conversion, ni désinscription. Les essais de plus de 7 jours ne sont jamais relancés. L'email contient un lien de reprise et un lien de désinscription (`List-Unsubscribe`).
+
 ### Suivi produit
 Signaux d'usage qu'aucune table métier n'enregistre, stockés dans `TrackingEvent` sans clé étrangère :
 - `POST /api/public/tracking/landing` (public) : visite anonyme de la page d'accueil, avec sa source (`utm_*` ou hôte du référent, jamais l'URL complète)

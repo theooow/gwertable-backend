@@ -99,3 +99,30 @@ export async function sendInvoiceEmail({ email, customerName, number, pdf }: { e
   try { await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject: `Facture ${number}`, text: `${greeting}\n\n${message}`, html, attachments: [{ filename: `${number}.pdf`, content: pdf, contentType: "application/pdf" }] }); }
   catch { throw new EmailDeliveryError("Impossible d'envoyer la facture par email"); }
 }
+
+export type BudgetTrialReminder = { email: string; resumeUrl: string; unsubscribeUrl: string; eventName: string | null; breakEvenTickets: number | null };
+
+export async function sendBudgetTrialReminderEmail({ email, resumeUrl, unsubscribeUrl, eventName, breakEvenTickets }: BudgetTrialReminder) {
+  if (env.MAIL_TRANSPORT === "log") {
+    console.info({ email, resumeUrl }, "Budget trial reminder skipped (log transport)");
+    return;
+  }
+  const subject = "Vous n’avez pas finalisé votre création de compte";
+  const hook = breakEvenTickets !== null
+    ? `Votre budget d’essai${eventName ? ` pour « ${eventName} »` : ""} est prêt : l’équilibre est atteint à ${breakEvenTickets} billets vendus.`
+    : "Votre dashboard budget d’essai vous attend : quelques chiffres suffisent pour savoir si votre événement sera rentable.";
+  const next = "Créez votre compte pour le retrouver tel quel, suivre vos dépenses réelles et ne plus finir dans le rouge.";
+  const optOut = "Vous recevez cet unique rappel car vous avez essayé le dashboard budget d’Abregi.";
+  const text = [hook, "", next, "", `Reprendre mon budget : ${resumeUrl}`, "", optOut, `Ne plus recevoir de rappel : ${unsubscribeUrl}`].join("\n");
+  const html = renderEmailHtml({
+    preheader: hook,
+    title: "Votre budget vous attend",
+    paragraphs: [hook, next],
+    action: { label: "Reprendre mon budget", url: resumeUrl },
+    notes: [optOut, `Ne plus recevoir de rappel : ${unsubscribeUrl}`],
+  });
+  await createTransport().sendMail({
+    from: env.MAIL_FROM, to: email, subject, text, html,
+    headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+  });
+}
