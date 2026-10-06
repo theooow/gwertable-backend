@@ -41,6 +41,23 @@ model ApiLog {
   @@index([action, createdAt])
 }
 
+/// Product analytics signals that no business table records (page views, simulations, exports).
+/// Kept without foreign keys so funnels survive account or event deletion.
+model TrackingEvent {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  name        String
+  anonymousId String?
+  userId      String?
+  workspaceId String?
+  eventId     String?
+  properties  Json     @default("{}")
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@index([anonymousId])
+}
+
 // ============================================================
 // ENUMS
 // ============================================================
