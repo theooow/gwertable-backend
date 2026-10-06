@@ -4,6 +4,7 @@ import { prisma } from "../prisma.js";
 import { isAdminEmail } from "../lib/admin.js";
 import { ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { getAdminKpis } from "../repositories/admin-kpi.repository.js";
+import { FUNNEL_PERIODS, getBudgetFunnel } from "../repositories/admin-funnel.repository.js";
 
 const userParamsSchema = z.object({ userId: z.string().min(1) });
 const updatePlanSchema = z.object({
@@ -15,6 +16,8 @@ function assertAdmin(request: FastifyRequest) {
     throw new ForbiddenError("Acces admin reserve");
   }
 }
+
+const funnelQuerySchema = z.object({ period: z.enum(FUNNEL_PERIODS).default("90") });
 
 const logFilters = z.object({
   q: z.string().max(200).default(""),
@@ -81,6 +84,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/admin/kpis", { config: { documentation: {} } }, async () => getAdminKpis(prisma));
+
+  fastify.get("/api/admin/funnel", { config: { documentation: { querystring: funnelQuerySchema } } }, async (request) =>
+    getBudgetFunnel(prisma, funnelQuerySchema.parse(request.query).period));
 
   fastify.patch("/api/admin/users/:userId/plan", { config: { documentation: { params: userParamsSchema, body: updatePlanSchema } } }, async (request) => {
     assertAdmin(request);

@@ -300,6 +300,15 @@ Synchronisation des tarifs billets depuis l'API Shotgun (billetterie) : récupé
 ### Administration
 Journal des appels API, vue d'ensemble, KPI et gestion des offres utilisateurs, réservés à l'administrateur de la plateforme. Voir [`docs/admin-journal.md`](docs/admin-journal.md).
 
+`GET /api/admin/funnel?period=30|90|365|all` calcule le funnel AARRR du budget sur la cohorte des comptes créés pendant la période (administrateur exclu) :
+- **Acquisition** : visites de la page d'accueil, comptes créés, ventilés par source (première visite liée au compte, sinon `inconnue`)
+- **Activation** : email vérifié → premier événement → budget ouvert → première ligne → budget complet (dépense manuelle + recette ou tarif). Atteindre une étape implique les précédentes.
+- **Rétention** : retour sur le budget un autre jour, à 7 j et à 30 j de la première ligne ; `eligible` ne compte que les comptes ayant eu ce délai
+- **Referral** : invitation de membre ou de collaborateur, puis invitation acceptée
+- **Revenue (proxy)** : export du budget ou de la compta, budget sur 2 événements ou plus
+
+Les étapes métier sont lues dans `ActivityEntry` (historique complet) ; visites, ouvertures, simulations et exports dans `TrackingEvent` (depuis `trackingSince`).
+
 ### Suivi produit
 Signaux d'usage qu'aucune table métier n'enregistre, stockés dans `TrackingEvent` sans clé étrangère :
 - `POST /api/public/tracking/landing` (public) : visite anonyme de la page d'accueil, avec sa source (`utm_*` ou hôte du référent, jamais l'URL complète)

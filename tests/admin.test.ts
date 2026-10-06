@@ -8,7 +8,7 @@ setupTestApp();
 describe("admin routes", () => {
   it("rejects anonymous access and workspace admins for all journal endpoints", async () => {
     const { authorization } = await seedAdminSession();
-    for (const path of ["/api/admin/overview", "/api/admin/kpis", "/api/admin/logs", "/api/admin/logs/missing"]) {
+    for (const path of ["/api/admin/overview", "/api/admin/kpis", "/api/admin/funnel", "/api/admin/logs", "/api/admin/logs/missing"]) {
       assert.equal((await request("GET", path)).statusCode, 401);
       assert.equal((await request("GET", path, authorization)).statusCode, 403);
     }

@@ -9,7 +9,7 @@ export type AdoptionModule = (typeof ADOPTION_MODULES)[number];
 type EventCounts = Record<"expenses" | "incomes" | "ticketTiers" | "tasks" | "participants" | "volunteerApplications" | "shifts" | "runOfShow" | "shopping" | "equipmentUsages", number>;
 
 /** Participant fees and equipment rentals create expenses automatically; they do not reflect deliberate budgeting. */
-const manualExpense = { sourceParticipantId: null, isEquipmentSync: false };
+export const manualExpense = { sourceParticipantId: null, isEquipmentSync: false };
 
 function usedModules(counts: EventCounts): Record<AdoptionModule, boolean> {
   return {
