@@ -31,6 +31,7 @@ export async function resetDatabase() {
       "Task",
       "TaskAssignee",
       "TicketTier",
+      "TrackingEvent",
       "TaskCalendarSubscription",
       "EventNotificationSettings",
       "NotificationDelivery",

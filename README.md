@@ -211,7 +211,7 @@ Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscri
 
 ### Routes publiques
 
-Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
+Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, la mesure d'audience de la page d'accueil `/api/public/tracking/landing`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
 
 ### Multi-tenant
 
@@ -299,6 +299,11 @@ Synchronisation des tarifs billets depuis l'API Shotgun (billetterie) : récupé
 
 ### Administration
 Journal des appels API, vue d'ensemble, KPI et gestion des offres utilisateurs, réservés à l'administrateur de la plateforme. Voir [`docs/admin-journal.md`](docs/admin-journal.md).
+
+### Suivi produit
+Signaux d'usage qu'aucune table métier n'enregistre, stockés dans `TrackingEvent` sans clé étrangère :
+- `POST /api/public/tracking/landing` (public) : visite anonyme de la page d'accueil, avec sa source (`utm_*` ou hôte du référent, jamais l'URL complète)
+- `POST /api/tracking/events` (authentifié) : `app_opened`, `budget_viewed`, `budget_simulated`, `budget_exported`. Les signaux de l'administrateur de la plateforme sont ignorés.
 
 ### Uploads
 Les fichiers sont envoyés en base64 dans un corps JSON.

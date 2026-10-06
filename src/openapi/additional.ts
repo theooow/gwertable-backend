@@ -119,6 +119,10 @@ const groups: Record<string, [string, string][]> = {
       [`DELETE /api/events/:eventId/volunteers/${resource}/:id`, `Supprimer ${resource === "shifts" ? "un créneau bénévole" : "un service de restauration"}`],
     ]),
   ],
+  "Suivi produit": [
+    ["POST /api/public/tracking/landing", "Enregistrer une visite anonyme de la page d'accueil et sa provenance"],
+    ["POST /api/tracking/events", "Enregistrer un signal d'usage du budget (ouverture, simulation, export)"],
+  ],
   Personnes: [
     ["PATCH /api/people/:id", "Modifier des cellules d'un contact"],
     ["POST /api/people/:id/documents", "Rattacher un document à un contact"],
