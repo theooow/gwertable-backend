@@ -81,4 +81,12 @@ describe("admin budget funnel", () => {
     assert.equal(funnel.steps.find((step) => step.key === "active7d")!.eligible, 0);
     assert.equal((await request("GET", "/api/admin/funnel?period=7", authorization)).statusCode, 400);
   });
+
+  it("leaves out accounts created before tracking started", async () => {
+    const authorization = await seedJourneys();
+    await prisma.user.create({ data: { email: "legacy@abregi.test", createdAt: daysAgo(60), emailVerified: daysAgo(60) } });
+    const funnel = json<Funnel>(await request("GET", "/api/admin/funnel?period=90", authorization));
+    const users = Object.fromEntries(funnel.steps.map((step) => [step.key, step.users]));
+    assert.deepEqual([users.signedUp, users.verified], [2, 1]);
+  });
 });

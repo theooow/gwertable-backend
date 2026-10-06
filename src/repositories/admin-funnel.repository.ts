@@ -50,14 +50,18 @@ function median(values: number[]): number | null {
 }
 
 export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod, now = new Date()) {
-  const since = period === "all" ? null : new Date(now.getTime() - Number(period) * DAY_MS);
+  const periodStart = period === "all" ? null : new Date(now.getTime() - Number(period) * DAY_MS);
+  const firstSignal = await prisma.trackingEvent.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+  // Accounts older than tracking have no measurable acquisition, so they would only inflate activation.
+  const trackingStart = firstSignal?.createdAt ?? now;
+  const since = periodStart && periodStart > trackingStart ? periodStart : trackingStart;
   const users = await prisma.user.findMany({
-    where: { archivedAt: null, email: { not: ADMIN_EMAIL }, ...(since ? { createdAt: { gte: since } } : {}) },
+    where: { archivedAt: null, email: { not: ADMIN_EMAIL }, createdAt: { gte: since } },
     select: { id: true, createdAt: true, emailVerified: true },
   });
   const userIds = users.map((user) => user.id);
 
-  const [activities, signals, firstSignal, leads] = await Promise.all([
+  const [activities, signals, leads] = await Promise.all([
     prisma.activityEntry.findMany({
       where: { actorId: { in: userIds }, type: { in: ["EVENT_CREATED", ...INVITE_TYPES, ...BUDGET_TYPES] } },
       select: { actorId: true, type: true, workspaceId: true, eventId: true, createdAt: true },
@@ -66,8 +70,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
       where: { userId: { in: userIds } },
       select: { userId: true, name: true, anonymousId: true, eventId: true, createdAt: true },
     }),
-    prisma.trackingEvent.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-    prisma.budgetLead.findMany({ where: since ? { createdAt: { gte: since } } : {}, select: { email: true, trialCompletedAt: true, convertedAt: true } }),
+    prisma.budgetLead.findMany({ where: periodStart ? { createdAt: { gte: periodStart } } : {}, select: { email: true, trialCompletedAt: true, convertedAt: true } }),
   ]);
 
   const journeys = new Map<string, UserJourney>(users.map((user) => [user.id, {
@@ -119,7 +122,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
       select: { eventId: true, acceptedAt: true },
     }),
     prisma.trackingEvent.findMany({
-      where: { name: "landing_viewed", ...(since ? { OR: [{ anonymousId: { in: anonymousIds } }, { createdAt: { gte: since } }] } : {}) },
+      where: { name: "landing_viewed", OR: [{ anonymousId: { in: anonymousIds } }, { createdAt: { gte: since } }] },
       orderBy: { createdAt: "asc" },
       select: { anonymousId: true, properties: true, createdAt: true },
     }),
@@ -158,7 +161,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
   }
   const sources = new Map<string, { visitors: number; signups: number; activated: number }>();
   const sourceRow = (source: string) => sources.get(source) ?? sources.set(source, { visitors: 0, signups: 0, activated: 0 }).get(source)!;
-  for (const visit of firstLanding.values()) if (!since || visit.at >= since) sourceRow(visit.source).visitors += 1;
+  for (const visit of firstLanding.values()) if (visit.at >= since) sourceRow(visit.source).visitors += 1;
   for (const journey of journeys.values()) {
     const origin = [...journey.anonymousIds].map((id) => firstLanding.get(id)).filter((visit) => visit !== undefined).sort((a, b) => a.at.getTime() - b.at.getTime())[0];
     const row = sourceRow(origin?.source ?? "inconnue");
@@ -166,12 +169,12 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
     if (journey.steps.has("firstBudgetLine")) row.activated += 1;
   }
 
-  const visitors = [...firstLanding.values()].filter((visit) => !since || visit.at >= since).length;
+  const visitors = [...firstLanding.values()].filter((visit) => visit.at >= since).length;
   const journeyList = users.map((user) => ({ createdAt: user.createdAt, journey: journeys.get(user.id)! }));
   return {
     generatedAt: now.toISOString(),
     period,
-    since: since?.toISOString() ?? null,
+    since: periodStart?.toISOString() ?? null,
     trackingSince: firstSignal?.createdAt.toISOString() ?? null,
     medianHoursToFirstBudgetLine: median(hoursToFirstLine),
     steps: [
