@@ -8,6 +8,8 @@ const HOUR_MS = 3600_000;
 const REMIND_AFTER_MS = 24 * HOUR_MS;
 // Older trials are left alone: a reminder weeks later reads as spam, e.g. right after the first deploy.
 const REMIND_UNTIL_MS = 7 * 24 * HOUR_MS;
+// Retention announced in the privacy policy for trials that never became an account.
+const RETENTION_MS = 90 * 24 * HOUR_MS;
 
 function breakEvenTickets(trial: unknown): { eventName: string | null; breakEvenTickets: number | null } {
   const parsed = budgetTrialSchema.safeParse(trial);
@@ -52,11 +54,15 @@ export async function remindAbandonedBudgetTrials(db: PrismaClient, logger: Pick
   return { sent };
 }
 
+export function purgeExpiredBudgetTrials(db: PrismaClient, now = new Date()) {
+  return db.budgetLead.deleteMany({ where: { convertedAt: null, createdAt: { lt: new Date(now.getTime() - RETENTION_MS) } } });
+}
+
 export function startBudgetLeadReminderWorker(db: PrismaClient, logger: FastifyBaseLogger) {
   let active: Promise<unknown> | undefined;
   const tick = () => {
     if (active) return;
-    active = remindAbandonedBudgetTrials(db, logger).catch(() => logger.warn("Budget trial reminders unavailable")).finally(() => { active = undefined; });
+    active = remindAbandonedBudgetTrials(db, logger).then(() => purgeExpiredBudgetTrials(db)).catch(() => logger.warn("Budget trial reminders unavailable")).finally(() => { active = undefined; });
   };
   const interval = setInterval(tick, 15 * 60_000);
   interval.unref();

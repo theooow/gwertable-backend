@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { setupTestApp } from "./helpers.js";
 import { prisma } from "../src/prisma.js";
-import { remindAbandonedBudgetTrials } from "../src/workers/budget-lead-reminder-worker.js";
+import { purgeExpiredBudgetTrials, remindAbandonedBudgetTrials } from "../src/workers/budget-lead-reminder-worker.js";
 import type { BudgetTrialReminder } from "../src/lib/mailer.js";
 
 setupTestApp();
@@ -44,5 +44,13 @@ describe("budget trial reminders", () => {
     await remindAbandonedBudgetTrials(prisma, logger, now, async () => { throw new Error("smtp down"); });
     assert.equal((await prisma.budgetLead.findFirstOrThrow()).reminderSentAt, null);
     assert.deepEqual(await remindAbandonedBudgetTrials(prisma, logger, now, async () => undefined), { sent: 1 });
+  });
+
+  it("deletes unconverted trials after the 3-month retention period", async () => {
+    await lead("old@asso.test", "expired", hoursAgo(24 * 91));
+    await lead("old@asso.test", "kept-converted", hoursAgo(24 * 120), { convertedAt: hoursAgo(24 * 119) });
+    await lead("new@asso.test", "recent", hoursAgo(24 * 30));
+    assert.equal((await purgeExpiredBudgetTrials(prisma, now)).count, 1);
+    assert.deepEqual((await prisma.budgetLead.findMany({ orderBy: { token: "asc" } })).map((row) => row.token.split("-token")[0]), ["kept-converted", "recent"]);
   });
 });
