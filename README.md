@@ -301,7 +301,7 @@ Synchronisation des tarifs billets depuis l'API Shotgun (billetterie) : récupé
 Journal des appels API, vue d'ensemble, KPI et gestion des offres utilisateurs, réservés à l'administrateur de la plateforme. Voir [`docs/admin-journal.md`](docs/admin-journal.md).
 
 `GET /api/admin/funnel?period=30|90|365|all` calcule le funnel AARRR du budget sur la cohorte des comptes créés pendant la période (administrateur exclu) :
-- **Acquisition** : visites de la page d'accueil, comptes créés, ventilés par source (première visite liée au compte, sinon `inconnue`)
+- **Acquisition** : visites des landings, puis pour la landing budget : email laissé, dashboard d'essai rempli, essai transformé en compte (comptés par adresse) ; enfin comptes créés, ventilés par source (première visite liée au compte, sinon `inconnue`)
 - **Activation** : email vérifié → premier événement → budget ouvert → première ligne → budget complet (dépense manuelle + recette ou tarif). Atteindre une étape implique les précédentes.
 - **Rétention** : retour sur le budget un autre jour, à 7 j et à 30 j de la première ligne ; `eligible` ne compte que les comptes ayant eu ce délai
 - **Referral** : invitation de membre ou de collaborateur, puis invitation acceptée

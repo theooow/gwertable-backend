@@ -38,6 +38,12 @@ async function seedJourneys() {
     { ...activity("EVENT_CREATED", first.id, daysAgo(1)), actorId: admin.id },
   ] });
   await prisma.workspaceInvitation.create({ data: { workspaceId: workspace.id, email: "friend@abregi.test", role: "TREASURER", token: "invite", expires: new Date(), acceptedAt: daysAgo(29) } });
+  await prisma.budgetLead.createMany({ data: [
+    { email: "orga@abregi.test", token: "lead-token-1-000000", trialCompletedAt: daysAgo(41), convertedAt: daysAgo(40) },
+    { email: "orga@abregi.test", token: "lead-token-2-000000", createdAt: daysAgo(41) },
+    { email: "curious@abregi.test", token: "lead-token-3-000000", trialCompletedAt: daysAgo(2) },
+    { email: "bounce@abregi.test", token: "lead-token-4-000000", createdAt: daysAgo(3) },
+  ] });
   await prisma.trackingEvent.createMany({ data: [
     { name: "landing_viewed", anonymousId: "anon-orga-001", properties: { source: "instagram.com" }, createdAt: daysAgo(41) },
     { name: "landing_viewed", anonymousId: "anon-other-01", properties: { source: "direct" }, createdAt: daysAgo(2) },
@@ -55,7 +61,7 @@ describe("admin budget funnel", () => {
     const funnel = json<Funnel>(response);
     const steps = Object.fromEntries(funnel.steps.map((step) => [step.key, [step.users, step.eligible]]));
     assert.deepEqual(steps, {
-      visited: [2, null], signedUp: [2, null], verified: [1, null], eventCreated: [1, null], budgetOpened: [1, null],
+      visited: [2, null], leadCaptured: [3, null], trialCompleted: [2, null], trialConverted: [1, null], signedUp: [2, null], verified: [1, null], eventCreated: [1, null], budgetOpened: [1, null],
       firstBudgetLine: [1, null], budgetComplete: [1, null], returnedLaterDay: [1, 1], active7d: [1, 1], active30d: [1, 1],
       invited: [1, null], inviteAccepted: [1, null], exported: [1, null], multiEvent: [1, null],
     });
@@ -70,7 +76,8 @@ describe("admin budget funnel", () => {
   it("restricts the cohort to users and visits of the selected period", async () => {
     const authorization = await seedJourneys();
     const funnel = json<Funnel>(await request("GET", "/api/admin/funnel?period=30", authorization));
-    assert.deepEqual(funnel.steps.slice(0, 3).map((step) => step.users), [1, 1, 0]);
+    const users = Object.fromEntries(funnel.steps.map((step) => [step.key, step.users]));
+    assert.deepEqual([users.visited, users.leadCaptured, users.signedUp, users.verified], [1, 3, 1, 0]);
     assert.equal(funnel.steps.find((step) => step.key === "active7d")!.eligible, 0);
     assert.equal((await request("GET", "/api/admin/funnel?period=7", authorization)).statusCode, 400);
   });

@@ -32,6 +32,7 @@ const USER_STEPS: { key: UserStep; stage: Stage; label: string; minAgeDays?: num
 /** Activation is sequential: reaching a later step implies the earlier ones (e.g. budget lines added before view tracking existed). */
 const ACTIVATION_CHAIN: UserStep[] = ["eventCreated", "budgetOpened", "firstBudgetLine", "budgetComplete"];
 
+type Lead = { email: string; trialCompletedAt: Date | null; convertedAt: Date | null };
 type Touch = { at: Date; eventId: string | null };
 type UserJourney = { touches: Touch[]; budgetEvents: Set<string>; firstLineAt: Date | null; steps: Set<UserStep>; anonymousIds: Set<string> };
 
@@ -56,7 +57,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
   });
   const userIds = users.map((user) => user.id);
 
-  const [activities, signals, firstSignal] = await Promise.all([
+  const [activities, signals, firstSignal, leads] = await Promise.all([
     prisma.activityEntry.findMany({
       where: { actorId: { in: userIds }, type: { in: ["EVENT_CREATED", ...INVITE_TYPES, ...BUDGET_TYPES] } },
       select: { actorId: true, type: true, workspaceId: true, eventId: true, createdAt: true },
@@ -66,6 +67,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
       select: { userId: true, name: true, anonymousId: true, eventId: true, createdAt: true },
     }),
     prisma.trackingEvent.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.budgetLead.findMany({ where: since ? { createdAt: { gte: since } } : {}, select: { email: true, trialCompletedAt: true, convertedAt: true } }),
   ]);
 
   const journeys = new Map<string, UserJourney>(users.map((user) => [user.id, {
@@ -174,6 +176,10 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
     medianHoursToFirstBudgetLine: median(hoursToFirstLine),
     steps: [
       { key: "visited", stage: "acquisition" as Stage, label: "Visite de la page d'accueil", users: visitors, eligible: null },
+      // Budget landing trials, counted per person since one email may start several trials.
+      ...([["leadCaptured", "Email laissé pour l'essai budget", () => true], ["trialCompleted", "Dashboard d'essai rempli", (lead: Lead) => lead.trialCompletedAt !== null],
+        ["trialConverted", "Essai transformé en compte", (lead: Lead) => lead.convertedAt !== null]] as const).map(([key, label, reached]) =>
+        ({ key, stage: "acquisition" as Stage, label, users: new Set(leads.filter(reached).map((lead) => lead.email)).size, eligible: null })),
       { key: "signedUp", stage: "acquisition" as Stage, label: "Compte créé", users: users.length, eligible: null },
       ...USER_STEPS.map((step) => {
         // Retention is only measurable once the user had enough time to come back.
