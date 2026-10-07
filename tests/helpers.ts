@@ -98,11 +98,12 @@ export async function request(
   url: string,
   token?: string,
   payload?: InjectPayload,
+  headers: Record<string, string> = {},
 ): Promise<InjectResponse> {
   return app.inject({
     method,
     url,
-    headers: token ? { authorization: token } : undefined,
+    headers: { ...headers, ...(token ? { authorization: token } : {}) },
     payload,
   });
 }

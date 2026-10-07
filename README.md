@@ -213,6 +213,28 @@ Pour les outils externes (agents IA via MCP, scripts), un utilisateur crée des 
 - `expiresInDays` optionnel (1 à 365) ; `lastUsedAt` est mis à jour à la minute près ;
 - un token ne peut ni gérer les tokens, ni supprimer le compte, ni accéder à `/api/admin`.
 
+### Serveur MCP (agents IA)
+
+`POST /mcp` expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
+
+Plutôt qu'un outil écrit à la main par route, les outils s'appuient sur le catalogue OpenAPI (`src/mcp/operations.ts`) : toute route documentée devient disponible, hors auth, administration, fichiers binaires, routes publiques et gestion des tokens.
+
+| Outil | Rôle |
+| --- | --- |
+| `whoami` | Utilisateur, espace et rôle courants |
+| `search_operations` | Rechercher une opération par mots-clés ou tag |
+| `describe_operation` | Paramètres et schéma du corps |
+| `call_read_operation` | Exécuter un `GET` |
+| `call_write_operation` | Exécuter un `POST/PUT/PATCH/DELETE` (absent avec un token `READ`) |
+
+Chaque appel est rejoué via `app.inject` avec les identifiants de la requête MCP : permissions, validation Zod, journal API et fil d'activité s'appliquent comme pour l'application web. Ajouter une route documentée suffit à la rendre accessible aux agents.
+
+Connexion depuis Claude Code :
+
+```bash
+claude mcp add --transport http abregi https://<api>/mcp --header "Authorization: Bearer abr_..."
+```
+
 ### Invitations
 
 Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscription pour rejoindre un espace de travail ou accepter une invitation à un événement.
@@ -369,6 +391,10 @@ src/
 │   ├── additional.ts             # Documentation des routes complémentaires
 │   ├── contracts.ts              # Schémas de réponse partagés
 │   └── forms.ts                  # Formulaires Swagger UI (corps de requête, uploads)
+│
+├── mcp/
+│   ├── operations.ts             # Catalogue d'opérations dérivé d'OpenAPI, exécution via app.inject
+│   └── server.ts                 # Outils et instructions du serveur MCP
 │
 ├── workers/
 │   ├── notification-worker.ts    # Rappels de notifications

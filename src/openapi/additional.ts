@@ -15,6 +15,11 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/admin/funnel", "Consulter le funnel AARRR du budget événementiel"],
     ["PATCH /api/admin/users/:userId/plan", "Modifier l'abonnement d'un utilisateur"],
   ],
+  MCP: [
+    ["POST /mcp", "Échanger un message JSON-RPC avec le serveur MCP (Streamable HTTP, sans état)"],
+    ["GET /mcp", "Flux SSE non proposé par le serveur MCP sans état (405)"],
+    ["DELETE /mcp", "Fin de session non applicable au serveur MCP sans état (405)"],
+  ],
   Compte: [
     ["GET /api/account/api-tokens", "Lister ses tokens d'API personnels (MCP, scripts)"],
     ["POST /api/account/api-tokens", "Créer un token d'API personnel (affiché une seule fois)"],
