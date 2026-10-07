@@ -71,6 +71,7 @@ export const swaggerPlugin = fp(async (fastify) => {
         { name: "Facturation électronique", description: "Identité légale" },
         { name: "Activité", description: "Fil d'activité et préférences" },
         { name: "Notifications", description: "Notifications des événements" },
+        { name: "OAuth", description: "Serveur d'autorisation OAuth 2.1 des agents IA (PKCE, enregistrement dynamique)" },
         { name: "MCP", description: "Serveur Model Context Protocol pour agents IA (token d'API personnel)" },
         { name: "Administration", description: "Accès réservé aux administrateurs de la plateforme" },
       ],

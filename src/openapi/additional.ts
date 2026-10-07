@@ -15,6 +15,17 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/admin/funnel", "Consulter le funnel AARRR du budget événementiel"],
     ["PATCH /api/admin/users/:userId/plan", "Modifier l'abonnement d'un utilisateur"],
   ],
+  OAuth: [
+    ["GET /.well-known/oauth-protected-resource", "Métadonnées de la ressource protégée MCP (RFC 9728)"],
+    ["GET /.well-known/oauth-protected-resource/mcp", "Métadonnées de la ressource protégée MCP, variante par chemin"],
+    ["GET /.well-known/oauth-authorization-server", "Métadonnées du serveur d'autorisation (RFC 8414)"],
+    ["POST /oauth/register", "Enregistrer dynamiquement un client OAuth public (RFC 7591)"],
+    ["POST /oauth/token", "Échanger un code d'autorisation ou un jeton de rafraîchissement"],
+    ["GET /api/oauth/authorize", "Vérifier une demande d'autorisation avant l'écran de consentement"],
+    ["POST /api/oauth/authorize", "Accepter ou refuser l'accès d'une application et obtenir l'URL de retour"],
+    ["GET /api/account/oauth-grants", "Lister les applications IA connectées au compte"],
+    ["DELETE /api/account/oauth-grants/:id", "Déconnecter une application IA"],
+  ],
   MCP: [
     ["POST /mcp", "Échanger un message JSON-RPC avec le serveur MCP (Streamable HTTP, sans état)"],
     ["GET /mcp", "Flux SSE non proposé par le serveur MCP sans état (405)"],

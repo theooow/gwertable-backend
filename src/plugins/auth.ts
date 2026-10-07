@@ -79,6 +79,8 @@ function getBearerToken(authorization: string | undefined): string | null {
 export function isPublicRoute(url: string): boolean {
   return (
     url === "/health" ||
+    url.startsWith("/.well-known/oauth-") ||
+    url.startsWith("/oauth/") ||
     url.startsWith("/api/public/volunteers/") ||
     url.startsWith("/api/public/tracking/") ||
     url.startsWith("/api/public/budget-trial") ||

@@ -3,6 +3,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { createMcpServer } from "../mcp/server.js";
 import { requirePlanFeature } from "../lib/usage-plans.js";
+import { publicOrigin } from "../lib/oauth.js";
 
 const jsonRpcMessageSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -20,6 +21,12 @@ function credentialsOf(request: FastifyRequest): Record<string, string> {
 
 /** Stateless MCP endpoint (Streamable HTTP): one server per request, no resumable SSE stream. */
 export async function mcpRoutes(fastify: FastifyInstance) {
+  // Points MCP clients to the OAuth metadata so they can start the authorization flow (RFC 9728).
+  fastify.addHook("onSend", async (_request, reply, payload) => {
+    if (reply.statusCode === 401) reply.header("www-authenticate", `Bearer resource_metadata="${publicOrigin()}/.well-known/oauth-protected-resource/mcp"`);
+    return payload;
+  });
+
   fastify.post("/mcp", { config: { documentation: { body: jsonRpcMessageSchema, statusCodes: [200, 202] } } }, async (request, reply) => {
     requirePlanFeature(request.user!.usagePlan, "ai.agents");
     const server = createMcpServer({ app: fastify, credentials: credentialsOf(request), canWrite: request.apiTokenScope !== "READ" });

@@ -8,7 +8,7 @@ export class ApiTokenRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list(userId: string) {
-    return this.prisma.apiToken.findMany({ where: { userId }, select: publicFields, orderBy: { createdAt: "desc" } });
+    return this.prisma.apiToken.findMany({ where: { userId, grantId: null }, select: publicFields, orderBy: { createdAt: "desc" } });
   }
 
   /** Returns the clear token once; only its hash is persisted. */
@@ -29,6 +29,6 @@ export class ApiTokenRepository {
   }
 
   delete(userId: string, id: string) {
-    return this.prisma.apiToken.deleteMany({ where: { id, userId } });
+    return this.prisma.apiToken.deleteMany({ where: { id, userId, grantId: null } });
   }
 }
