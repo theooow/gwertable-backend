@@ -15,6 +15,13 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/admin/funnel", "Consulter le funnel AARRR du budget événementiel"],
     ["PATCH /api/admin/users/:userId/plan", "Modifier l'abonnement d'un utilisateur"],
   ],
+  Assistant: [
+    ["GET /api/assistant/conversations", "Lister ses conversations avec l'assistant et savoir s'il est activé"],
+    ["GET /api/assistant/conversations/:id", "Consulter une conversation et ses actions en attente de validation"],
+    ["DELETE /api/assistant/conversations/:id", "Supprimer une conversation"],
+    ["POST /api/assistant/messages", "Envoyer un message à l'assistant (réponse en flux SSE)"],
+    ["POST /api/assistant/conversations/:id/confirm", "Valider ou refuser les modifications proposées par l'assistant (flux SSE)"],
+  ],
   MCP: [
     ["POST /mcp", "Échanger un message JSON-RPC avec le serveur MCP (Streamable HTTP, sans état)"],
     ["GET /mcp", "Flux SSE non proposé par le serveur MCP sans état (405)"],

@@ -30,6 +30,7 @@ import { trackingRoutes } from "./routes/tracking.js";
 import { budgetTrialRoutes } from "./routes/budget-trial.js";
 import { apiTokenRoutes } from "./routes/api-tokens.js";
 import { mcpRoutes } from "./routes/mcp.js";
+import { assistantRoutes } from "./routes/assistant.js";
 
 export async function buildApp() {
   const app = fastify({
@@ -76,6 +77,7 @@ export async function buildApp() {
   await app.register(trackingRoutes);
   await app.register(budgetTrialRoutes);
   await app.register(mcpRoutes);
+  await app.register(assistantRoutes);
 
   return app;
 }
