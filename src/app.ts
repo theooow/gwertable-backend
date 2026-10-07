@@ -28,6 +28,7 @@ import { activityRoutes } from "./routes/activity.js";
 import { accountingRoutes } from "./routes/accounting.js";
 import { trackingRoutes } from "./routes/tracking.js";
 import { budgetTrialRoutes } from "./routes/budget-trial.js";
+import { apiTokenRoutes } from "./routes/api-tokens.js";
 
 export async function buildApp() {
   const app = fastify({
@@ -51,6 +52,7 @@ export async function buildApp() {
   await app.register(swaggerPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(apiTokenRoutes);
   await app.register(adminRoutes);
   await app.register(eventRoutes);
   await app.register(eventModuleRoutes);

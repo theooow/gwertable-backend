@@ -1,9 +1,10 @@
 import fp from "fastify-plugin";
-import type { User, UserRole } from "@prisma/client";
+import type { ApiTokenScope, Prisma, User, UserRole } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { UnauthorizedError, ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { isAdminEmail } from "../lib/admin.js";
 import { CURRENT_TERMS_VERSION } from "../lib/terms.js";
+import { hashApiToken, isApiToken, isApiTokenForbiddenRoute } from "../lib/api-token.js";
 
 /**
  * Authenticated account in a workspace context.
@@ -53,6 +54,8 @@ declare module "fastify" {
     workspaceId: string;
     eventScoped: boolean;
     user?: AuthUser;
+    /** Set when the request is authenticated with a personal API token instead of a session. */
+    apiTokenScope?: ApiTokenScope;
   }
 }
 
@@ -101,11 +104,75 @@ function isAdminRoute(url: string): boolean {
   return url.startsWith("/api/admin");
 }
 
+const authUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  image: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  addressLine1: true,
+  addressLine2: true,
+  postalCode: true,
+  city: true,
+  country: true,
+  companyName: true,
+  companyAddressLine1: true,
+  companyAddressLine2: true,
+  companyPostalCode: true,
+  companyCity: true,
+  companyCountry: true,
+  companySiret: true,
+  companyVatNumber: true,
+  billingEmail: true,
+  locale: true,
+  currency: true,
+  timezone: true,
+  emailNotificationsEnabled: true,
+  taskReminderNotificationsEnabled: true,
+  eventReminderNotificationsEnabled: true,
+  marketingNotificationsEnabled: true,
+  themeMode: true,
+  themePreset: true,
+  themePrimaryColor: true,
+  termsVersion: true,
+  usagePlan: true,
+  personId: true,
+  defaultWorkspaceId: true,
+  archivedAt: true,
+} satisfies Prisma.UserSelect;
+
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const MCP_PATH = "/mcp";
+const API_TOKEN_TOUCH_INTERVAL_MS = 60_000;
+
+async function findAccount(token: string) {
+  if (!isApiToken(token)) {
+    const session = await prisma.session.findUnique({
+      where: { sessionToken: token },
+      include: { user: { select: authUserSelect } },
+    });
+    return session && session.expires > new Date() ? { user: session.user, apiTokenScope: undefined } : null;
+  }
+
+  const apiToken = await prisma.apiToken.findUnique({
+    where: { tokenHash: hashApiToken(token) },
+    include: { user: { select: authUserSelect } },
+  });
+  if (!apiToken || (apiToken.expiresAt && apiToken.expiresAt <= new Date())) return null;
+  if (!apiToken.lastUsedAt || apiToken.lastUsedAt.getTime() < Date.now() - API_TOKEN_TOUCH_INTERVAL_MS) {
+    await prisma.apiToken.update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } });
+  }
+  return { user: apiToken.user, apiTokenScope: apiToken.scope };
+}
+
 export const authPlugin = fp(async (fastify) => {
   fastify.decorateRequest("userRole", "VIEWER");
   fastify.decorateRequest("workspaceId", "");
   fastify.decorateRequest("eventScoped", false);
   fastify.decorateRequest("user");
+  fastify.decorateRequest("apiTokenScope");
 
   fastify.addHook("preHandler", async (request) => {
     if (isPublicRoute(request.url)) return;
@@ -121,58 +188,24 @@ export const authPlugin = fp(async (fastify) => {
       throw new UnauthorizedError("Non authentifie");
     }
 
-    const session = await prisma.session.findUnique({
-      where: { sessionToken: token },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            addressLine1: true,
-            addressLine2: true,
-            postalCode: true,
-            city: true,
-            country: true,
-            companyName: true,
-            companyAddressLine1: true,
-            companyAddressLine2: true,
-            companyPostalCode: true,
-            companyCity: true,
-            companyCountry: true,
-            companySiret: true,
-            companyVatNumber: true,
-            billingEmail: true,
-            locale: true,
-            currency: true,
-            timezone: true,
-            emailNotificationsEnabled: true,
-            taskReminderNotificationsEnabled: true,
-            eventReminderNotificationsEnabled: true,
-            marketingNotificationsEnabled: true,
-            themeMode: true,
-            themePreset: true,
-            themePrimaryColor: true,
-            termsVersion: true,
-            usagePlan: true,
-            personId: true,
-            defaultWorkspaceId: true,
-            archivedAt: true,
-          },
-        },
-      },
-    });
-
-    if (!session || session.expires <= new Date() || session.user.archivedAt) {
+    const authenticated = await findAccount(token);
+    if (!authenticated || authenticated.user.archivedAt) {
       throw new UnauthorizedError("Non authentifie");
     }
 
-    if (isAdminRoute(request.url) && isAdminEmail(session.user.email)) {
-      const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = session.user;
+    const { apiTokenScope } = authenticated;
+    if (apiTokenScope) {
+      if (isApiTokenForbiddenRoute(request.method, request.url)) {
+        throw new ForbiddenError("Action impossible avec un token d'API");
+      }
+      if (apiTokenScope === "READ" && !READ_METHODS.has(request.method) && request.url.split("?")[0] !== MCP_PATH) {
+        throw new ForbiddenError("Token d'API en lecture seule");
+      }
+      request.apiTokenScope = apiTokenScope;
+    }
+
+    if (isAdminRoute(request.url) && isAdminEmail(authenticated.user.email)) {
+      const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = authenticated.user;
       request.workspaceId = defaultWorkspaceId ?? "";
       request.eventScoped = false;
       request.user = {
@@ -189,13 +222,13 @@ export const authPlugin = fp(async (fastify) => {
       return;
     }
 
-    let workspaceId = session.user.defaultWorkspaceId;
+    let workspaceId = authenticated.user.defaultWorkspaceId;
     let membership = workspaceId
       ? await prisma.workspaceMember.findUnique({
           where: {
             workspaceId_userId: {
               workspaceId,
-              userId: session.user.id,
+              userId: authenticated.user.id,
             },
           },
           select: {
@@ -214,7 +247,7 @@ export const authPlugin = fp(async (fastify) => {
         where: {
           ...(workspaceId ? { workspaceId } : {}),
           acceptedAt: { not: null },
-          OR: [{ userId: session.user.id }, { email: session.user.email }],
+          OR: [{ userId: authenticated.user.id }, { email: authenticated.user.email }],
         },
         orderBy: { createdAt: "asc" },
         select: {
@@ -235,7 +268,7 @@ export const authPlugin = fp(async (fastify) => {
       throw new ForbiddenError("Aucun acces associe a ce compte");
     }
 
-    const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = session.user;
+    const { archivedAt: _archivedAt, defaultWorkspaceId, termsVersion, ...user } = authenticated.user;
     request.workspaceId = workspaceId;
     request.eventScoped = eventScoped;
     request.user = {

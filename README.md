@@ -205,6 +205,14 @@ L'API combine **mot de passe** et **code / lien envoyé par email**.
 
 `POST /api/auth/password/setup` définit un mot de passe à partir d'un token reçu par email. `POST /api/auth/login-link` renvoie un email de connexion. `GET /api/auth/me` retourne l'utilisateur courant, dont `termsAccepted` (faux tant que la version courante des CGU, définie dans `src/lib/terms.ts`, n'a pas été acceptée). `POST /api/auth/terms/accept` enregistre cette acceptation.
 
+### Tokens d'API personnels
+
+Pour les outils externes (agents IA via MCP, scripts), un utilisateur crée des tokens depuis ses paramètres : `GET|POST /api/account/api-tokens`, `DELETE /api/account/api-tokens/:id`. Le token (`abr_…`) n'est affiché qu'à la création ; seul son hash SHA-256 est stocké (`ApiToken`). Il s'utilise comme une session (`Authorization: Bearer abr_…`) avec les droits de l'utilisateur dans son espace par défaut, et :
+
+- `scope` `READ` (défaut) n'autorise que les lectures (`GET`) ; `WRITE` autorise aussi les modifications ;
+- `expiresInDays` optionnel (1 à 365) ; `lastUsedAt` est mis à jour à la minute près ;
+- un token ne peut ni gérer les tokens, ni supprimer le compte, ni accéder à `/api/admin`.
+
 ### Invitations
 
 Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscription pour rejoindre un espace de travail ou accepter une invitation à un événement.
@@ -424,7 +432,7 @@ Les fichiers de test couvrent l'authentification, les espaces, les événements 
 
 Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plusieurs couches :
 
-- **Auth** : `User`, `Session`, `VerificationToken`, `Account`
+- **Auth** : `User`, `Session`, `ApiToken`, `VerificationToken`, `Account`
 - **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `LegalEntity`
 - **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote`, `Venue`, `Supplier`
 - **Événements** : `Event`, `EventCollaborator`, `EventParticipant`
