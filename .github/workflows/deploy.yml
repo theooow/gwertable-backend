@@ -192,10 +192,6 @@ jobs:
                   OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
                   OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://localhost:11434}"
                   OLLAMA_MODEL: "${OLLAMA_MODEL:-llava}"
-                  ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-                  ASSISTANT_MODEL: "${ASSISTANT_MODEL:-claude-opus-5-5}"
-                  ASSISTANT_EFFORT: "${ASSISTANT_EFFORT:-medium}"
-                  ASSISTANT_MAX_STEPS: "${ASSISTANT_MAX_STEPS:-20}"
                   AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-15}
                   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
                   MAIL_TRANSPORT: smtp
