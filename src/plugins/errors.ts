@@ -92,6 +92,16 @@ export const errorsPlugin = fp(async (fastify) => {
       });
     }
 
+    // Fastify's own client errors (unsupported media type, malformed JSON, body too large…).
+    const { statusCode, code } = error as { statusCode?: unknown; code?: unknown };
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      return reply.status(statusCode).send({
+        error: "BadRequest",
+        code,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     fastify.log.error(error);
     return reply.status(500).send({ error: "InternalServerError" });
   });
