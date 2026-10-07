@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../prisma.js";
 import { NotFoundError } from "../lib/errors.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 import { ApiTokenRepository } from "../repositories/api-token.repository.js";
 import { apiTokenParamsSchema, createApiTokenSchema } from "../schemas/api-token.js";
 
@@ -12,6 +13,7 @@ export async function apiTokenRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/account/api-tokens", { config: { documentation: { body: createApiTokenSchema, statusCodes: [201] } } }, async (request, reply) => {
+    requirePlanFeature(request.user!.usagePlan, "ai.agents");
     const input = createApiTokenSchema.parse(request.body);
     return reply.status(201).send(await repository.create(request.user!.id, input));
   });

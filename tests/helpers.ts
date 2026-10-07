@@ -2,6 +2,7 @@ import { after, before, beforeEach } from "node:test";
 import type { FastifyInstance } from "fastify";
 import type { InjectOptions, InjectPayload, Response as InjectResponse } from "light-my-request";
 import { buildApp } from "../src/app.js";
+import type { UsagePlan } from "@prisma/client";
 import { prisma } from "../src/prisma.js";
 
 let app: FastifyInstance;
@@ -61,13 +62,14 @@ export function setupTestApp() {
   });
 }
 
-export async function seedAdminSession() {
+export async function seedAdminSession(usagePlan: UsagePlan = "BETA_TEST") {
   const workspace = await prisma.workspace.create({
     data: { name: "Test workspace" },
   });
   const user = await prisma.user.create({
     data: {
       email: "admin@abregi.test",
+      usagePlan,
       role: "ADMIN",
       defaultWorkspaceId: workspace.id,
       workspaceMemberships: {

@@ -212,10 +212,12 @@ Pour les outils externes (agents IA via MCP, scripts), un utilisateur crée des 
 - `scope` `READ` (défaut) n'autorise que les lectures (`GET`) ; `WRITE` autorise aussi les modifications ;
 - `expiresInDays` optionnel (1 à 365) ; `lastUsedAt` est mis à jour à la minute près ;
 - un token ne peut ni gérer les tokens, ni supprimer le compte, ni accéder à `/api/admin`.
+- réservé au plan Platinium (fonctionnalité `ai.agents`) : création refusée (`403`) sur les autres plans, et les tokens existants cessent de fonctionner si le compte quitte Platinium (ils restent listables et révocables).
+
 
 ### Serveur MCP (agents IA)
 
-`POST /mcp` expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
+`POST /mcp` (plan Platinium) expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
 
 Plutôt qu'un outil écrit à la main par route, les outils s'appuient sur le catalogue OpenAPI (`src/mcp/operations.ts`) : toute route documentée devient disponible, hors auth, administration, fichiers binaires, routes publiques et gestion des tokens.
 

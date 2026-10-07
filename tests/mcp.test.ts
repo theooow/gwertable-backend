@@ -25,7 +25,7 @@ async function callTool(authorization: string, name: string, args: Record<string
 
 test("MCP requires authentication and advertises server instructions", async () => {
   assert.equal((await rpc(undefined, "tools/list")).statusCode, 401);
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedAdminSession("PLATINIUM");
   const token = await createToken(authorization, "READ");
   const { body } = await rpc<{ instructions: string; serverInfo: { name: string } }>(token, "initialize", {
     protocolVersion: "2025-06-18",
@@ -38,7 +38,7 @@ test("MCP requires authentication and advertises server instructions", async () 
 });
 
 test("a read-only token exposes read tools and reads through the REST API", async () => {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedAdminSession("PLATINIUM");
   await request("POST", "/api/events", authorization, eventPayload);
   const token = await createToken(authorization, "READ");
 
@@ -63,7 +63,7 @@ test("a read-only token exposes read tools and reads through the REST API", asyn
 });
 
 test("a write token creates data with the user's permissions and reports API errors", async () => {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedAdminSession("PLATINIUM");
   const token = await createToken(authorization, "WRITE");
 
   const description = JSON.parse((await callTool(token, "describe_operation", { operationId: "post_api_events" })).content[0].text) as { method: string; body: { properties: Record<string, unknown> } };
@@ -86,7 +86,7 @@ test("a write token creates data with the user's permissions and reports API err
 });
 
 test("a write body serialized as a JSON string is still sent as JSON", async () => {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedAdminSession("PLATINIUM");
   const token = await createToken(authorization, "WRITE");
 
   const created = await callTool(token, "call_write_operation", { operationId: "post_api_events", body: JSON.stringify(eventPayload) });

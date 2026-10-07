@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { createMcpServer } from "../mcp/server.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 
 const jsonRpcMessageSchema = z.object({
   jsonrpc: z.literal("2.0"),
@@ -20,6 +21,7 @@ function credentialsOf(request: FastifyRequest): Record<string, string> {
 /** Stateless MCP endpoint (Streamable HTTP): one server per request, no resumable SSE stream. */
 export async function mcpRoutes(fastify: FastifyInstance) {
   fastify.post("/mcp", { config: { documentation: { body: jsonRpcMessageSchema, statusCodes: [200, 202] } } }, async (request, reply) => {
+    requirePlanFeature(request.user!.usagePlan, "ai.agents");
     const server = createMcpServer({ app: fastify, credentials: credentialsOf(request), canWrite: request.apiTokenScope !== "READ" });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     reply.hijack();

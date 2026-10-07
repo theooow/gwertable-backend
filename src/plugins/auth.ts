@@ -5,6 +5,7 @@ import { UnauthorizedError, ForbiddenError, NotFoundError } from "../lib/errors.
 import { isAdminEmail } from "../lib/admin.js";
 import { CURRENT_TERMS_VERSION } from "../lib/terms.js";
 import { hashApiToken, isApiToken, isApiTokenForbiddenRoute } from "../lib/api-token.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 
 /**
  * Authenticated account in a workspace context.
@@ -195,6 +196,8 @@ export const authPlugin = fp(async (fastify) => {
 
     const { apiTokenScope } = authenticated;
     if (apiTokenScope) {
+      // Tokens of an account that left Platinium stop working until it comes back.
+      requirePlanFeature(authenticated.user.usagePlan, "ai.agents");
       if (isApiTokenForbiddenRoute(request.method, request.url)) {
         throw new ForbiddenError("Action impossible avec un token d'API");
       }
