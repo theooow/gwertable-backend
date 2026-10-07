@@ -52,7 +52,7 @@ const operationInput = z.object({
   query: z.record(z.string(), z.union([queryValue, z.array(queryValue)])).optional().describe("Paramètres de requête"),
 });
 const writeInput = operationInput.extend({
-  body: z.unknown().optional().describe("Corps JSON conforme au schéma de describe_operation"),
+  body: z.unknown().optional().describe("Corps JSON (objet ou tableau, pas une chaîne) conforme au schéma de describe_operation"),
 });
 
 function describe(operation: Operation) {

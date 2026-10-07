@@ -102,12 +102,25 @@ function buildUrl(operation: Operation, input: OperationInput): string {
  * Replays the operation through Fastify with the caller's credentials, so routing,
  * authorization, validation and activity logging behave exactly as for the web app.
  */
+/** Agents sometimes serialize the body themselves: accept a JSON string as well as a value. */
+function jsonPayload(body: unknown): string {
+  if (typeof body === "string") {
+    try {
+      return JSON.stringify(JSON.parse(body));
+    } catch {
+      // Not JSON: sent as a JSON string so the route reports a validation error.
+    }
+  }
+  return JSON.stringify(body);
+}
+
 export async function executeOperation(app: FastifyInstance, credentials: Record<string, string>, operation: Operation, input: OperationInput): Promise<OperationResult> {
+  const hasBody = input.body !== undefined && operation.method !== "GET";
   const response = await app.inject({
     method: operation.method as "GET",
     url: buildUrl(operation, input),
-    headers: credentials,
-    ...(input.body !== undefined && operation.method !== "GET" ? { payload: input.body as object } : {}),
+    headers: hasBody ? { ...credentials, "content-type": "application/json" } : credentials,
+    ...(hasBody ? { payload: jsonPayload(input.body) } : {}),
   });
   if (!response.body) return { status: response.statusCode, body: null };
   const body = String(response.headers["content-type"]).includes("application/json") ? response.json() : response.body.slice(0, MAX_RESPONSE_CHARS);

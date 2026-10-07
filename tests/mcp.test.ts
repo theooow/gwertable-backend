@@ -84,3 +84,12 @@ test("a write token creates data with the user's permissions and reports API err
   const missingParam = await callTool(token, "call_read_operation", { operationId: "get_api_events_id" });
   assert.ok(missingParam.isError);
 });
+
+test("a write body serialized as a JSON string is still sent as JSON", async () => {
+  const { authorization } = await seedAdminSession();
+  const token = await createToken(authorization, "WRITE");
+
+  const created = await callTool(token, "call_write_operation", { operationId: "post_api_events", body: JSON.stringify(eventPayload) });
+  assert.ok(!created.isError, created.content[0].text);
+  assert.equal((JSON.parse(created.content[0].text) as { status: number }).status, 201);
+});
