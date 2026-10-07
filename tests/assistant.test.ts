@@ -82,7 +82,7 @@ test("the assistant reads data through the API and keeps an append-only history"
   assert.deepEqual(stream.filter((event) => event.type === "tool").map((event) => event.type === "tool" && event.name), ["call_read_operation"]);
   assert.equal(stream.at(-1)?.type, "done");
 
-  assert.equal(calls[0].model, "claude-fable-5-1");
+  assert.equal(calls[0].model, "claude-opus-5-5");
   assert.equal(calls[0].fallbacks, "default");
   assert.ok(calls[0].tools?.some((tool) => "name" in tool && tool.name === "call_write_operation"));
   const firstTurn = calls[0].messages[0].content as Anthropic.Beta.BetaTextBlockParam[];

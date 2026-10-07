@@ -31,7 +31,7 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("llava"),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ASSISTANT_MODEL: z.string().default("claude-fable-5-1"),
+  ASSISTANT_MODEL: z.string().default("claude-opus-5-5"),
   ASSISTANT_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
   ASSISTANT_MAX_STEPS: z.coerce.number().int().positive().default(20),
   DISCORD_BOT_TOKEN: z.string().optional(),

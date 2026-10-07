@@ -129,7 +129,7 @@ Interface web MailHog : `http://localhost:8025`
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL du serveur Ollama |
 | `OLLAMA_MODEL` | `llava` | Modèle Ollama |
 | `ANTHROPIC_API_KEY` | — | Active l'assistant IA intégré (sinon `503` et assistant masqué) |
-| `ASSISTANT_MODEL` | `claude-fable-5-1` | Modèle Claude de l'assistant |
+| `ASSISTANT_MODEL` | `claude-opus-5-5` | Modèle Claude de l'assistant |
 | `ASSISTANT_EFFORT` | `medium` | Effort de raisonnement (`low` à `max`) |
 | `ASSISTANT_MAX_STEPS` | `20` | Appels au modèle maximum par message (borne le coût d'une demande) |
 | `DISCORD_BOT_TOKEN` | — | Token du bot Discord par défaut pour les notifications |
@@ -241,7 +241,7 @@ claude mcp add --transport http abregi https://<api>/mcp --header "Authorization
 
 ### Assistant IA intégré
 
-`POST /api/assistant/messages` (`{ content, conversationId? }`) fait tourner une boucle d'outils Claude (`claude-fable-5-1` par défaut, repli serveur `fallbacks: "default"` en cas de refus) et répond en Server-Sent Events : `conversation`, `text` (deltas), `tool` (étape en cours), `confirm`, `done`, `error`. Les outils sont ceux du serveur MCP (`src/mcp/tools.ts`), exécutés avec la session de l'utilisateur.
+`POST /api/assistant/messages` (`{ content, conversationId? }`) fait tourner une boucle d'outils Claude (`claude-opus-5-5` par défaut, repli serveur `fallbacks: "default"` en cas de refus) et répond en Server-Sent Events : `conversation`, `text` (deltas), `tool` (étape en cours), `confirm`, `done`, `error`. Les outils sont ceux du serveur MCP (`src/mcp/tools.ts`), exécutés avec la session de l'utilisateur.
 
 - Toute modification (`call_write_operation`) suspend la boucle et émet `confirm` ; `POST /api/assistant/conversations/:id/confirm` (`{ approve }`) l'exécute ou la refuse puis reprend le flux. Un nouveau message vaut refus des actions en attente.
 - L'historique (`AssistantConversation.messages`) est stocké tel qu'échangé avec l'API et seulement complété : les blocs de réflexion doivent être renvoyés à l'identique. Le contexte utilisateur (nom, espace, rôle, date) est écrit une fois dans le premier message pour garder le préfixe en cache.
