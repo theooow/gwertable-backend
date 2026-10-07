@@ -394,7 +394,8 @@ src/
 │
 ├── mcp/
 │   ├── operations.ts             # Catalogue d'opérations dérivé d'OpenAPI, exécution via app.inject
-│   └── server.ts                 # Outils et instructions du serveur MCP
+│   ├── tools.ts                  # Outils partagés entre le serveur MCP et l'assistant
+│   └── server.ts                 # Serveur MCP exposant ces outils
 │
 ├── workers/
 │   ├── notification-worker.ts    # Rappels de notifications
