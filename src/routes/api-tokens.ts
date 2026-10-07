@@ -16,10 +16,10 @@ export async function apiTokenRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(await repository.create(request.user!.id, input));
   });
 
-  fastify.delete("/api/account/api-tokens/:id", { config: { documentation: { params: apiTokenParamsSchema, statusCodes: [204] } } }, async (request, reply) => {
+  fastify.delete("/api/account/api-tokens/:id", { config: { documentation: { params: apiTokenParamsSchema } } }, async (request) => {
     const { id } = apiTokenParamsSchema.parse(request.params);
     const { count } = await repository.delete(request.user!.id, id);
     if (!count) throw new NotFoundError("Token introuvable");
-    return reply.status(204).send();
+    return { ok: true };
   });
 }

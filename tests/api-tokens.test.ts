@@ -49,7 +49,7 @@ test("a read-only token cannot write and no token can manage tokens", async () =
 test("revoked and expired tokens are rejected", async () => {
   const { authorization } = await seedAdminSession();
   const revoked = await createToken(authorization, "READ");
-  assert.equal((await request("DELETE", `/api/account/api-tokens/${revoked.id}`, authorization)).statusCode, 204);
+  assert.equal((await request("DELETE", `/api/account/api-tokens/${revoked.id}`, authorization)).statusCode, 200);
   assert.equal((await request("GET", "/api/events", `Bearer ${revoked.token}`)).statusCode, 401);
   assert.equal((await request("DELETE", `/api/account/api-tokens/${revoked.id}`, authorization)).statusCode, 404);
 
