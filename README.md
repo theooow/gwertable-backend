@@ -245,7 +245,8 @@ claude mcp add --transport http abregi https://<api>/mcp --header "Authorization
 
 - Toute modification (`call_write_operation`) suspend la boucle et émet `confirm` ; `POST /api/assistant/conversations/:id/confirm` (`{ approve }`) l'exécute ou la refuse puis reprend le flux. Un nouveau message vaut refus des actions en attente.
 - L'historique (`AssistantConversation.messages`) est stocké tel qu'échangé avec l'API et seulement complété : les blocs de réflexion doivent être renvoyés à l'identique. Le contexte utilisateur (nom, espace, rôle, date) est écrit une fois dans le premier message pour garder le préfixe en cache.
-- Les tokens consommés sont cumulés par conversation (`inputTokens`, `outputTokens`). L'assistant est réservé aux sessions (refusé aux tokens d'API).
+- Réservé au plan Platinium (fonctionnalité `ai.assistant`) : `enabled` vaut `false` et l'envoi de messages répond `403` pour les autres plans. Réservé aussi aux sessions (refusé aux tokens d'API).
+- Les tokens consommés sont cumulés par conversation (`inputTokens`, `outputTokens`).
 
 ### Invitations
 

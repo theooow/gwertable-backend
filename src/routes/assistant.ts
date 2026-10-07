@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../prisma.js";
 import { AppError } from "../lib/errors.js";
+import { planCan, requirePlanFeature } from "../lib/usage-plans.js";
 import { AssistantRepository } from "../repositories/assistant.repository.js";
 import { AssistantService, isAssistantEnabled, type AssistantCaller, type AssistantEvent } from "../services/assistant.service.js";
 import { assistantConfirmSchema, assistantConversationParamsSchema, assistantMessageSchema } from "../schemas/assistant.js";
@@ -13,6 +14,7 @@ class AssistantDisabledError extends AppError {}
 function callerOf(fastify: FastifyInstance, request: FastifyRequest): AssistantCaller {
   if (!isAssistantEnabled()) throw new AssistantDisabledError("Assistant IA non configuré");
   const user = request.user!;
+  requirePlanFeature(user.usagePlan, "ai.assistant");
   const { authorization, cookie } = request.headers;
   const credentials = Object.fromEntries(Object.entries({ authorization, cookie }).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
   const today = new Intl.DateTimeFormat("fr-FR", { dateStyle: "full", timeZone: user.timezone }).format(new Date());
@@ -59,7 +61,7 @@ export async function assistantRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/assistant/conversations", { config: { documentation: {} } }, async (request) => ({
-    enabled: isAssistantEnabled(),
+    enabled: isAssistantEnabled() && planCan(request.user!.usagePlan, "ai.assistant"),
     model: env.ASSISTANT_MODEL,
     conversations: await service.list(request.user!.id, request.workspaceId),
   }));

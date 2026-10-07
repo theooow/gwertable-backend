@@ -51,6 +51,13 @@ function events(body: string): AssistantEvent[] {
   return body.split("\n\n").filter((chunk) => chunk.startsWith("data: ")).map((chunk) => JSON.parse(chunk.slice(6)) as AssistantEvent);
 }
 
+/** The assistant is a Platinium feature. */
+async function seedPlatiniumSession() {
+  const session = await seedAdminSession();
+  await prisma.user.update({ where: { id: session.user.id }, data: { usagePlan: "PLATINIUM" } });
+  return session;
+}
+
 async function send(authorization: string, content: string, conversationId?: string) {
   const response = await request("POST", "/api/assistant/messages", authorization, { content, conversationId });
   assert.equal(response.statusCode, 200, response.body);
@@ -68,8 +75,17 @@ test("the assistant is disabled without an Anthropic API key and closed to API t
   assert.equal((await request("POST", "/api/assistant/messages", `Bearer ${token}`, { content: "Bonjour" })).statusCode, 403);
 });
 
-test("the assistant reads data through the API and keeps an append-only history", async () => {
+test("the assistant is reserved to the Platinium plan", async () => {
   const { authorization } = await seedAdminSession();
+  scriptModel([]);
+  assert.equal(json<{ enabled: boolean }>(await request("GET", "/api/assistant/conversations", authorization)).enabled, false);
+  const response = await request("POST", "/api/assistant/messages", authorization, { content: "Bonjour" });
+  assert.equal(response.statusCode, 403);
+  assert.match(response.body, /Platinium/);
+});
+
+test("the assistant reads data through the API and keeps an append-only history", async () => {
+  const { authorization } = await seedPlatiniumSession();
   await request("POST", "/api/events", authorization, eventPayload);
   const calls = scriptModel([
     { content: [toolUse("t1", "call_read_operation", { operationId: "get_api_events" })], stop: "tool_use" },
@@ -104,7 +120,7 @@ test("the assistant reads data through the API and keeps an append-only history"
 });
 
 test("writes wait for the user's approval and declined writes are never executed", async () => {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedPlatiniumSession();
   const createEvent = toolUse("w1", "call_write_operation", { operationId: "post_api_events", body: eventPayload });
 
   scriptModel([{ content: [text("Je crée l'événement."), createEvent], stop: "tool_use" }]);
@@ -135,7 +151,7 @@ test("writes wait for the user's approval and declined writes are never executed
 });
 
 test("a new message declines pending actions and conversations are private", async () => {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedPlatiniumSession();
   scriptModel([{ content: [toolUse("w1", "call_write_operation", { operationId: "post_api_events", body: eventPayload })], stop: "tool_use" }]);
   const { id } = (await send(authorization, "Crée un événement")).find((event) => event.type === "conversation") as { id: string };
 
