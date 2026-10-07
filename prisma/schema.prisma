@@ -288,6 +288,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   apiTokens     ApiToken[]
+  assistantConversations AssistantConversation[]
   workspaceMemberships WorkspaceMember[]
   eventCollaborations   EventCollaborator[]
   tasksCreated          Task[]        @relation("TaskCreatedBy")
@@ -332,6 +333,7 @@ model Workspace {
   invoices        Invoice[]
   expenseClaims   ExpenseClaim[]
   fiscalYears     FiscalYear[]
+  assistantConversations AssistantConversation[]
 }
 
 /// Legal issuer/recipient identity. A workspace has one entity in this first
@@ -480,6 +482,24 @@ model ApiToken {
   createdAt   DateTime      @default(now())
 
   @@index([userId])
+}
+
+/// In-app assistant conversation. `messages` holds the Claude API message history
+/// exactly as exchanged (append-only: thinking blocks must be replayed unchanged).
+model AssistantConversation {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title        String
+  messages     Json      @default("[]")
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, workspaceId, updatedAt])
 }
 
 model VerificationToken {
