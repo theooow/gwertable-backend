@@ -205,6 +205,38 @@ L'API combine **mot de passe** et **code / lien envoyé par email**.
 
 `POST /api/auth/password/setup` définit un mot de passe à partir d'un token reçu par email. `POST /api/auth/login-link` renvoie un email de connexion. `GET /api/auth/me` retourne l'utilisateur courant, dont `termsAccepted` (faux tant que la version courante des CGU, définie dans `src/lib/terms.ts`, n'a pas été acceptée). `POST /api/auth/terms/accept` enregistre cette acceptation.
 
+### Tokens d'API personnels
+
+Pour les outils externes (agents IA via MCP, scripts), un utilisateur crée des tokens depuis ses paramètres : `GET|POST /api/account/api-tokens`, `DELETE /api/account/api-tokens/:id`. Le token (`abr_…`) n'est affiché qu'à la création ; seul son hash SHA-256 est stocké (`ApiToken`). Il s'utilise comme une session (`Authorization: Bearer abr_…`) avec les droits de l'utilisateur dans son espace par défaut, et :
+
+- `scope` `READ` (défaut) n'autorise que les lectures (`GET`) ; `WRITE` autorise aussi les modifications ;
+- `expiresInDays` optionnel (1 à 365) ; `lastUsedAt` est mis à jour à la minute près ;
+- un token ne peut ni gérer les tokens, ni supprimer le compte, ni accéder à `/api/admin`.
+- réservé au plan Platinium (fonctionnalité `ai.agents`) : création refusée (`403`) sur les autres plans, et les tokens existants cessent de fonctionner si le compte quitte Platinium (ils restent listables et révocables).
+
+
+### Serveur MCP (agents IA)
+
+`POST /mcp` (plan Platinium) expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
+
+Plutôt qu'un outil écrit à la main par route, les outils s'appuient sur le catalogue OpenAPI (`src/mcp/operations.ts`) : toute route documentée devient disponible, hors auth, administration, fichiers binaires, routes publiques et gestion des tokens.
+
+| Outil | Rôle |
+| --- | --- |
+| `whoami` | Utilisateur, espace et rôle courants |
+| `search_operations` | Rechercher une opération par mots-clés ou tag |
+| `describe_operation` | Paramètres et schéma du corps |
+| `call_read_operation` | Exécuter un `GET` |
+| `call_write_operation` | Exécuter un `POST/PUT/PATCH/DELETE` (absent avec un token `READ`) |
+
+Chaque appel est rejoué via `app.inject` avec les identifiants de la requête MCP : permissions, validation Zod, journal API et fil d'activité s'appliquent comme pour l'application web. Ajouter une route documentée suffit à la rendre accessible aux agents.
+
+Connexion depuis Claude Code :
+
+```bash
+claude mcp add --transport http abregi https://<api>/mcp --header "Authorization: Bearer abr_..."
+```
+
 ### Invitations
 
 Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscription pour rejoindre un espace de travail ou accepter une invitation à un événement.
@@ -362,6 +394,11 @@ src/
 │   ├── contracts.ts              # Schémas de réponse partagés
 │   └── forms.ts                  # Formulaires Swagger UI (corps de requête, uploads)
 │
+├── mcp/
+│   ├── operations.ts             # Catalogue d'opérations dérivé d'OpenAPI, exécution via app.inject
+│   ├── tools.ts                  # Outils exposés aux agents IA
+│   └── server.ts                 # Serveur MCP exposant ces outils
+│
 ├── workers/
 │   ├── notification-worker.ts    # Rappels de notifications
 │   └── volunteer-email-worker.ts # Envoi des emails bénévoles
@@ -424,7 +461,7 @@ Les fichiers de test couvrent l'authentification, les espaces, les événements 
 
 Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plusieurs couches :
 
-- **Auth** : `User`, `Session`, `VerificationToken`, `Account`
+- **Auth** : `User`, `Session`, `ApiToken`, `VerificationToken`, `Account`
 - **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `LegalEntity`
 - **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote`, `Venue`, `Supplier`
 - **Événements** : `Event`, `EventCollaborator`, `EventParticipant`

@@ -287,6 +287,7 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
+  apiTokens     ApiToken[]
   workspaceMemberships WorkspaceMember[]
   eventCollaborations   EventCollaborator[]
   tasksCreated          Task[]        @relation("TaskCreatedBy")
@@ -455,6 +456,28 @@ model Session {
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expires      DateTime
+
+  @@index([userId])
+}
+
+enum ApiTokenScope {
+  READ
+  WRITE
+}
+
+/// Personal access token used by external tools (MCP clients, scripts).
+/// Only the SHA-256 hash is stored; the clear token is shown once at creation.
+model ApiToken {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  tokenHash   String        @unique
+  tokenPrefix String
+  scope       ApiTokenScope @default(READ)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
 
   @@index([userId])
 }
