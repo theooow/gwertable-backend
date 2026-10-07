@@ -16,11 +16,8 @@ export function isApiToken(token: string): boolean {
   return token.startsWith(API_TOKEN_PREFIX);
 }
 
-/**
- * API tokens cannot reach platform administration, mint or revoke tokens, delete their account,
- * nor drive the billed in-app assistant (external agents bring their own model).
- */
+/** API tokens cannot reach platform administration, mint or revoke tokens, nor delete their account. */
 export function isApiTokenForbiddenRoute(method: string, url: string): boolean {
   const path = url.split("?")[0];
-  return path.startsWith("/api/admin") || path.startsWith("/api/account/api-tokens") || path.startsWith("/api/assistant") || (method === "DELETE" && path === "/api/account");
+  return path.startsWith("/api/admin") || path.startsWith("/api/account/api-tokens") || (method === "DELETE" && path === "/api/account");
 }

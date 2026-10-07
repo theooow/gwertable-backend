@@ -128,10 +128,6 @@ Interface web MailHog : `http://localhost:8025`
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Modèle OpenAI |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL du serveur Ollama |
 | `OLLAMA_MODEL` | `llava` | Modèle Ollama |
-| `ANTHROPIC_API_KEY` | — | Active l'assistant IA intégré (sinon `503` et assistant masqué) |
-| `ASSISTANT_MODEL` | `claude-opus-5-5` | Modèle Claude de l'assistant |
-| `ASSISTANT_EFFORT` | `medium` | Effort de raisonnement (`low` à `max`) |
-| `ASSISTANT_MAX_STEPS` | `20` | Appels au modèle maximum par message (borne le coût d'une demande) |
 | `DISCORD_BOT_TOKEN` | — | Token du bot Discord par défaut pour les notifications |
 | `WHATSAPP_ACCESS_TOKEN` | — | Token de l'API WhatsApp Cloud |
 | `WHATSAPP_PHONE_NUMBER_ID` | — | Identifiant du numéro WhatsApp émetteur |
@@ -238,15 +234,6 @@ Connexion depuis Claude Code :
 ```bash
 claude mcp add --transport http abregi https://<api>/mcp --header "Authorization: Bearer abr_..."
 ```
-
-### Assistant IA intégré
-
-`POST /api/assistant/messages` (`{ content, conversationId? }`) fait tourner une boucle d'outils Claude (`claude-opus-5-5` par défaut, repli serveur `fallbacks: "default"` en cas de refus) et répond en Server-Sent Events : `conversation`, `text` (deltas), `tool` (étape en cours), `confirm`, `done`, `error`. Les outils sont ceux du serveur MCP (`src/mcp/tools.ts`), exécutés avec la session de l'utilisateur.
-
-- Toute modification (`call_write_operation`) suspend la boucle et émet `confirm` ; `POST /api/assistant/conversations/:id/confirm` (`{ approve }`) l'exécute ou la refuse puis reprend le flux. Un nouveau message vaut refus des actions en attente.
-- L'historique (`AssistantConversation.messages`) est stocké tel qu'échangé avec l'API et seulement complété : les blocs de réflexion doivent être renvoyés à l'identique. Le contexte utilisateur (nom, espace, rôle, date) est écrit une fois dans le premier message pour garder le préfixe en cache.
-- Réservé au plan Platinium (fonctionnalité `ai.assistant`) : `enabled` vaut `false` et l'envoi de messages répond `403` pour les autres plans. Réservé aussi aux sessions (refusé aux tokens d'API).
-- Les tokens consommés sont cumulés par conversation (`inputTokens`, `outputTokens`).
 
 ### Invitations
 
@@ -407,7 +394,7 @@ src/
 │
 ├── mcp/
 │   ├── operations.ts             # Catalogue d'opérations dérivé d'OpenAPI, exécution via app.inject
-│   ├── tools.ts                  # Outils partagés entre le serveur MCP et l'assistant (services/assistant.service.ts)
+│   ├── tools.ts                  # Outils exposés aux agents IA
 │   └── server.ts                 # Serveur MCP exposant ces outils
 │
 ├── workers/

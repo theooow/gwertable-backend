@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { executeOperation, getOperations, searchOperations, truncate, type Operation, type OperationInput } from "./operations.js";
 
-/** Tools shared by the MCP server and the in-app assistant. */
+/** Tools exposed to external AI agents through the MCP server. */
 export type AgentToolContext = {
   app: FastifyInstance;
   /** Headers replayed on every internal call (Authorization and/or Cookie of the caller). */
