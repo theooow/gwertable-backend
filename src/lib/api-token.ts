@@ -16,8 +16,8 @@ export function isApiToken(token: string): boolean {
   return token.startsWith(API_TOKEN_PREFIX);
 }
 
-/** API tokens cannot reach platform administration, mint or revoke tokens, nor delete their account. */
+/** API tokens cannot reach platform administration, grant access (tokens, OAuth), nor delete their account. */
 export function isApiTokenForbiddenRoute(method: string, url: string): boolean {
   const path = url.split("?")[0];
-  return path.startsWith("/api/admin") || path.startsWith("/api/account/api-tokens") || (method === "DELETE" && path === "/api/account");
+  return path.startsWith("/api/admin") || path.startsWith("/api/account/api-tokens") || path.startsWith("/api/account/oauth-grants") || path.startsWith("/api/oauth/") || (method === "DELETE" && path === "/api/account");
 }

@@ -231,7 +231,18 @@ Plutôt qu'un outil écrit à la main par route, les outils s'appuient sur le ca
 
 Chaque appel est rejoué via `app.inject` avec les identifiants de la requête MCP : permissions, validation Zod, journal API et fil d'activité s'appliquent comme pour l'application web. Ajouter une route documentée suffit à la rendre accessible aux agents.
 
-Connexion depuis Claude Code :
+#### Connexion OAuth (ChatGPT, claude.ai, Claude Desktop…)
+
+Les clients MCP qui ne permettent pas de saisir un header utilisent OAuth 2.1, servi derrière l'origine publique `FRONTEND_URL` (le frontend relaie `/mcp`, `/oauth/*` et `/.well-known/oauth-*` au backend, qui n'est pas exposé) :
+
+1. `POST /mcp` sans jeton → `401` avec `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/mcp"` ;
+2. le client lit les métadonnées (`/.well-known/oauth-protected-resource[/mcp]`, `/.well-known/oauth-authorization-server`) puis s'enregistre (`POST /oauth/register`, client public, URI de retour HTTPS ou loopback HTTP) ;
+3. l'utilisateur consent sur la page frontend `/oauth/authorize` (session requise, plan Platinium, écriture accordée seulement si demandée et cochée) via `GET|POST /api/oauth/authorize` ;
+4. `POST /oauth/token` (`application/x-www-form-urlencoded`) échange le code contre un jeton d'accès d'une heure (PKCE S256 obligatoire, code à usage unique) et un jeton de rafraîchissement de 90 jours, renouvelé à chaque utilisation.
+
+Les jetons d'accès sont des `ApiToken` rattachés à un `OAuthGrant` ; l'utilisateur voit et révoque ses applications connectées via `GET|DELETE /api/account/oauth-grants`.
+
+Connexion depuis Claude Code avec un token personnel :
 
 ```bash
 claude mcp add --transport http abregi https://<api>/mcp --header "Authorization: Bearer abr_..."
@@ -461,7 +472,7 @@ Les fichiers de test couvrent l'authentification, les espaces, les événements 
 
 Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plusieurs couches :
 
-- **Auth** : `User`, `Session`, `ApiToken`, `VerificationToken`, `Account`
+- **Auth** : `User`, `Session`, `ApiToken`, `OAuthClient`, `OAuthAuthorizationCode`, `OAuthGrant`, `VerificationToken`, `Account`
 - **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `LegalEntity`
 - **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote`, `Venue`, `Supplier`
 - **Événements** : `Event`, `EventCollaborator`, `EventParticipant`

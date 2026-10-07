@@ -288,6 +288,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
   apiTokens     ApiToken[]
+  oauthCodes    OAuthAuthorizationCode[]
+  oauthGrants   OAuthGrant[]
   workspaceMemberships WorkspaceMember[]
   eventCollaborations   EventCollaborator[]
   tasksCreated          Task[]        @relation("TaskCreatedBy")
@@ -478,6 +480,54 @@ model ApiToken {
   lastUsedAt  DateTime?
   expiresAt   DateTime?
   createdAt   DateTime      @default(now())
+  /// Set for short-lived access tokens issued through OAuth; null for personal tokens.
+  grantId     String?
+  grant       OAuthGrant?   @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([grantId])
+}
+
+/// OAuth 2.1 public client registered dynamically by an MCP client (ChatGPT, Claude…).
+model OAuthClient {
+  id           String   @id @default(cuid())
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  codes  OAuthAuthorizationCode[]
+  grants OAuthGrant[]
+}
+
+/// Single-use authorization code (PKCE S256), exchanged at the token endpoint.
+model OAuthAuthorizationCode {
+  id            String        @id @default(cuid())
+  codeHash      String        @unique
+  clientId      String
+  client        OAuthClient   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  codeChallenge String
+  scope         ApiTokenScope
+  expiresAt     DateTime
+  createdAt     DateTime      @default(now())
+}
+
+/// Access granted by a user to an OAuth client; its refresh token rotates on every use.
+model OAuthGrant {
+  id               String        @id @default(cuid())
+  clientId         String
+  client           OAuthClient   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope            ApiTokenScope
+  refreshTokenHash String        @unique
+  refreshExpiresAt DateTime
+  lastUsedAt       DateTime?
+  createdAt        DateTime      @default(now())
+
+  accessTokens ApiToken[]
 
   @@index([userId])
 }
