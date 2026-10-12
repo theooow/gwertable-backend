@@ -6,7 +6,7 @@ import { ActivityService } from "../services/activity.service.js";
 
 const service = new ActivityService(new ActivityRepository(prisma));
 
-function viewerOf(request: FastifyRequest): ActivityViewer {
+export function viewerOf(request: FastifyRequest): ActivityViewer {
   return { userId: request.user!.id, email: request.user!.email, role: request.userRole, eventScoped: request.eventScoped };
 }
 

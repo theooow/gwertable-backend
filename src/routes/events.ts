@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { eventSchema } from "../schemas/event.js";
@@ -17,21 +17,23 @@ const service = new EventService(
   new EventRepository(new EventDao(prisma), new VenueDao(prisma), new ActivityRepository(prisma)),
 );
 
+export async function listVisibleEvents(request: FastifyRequest) {
+  const collaborator = request.eventScoped
+    ? { userId: request.user!.id, userEmail: request.user!.email }
+    : undefined;
+  const events = await service.list(request.workspaceId, request.userRole, collaborator);
+  const invitations = request.eventScoped ? await prisma.eventCollaborator.findMany({
+    where: { workspaceId: request.workspaceId, acceptedAt: { not: null }, OR: [{ userId: request.user!.id }, { email: request.user!.email }] },
+    select: { eventId: true, role: true },
+  }) : [];
+  return events.map(({ budgetSummary, ...event }) => ({
+    ...event,
+    ...(can(invitations.find((entry) => entry.eventId === event.id)?.role ?? request.userRole, "budget.read") ? { budgetSummary } : {}),
+  }));
+}
+
 export async function eventRoutes(fastify: FastifyInstance) {
-  fastify.get("/api/events", { config: { documentation: {  } } }, async (request) => {
-    const collaborator = request.eventScoped
-      ? { userId: request.user!.id, userEmail: request.user!.email }
-      : undefined;
-    const events = await service.list(request.workspaceId, request.userRole, collaborator);
-    const invitations = request.eventScoped ? await prisma.eventCollaborator.findMany({
-      where: { workspaceId: request.workspaceId, acceptedAt: { not: null }, OR: [{ userId: request.user!.id }, { email: request.user!.email }] },
-      select: { eventId: true, role: true },
-    }) : [];
-    return events.map(({ budgetSummary, ...event }) => ({
-      ...event,
-      ...(can(invitations.find((entry) => entry.eventId === event.id)?.role ?? request.userRole, "budget.read") ? { budgetSummary } : {}),
-    }));
-  });
+  fastify.get("/api/events", { config: { documentation: {  } } }, async (request) => listVisibleEvents(request));
 
   fastify.post("/api/events", { config: { documentation: { body: eventSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = eventSchema.parse(request.body);
