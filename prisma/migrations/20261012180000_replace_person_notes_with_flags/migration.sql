@@ -1,0 +1,7 @@
+-- CreateEnum
+CREATE TYPE "ContactFlag" AS ENUM ('PAYMENT_PENDING', 'DISPUTE_ONGOING', 'PREFERS_EMAIL', 'PREFERS_PHONE', 'PRIMARY_CONTACT', 'DO_NOT_CONTACT');
+
+-- AlterTable
+ALTER TABLE "Person" DROP COLUMN "notes",
+ADD COLUMN     "flags" "ContactFlag"[] DEFAULT ARRAY[]::"ContactFlag"[];
+

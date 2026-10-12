@@ -90,7 +90,7 @@ export class PersonDao extends BaseDao {
       phone: data.phone || null,
       discordUserId: data.discordUserId || null,
       tags: data.tags,
-      notes: data.notes || null,
+      flags: data.flags,
       contactType: data.contactType,
       availability: data.availability || null,
       negotiatedPrices: data.negotiatedPrices || null,

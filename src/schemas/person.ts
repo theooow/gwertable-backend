@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { LIMITS, optionalText, requiredText } from "./limits.js";
 
+export const CONTACT_FLAGS = ["PAYMENT_PENDING", "DISPUTE_ONGOING", "PREFERS_EMAIL", "PREFERS_PHONE", "PRIMARY_CONTACT", "DO_NOT_CONTACT"] as const;
+const contactFlagsSchema = z.array(z.enum(CONTACT_FLAGS)).max(CONTACT_FLAGS.length).transform((flags) => [...new Set(flags)]);
+
 export const personSchema = z.object({
   fullName: requiredText("Le nom", LIMITS.name),
   email: z.string().trim().max(LIMITS.email).email("Email invalide").optional().or(z.literal("")),
   phone: optionalText("Le telephone", LIMITS.phone),
   discordUserId: optionalText("L'identifiant Discord", LIMITS.discordId),
   tags: z.array(z.string().trim().min(1).max(LIMITS.tag)).max(LIMITS.tags).default([]),
-  notes: optionalText("Les notes", LIMITS.longText),
+  flags: contactFlagsSchema.default([]),
   contactType: z.enum(["CONTACT", "ARTIST", "SUPPLIER", "VENDOR", "VENUE"]).default("CONTACT"),
   availability: optionalText("La disponibilite", LIMITS.longText),
   negotiatedPrices: optionalText("Les tarifs negocies", LIMITS.longText),
@@ -33,7 +36,7 @@ export const personCellSchema = z.object({
   phone: z.string().trim().max(40).optional(),
   contactType: z.enum(["CONTACT", "ARTIST", "SUPPLIER", "VENDOR", "VENUE"]).optional(),
   tags: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
-  notes: z.string().trim().max(4000).optional(),
+  flags: contactFlagsSchema.optional(),
   availability: z.string().trim().max(4000).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "Aucun champ à modifier");
 export type PersonCellInput = z.infer<typeof personCellSchema>;

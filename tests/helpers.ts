@@ -120,7 +120,7 @@ export const personPayload = {
   phone: "0600000000",
   discordUserId: "",
   tags: ["staff", "bar"],
-  notes: "Disponible",
+  flags: ["PREFERS_EMAIL"],
 };
 
 export const eventPayload = {

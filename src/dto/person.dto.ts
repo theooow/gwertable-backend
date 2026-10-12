@@ -1,4 +1,4 @@
-import type { PersonType } from "@prisma/client";
+import type { ContactFlag, PersonType } from "@prisma/client";
 
 export type PersonDocumentDTO = {
   id: string;
@@ -31,7 +31,7 @@ export type PersonDTO = {
   email: string | null;
   phone: string | null;
   discordUserId: string | null;
-  notes: string | null;
+  flags: ContactFlag[];
   tags: string[];
   contactType: PersonType;
   availability: string | null;
@@ -64,7 +64,7 @@ type PersonRecord = {
   email: string | null;
   phone: string | null;
   discordUserId: string | null;
-  notes: string | null;
+  flags: ContactFlag[];
   tags: string[];
   contactType: PersonType;
   availability: string | null;
@@ -92,7 +92,7 @@ function toPersonFields(person: PersonRecord): PersonDTO {
     email: person.email,
     phone: person.phone,
     discordUserId: person.discordUserId,
-    notes: person.notes,
+    flags: person.flags,
     tags: person.tags,
     contactType: person.contactType,
     availability: person.availability,

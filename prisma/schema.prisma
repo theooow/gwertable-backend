@@ -540,6 +540,16 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Predefined, factual statuses only: free-text notes about people are not allowed (GDPR).
+enum ContactFlag {
+  PAYMENT_PENDING
+  DISPUTE_ONGOING
+  PREFERS_EMAIL
+  PREFERS_PHONE
+  PRIMARY_CONTACT
+  DO_NOT_CONTACT
+}
+
 model Person {
   volunteerContracts VolunteerContract[]
   id            String    @id @default(cuid())
@@ -549,7 +559,7 @@ model Person {
   email         String?
   phone         String?
   discordUserId String?
-  notes         String?
+  flags         ContactFlag[] @default([])
   tags          String[]
   contactType          PersonType @default(CONTACT)
   availability         String?

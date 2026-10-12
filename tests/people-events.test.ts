@@ -41,10 +41,20 @@ describe("people and event routes", () => {
         phone: "",
         discordUserId: "",
         tags: ["staff"],
-        notes: "",
+        flags: [],
       })).statusCode,
       200,
     );
+    const flagged = await request("PUT", `/api/people/${person.id}`, authorization, {
+      fullName: "Alice Martin Updated",
+      flags: ["PAYMENT_PENDING", "PREFERS_EMAIL", "PAYMENT_PENDING"],
+      notes: "Free text is no longer stored",
+    });
+    assert.equal(flagged.statusCode, 200);
+    const flaggedPerson = json<Record<string, unknown>>(flagged);
+    assert.deepEqual(flaggedPerson.flags, ["PAYMENT_PENDING", "PREFERS_EMAIL"]);
+    assert.equal("notes" in flaggedPerson, false);
+    assert.equal((await request("PUT", `/api/people/${person.id}`, authorization, { fullName: "Alice", flags: ["BAD_PAYER"] })).statusCode, 400);
     assert.equal((await request("POST", `/api/people/${person.id}/archive`, authorization)).statusCode, 200);
     assert.equal((await request("POST", `/api/people/${person.id}/restore`, authorization)).statusCode, 200);
 
