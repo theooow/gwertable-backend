@@ -25,6 +25,7 @@ import { shotgunRoutes } from "./routes/shotgun.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 import { equipmentRoutes } from "./routes/equipment.js";
 import { activityRoutes } from "./routes/activity.js";
+import { appShellRoutes } from "./routes/app-shell.js";
 import { accountingRoutes } from "./routes/accounting.js";
 import { trackingRoutes } from "./routes/tracking.js";
 import { budgetTrialRoutes } from "./routes/budget-trial.js";
@@ -74,6 +75,7 @@ export async function buildApp() {
   await app.register(workspaceRoutes);
   await app.register(equipmentRoutes);
   await app.register(activityRoutes);
+  await app.register(appShellRoutes);
   await app.register(trackingRoutes);
   await app.register(budgetTrialRoutes);
   await app.register(mcpRoutes);

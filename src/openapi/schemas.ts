@@ -66,6 +66,13 @@ export const routeDocs: Record<string, RouteDoc> = {
     "summary": "Retourner les paramètres de l'espace de travail courant",
     "description": "Le champ `shotgunApiToken` est toujours masqué (null). Utiliser `shotgunConnected: true` pour vérifier la connexion."
   },
+  "GET /api/app-shell": {
+    "tags": [
+      "Workspace"
+    ],
+    "summary": "Charger les données communes à toutes les pages de l'application",
+    "description": "Regroupe en un appel les espaces de travail, les événements invités, le badge d'activité (1 entrée + compteur de non-lus) et la liste des événements visibles."
+  },
   "GET /api/workspaces": {
     "tags": [
       "Workspace"
