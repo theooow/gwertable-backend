@@ -37,7 +37,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/events", { config: { documentation: { body: eventSchema, statusCodes: [201] } } }, async (request, reply) => {
     const data = eventSchema.parse(request.body);
-    const event = await service.create(request.workspaceId, request.userRole, request.user!.id, data);
+    const event = await service.create(request.workspaceId, request.userRole, request.user!.id, request.user!.usagePlan, data);
     return reply.status(201).send(event);
   });
 
@@ -63,7 +63,7 @@ export async function eventRoutes(fastify: FastifyInstance) {
   fastify.put("/api/events/:id", { config: { documentation: { params: idParamsSchema, body: eventSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const data = eventSchema.parse(request.body);
-    return service.update(id, request.workspaceId, request.userRole, request.user!.id, data);
+    return service.update(id, request.workspaceId, request.userRole, request.user!.id, request.user!.usagePlan, data);
   });
 
   fastify.delete("/api/events/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {

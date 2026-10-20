@@ -43,6 +43,6 @@ export async function budgetTrialRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/budget-trial/:token/claim", { config: { documentation: { params: budgetTrialTokenSchema } } }, async (request) => {
     const { token } = budgetTrialTokenSchema.parse(request.params);
-    return service.claim(token, request.workspaceId, request.userRole, request.user!.id);
+    return service.claim(token, request.workspaceId, request.userRole, request.user!.id, request.user!.usagePlan);
   });
 }

@@ -128,6 +128,16 @@ export class EventRepository {
    * @param data - Données validées de l'événement
    * @throws {NotFoundError} Si le lieu spécifié est introuvable
    */
+  countActiveEventsAdministeredBy(userId: string) {
+    return this.eventDao.countActiveAdministeredBy(userId);
+  }
+
+  async findEventStatus(id: string, workspaceId: string) {
+    const event = await this.eventDao.findStatus(id, workspaceId);
+    if (!event) throw new NotFoundError("Evenement introuvable");
+    return event.status;
+  }
+
   async createEvent(workspaceId: string, userId: string, data: EventInput) {
     if (data.venueId) {
       await this.venueDao.findByIdOrThrow(data.venueId, workspaceId);

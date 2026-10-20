@@ -8,6 +8,7 @@ import { prisma } from "../prisma.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { requireCan } from "../lib/permissions.js";
 import { recordActivity, recordRequestActivity } from "../lib/activity-recorder.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 import { contractIssuerSchema } from "../schemas/contract-issuer.js";
 import { WorkspaceDao } from "../dao/workspace.dao.js";
 import { WorkspaceMemberDao } from "../dao/workspace-member.dao.js";
@@ -340,6 +341,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/workspace/invitations", { config: { documentation: { body: inviteSchema, statusCodes: [201] } } }, async (request, reply) => {
     const parsed = inviteSchema.parse(request.body);
+    requirePlanFeature(request.user!.usagePlan, "team.invite");
     const invitation = await service.createInvitation(
       request.workspaceId,
       request.userRole,

@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 import { ConflictError, NotFoundError, ValidationError } from "../lib/errors.js";
 import type { BudgetLeadRepository } from "../repositories/budget-lead.repository.js";
 import { budgetTrialSchema, type BudgetTrial } from "../schemas/budget-trial.js";
@@ -40,7 +40,7 @@ export class BudgetTrialService {
   }
 
   /** Turns the trial into the user's first event with a forecast budget, so they land on a filled budget. */
-  async claim(token: string, workspaceId: string, role: UserRole, userId: string) {
+  async claim(token: string, workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan) {
     const lead = await this.findLead(token);
     if (lead.convertedEventId) return { eventId: lead.convertedEventId };
     const parsed = budgetTrialSchema.safeParse(lead.trial);
@@ -48,7 +48,7 @@ export class BudgetTrialService {
     const trial = parsed.data;
 
     const startsAt = trial.eventDate ? new Date(`${trial.eventDate}T20:00:00.000Z`) : new Date(Date.now() + 30 * DAY_MS);
-    const event = await this.events.create(workspaceId, role, userId, eventSchema.parse({
+    const event = await this.events.create(workspaceId, role, userId, usagePlan, eventSchema.parse({
       name: trial.eventName || "Mon premier événement",
       startsAt: startsAt.toISOString(),
       status: "PLANNING",

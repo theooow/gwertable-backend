@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma.js";
 import { requireCan } from "../../lib/permissions.js";
 import { NotFoundError, ConflictError } from "../../lib/errors.js";
+import { requirePlanFeature } from "../../lib/usage-plans.js";
 import { env } from "../../env.js";
 import { participantCreateSchema, participantSchema } from "../../schemas/participant.js";
 import { EventParticipantDao } from "../../dao/event-participant.dao.js";
@@ -109,6 +110,7 @@ export async function participantRoutes(fastify: FastifyInstance) {
 
   fastify.post("/api/events/:eventId/collaborators", { config: { documentation: { params: eventParamsSchema, body: eventCollaboratorSchema, statusCodes: [201] } } }, async (request, reply) => {
     requireCan(request.userRole, "event.write");
+    requirePlanFeature(request.user!.usagePlan, "team.invite");
     const { eventId } = eventParamsSchema.parse(request.params);
     const parsed = eventCollaboratorSchema.parse(request.body);
 

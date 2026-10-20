@@ -1,5 +1,6 @@
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
+import { activeEventLimit, activeEventStatuses, requireActiveEventSlot } from "../lib/usage-plans.js";
 import type { EventInput } from "../schemas/event.js";
 import { EventRepository, type CollaboratorContext } from "../repositories/event.repository.js";
 
@@ -49,11 +50,12 @@ export class EventService {
    * @param workspaceId - Identifiant de l'espace de travail
    * @param role - Rôle de l'utilisateur courant
    * @param data - Données validées de l'événement
-   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture ou si le plan n'a plus d'événement en cours disponible
    * @throws {NotFoundError} Si le lieu spécifié est introuvable
    */
-  async create(workspaceId: string, role: UserRole, userId: string, data: EventInput) {
+  async create(workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, data: EventInput) {
     requireCan(role, "event.write");
+    if (activeEventStatuses.includes(data.status)) await this.requireActiveEventSlot(userId, usagePlan);
     return this.eventRepository.createEvent(workspaceId, userId, data);
   }
 
@@ -67,8 +69,12 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    * @throws {NotFoundError} Si l'événement ou le lieu est introuvable
    */
-  async update(id: string, workspaceId: string, role: UserRole, userId: string, data: EventInput) {
+  async update(id: string, workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, data: EventInput) {
     requireCan(role, "event.write");
+    if (activeEventLimit(usagePlan) !== null && activeEventStatuses.includes(data.status)
+      && !activeEventStatuses.includes(await this.eventRepository.findEventStatus(id, workspaceId))) {
+      await this.requireActiveEventSlot(userId, usagePlan);
+    }
     return this.eventRepository.updateEvent(id, workspaceId, userId, data);
   }
 
@@ -109,5 +115,10 @@ export class EventService {
   async createVenue(workspaceId: string, role: UserRole, name: string) {
     requireCan(role, "event.write");
     return this.eventRepository.createVenue(workspaceId, name);
+  }
+
+  private async requireActiveEventSlot(userId: string, usagePlan: UsagePlan) {
+    if (activeEventLimit(usagePlan) === null) return;
+    requireActiveEventSlot(usagePlan, await this.eventRepository.countActiveEventsAdministeredBy(userId));
   }
 }

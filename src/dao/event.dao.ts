@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { EventStatus, TicketSource } from "@prisma/client";
 import type { EventInput } from "../schemas/event.js";
+import { activeEventStatuses } from "../lib/usage-plans.js";
 import { BaseDao } from "./base.dao.js";
 
 const EVENT_DEFAULT_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -144,6 +145,17 @@ export class EventDao extends BaseDao {
    * @param id - Identifiant de l'événement
    * @param workspaceId - Identifiant de l'espace de travail
    */
+  /** Events still in progress across every workspace the user administers, which is what plan limits count. */
+  async countActiveAdministeredBy(userId: string) {
+    return this.prisma.event.count({
+      where: { status: { in: activeEventStatuses }, workspace: { members: { some: { userId, role: "ADMIN" } } } },
+    });
+  }
+
+  async findStatus(id: string, workspaceId: string) {
+    return this.prisma.event.findUnique({ where: { id, workspaceId }, select: { status: true } });
+  }
+
   async findShotgunId(id: string, workspaceId: string) {
     return this.prisma.event.findUnique({
       where: { id, workspaceId },
