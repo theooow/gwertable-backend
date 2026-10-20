@@ -48,7 +48,7 @@ describe("equipment document import", () => {
     }) as typeof fetch;
 
     const { authorization, user } = await seedAdminSession();
-    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
     const { event } = await seedEventContext(authorization);
     const supplier = await prisma.person.create({
       data: { workspaceId: user.defaultWorkspaceId!, fullName: "SoundCo", tags: [], contactType: "VENDOR" },
@@ -111,7 +111,7 @@ describe("equipment document import", () => {
     process.env.DOCUMENT_AI_PROVIDER = "openai";
 
     const { authorization, user } = await seedAdminSession();
-    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
     const { event } = await seedEventContext(authorization);
 
     const response = await request("POST", `/api/events/${event.id}/equipment/import-preview`, authorization, {
@@ -165,7 +165,7 @@ describe("equipment document import", () => {
     });
 
     assert.equal(response.statusCode, 403);
-    assert.match(response.body, /plan Platinium/);
+    assert.match(response.body, /plan Plus/);
   });
 
   it("confirms an import as one quote with one-off usages and synced budget expense", async () => {

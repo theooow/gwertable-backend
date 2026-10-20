@@ -212,12 +212,12 @@ Pour les outils externes (agents IA via MCP, scripts), un utilisateur crée des 
 - `scope` `READ` (défaut) n'autorise que les lectures (`GET`) ; `WRITE` autorise aussi les modifications ;
 - `expiresInDays` optionnel (1 à 365) ; `lastUsedAt` est mis à jour à la minute près ;
 - un token ne peut ni gérer les tokens, ni supprimer le compte, ni accéder à `/api/admin`.
-- réservé au plan Platinium (fonctionnalité `ai.agents`) : création refusée (`403`) sur les autres plans, et les tokens existants cessent de fonctionner si le compte quitte Platinium (ils restent listables et révocables).
+- réservé au plan Pro (fonctionnalité `ai.agents`) : création refusée (`403`) sur les autres plans, et les tokens existants cessent de fonctionner si le compte quitte Pro (ils restent listables et révocables).
 
 
 ### Serveur MCP (agents IA)
 
-`POST /mcp` (plan Platinium) expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
+`POST /mcp` (plan Pro) expose un serveur [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, sans état, réponses JSON) authentifié par token d'API personnel (ou session). `GET` et `DELETE /mcp` répondent 405.
 
 Plutôt qu'un outil écrit à la main par route, les outils s'appuient sur le catalogue OpenAPI (`src/mcp/operations.ts`) : toute route documentée devient disponible, hors auth, administration, fichiers binaires, routes publiques et gestion des tokens.
 
@@ -237,7 +237,7 @@ Les clients MCP qui ne permettent pas de saisir un header utilisent OAuth 2.1, s
 
 1. `POST /mcp` sans jeton → `401` avec `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/mcp"` ;
 2. le client lit les métadonnées (`/.well-known/oauth-protected-resource[/mcp]`, `/.well-known/oauth-authorization-server`) puis s'enregistre (`POST /oauth/register`, client public, URI de retour HTTPS ou loopback HTTP) ;
-3. l'utilisateur consent sur la page frontend `/oauth/authorize` (session requise, plan Platinium, écriture accordée seulement si demandée et cochée) via `GET|POST /api/oauth/authorize` ;
+3. l'utilisateur consent sur la page frontend `/oauth/authorize` (session requise, plan Pro, écriture accordée seulement si demandée et cochée) via `GET|POST /api/oauth/authorize` ;
 4. `POST /oauth/token` (`application/x-www-form-urlencoded`) échange le code contre un jeton d'accès d'une heure (PKCE S256 obligatoire, code à usage unique) et un jeton de rafraîchissement de 90 jours, renouvelé à chaque utilisation.
 
 Les jetons d'accès sont des `ApiToken` rattachés à un `OAuthGrant` ; l'utilisateur voit et révoque ses applications connectées via `GET|DELETE /api/account/oauth-grants`.
@@ -291,7 +291,7 @@ Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/sw
 Gestion multi-tenant : création d'espaces, gestion des membres avec rôles (`ADMIN`, `ORGANIZER`, `TREASURER`, `VOLUNTEER`, `ARTIST`, `VIEWER`), invitations par email, transfert de contacts entre espaces, logo et couleur des emails, identité légale de la structure (émetteur des conventions). La matrice des permissions par rôle est définie dans `lib/permissions.ts`.
 
 ### Compte & offres
-Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST`, `PLATINIUM`) qui conditionne l'import de documents par IA et les notifications WhatsApp (`lib/usage-plans.ts`).
+Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST` par défaut, `LITE`, `PLUS`, `PRO`) qui conditionne l'import de documents par IA (Plus et Pro), les agents IA et les notifications WhatsApp (Pro) (`lib/usage-plans.ts`).
 
 ### Personnes
 Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique de notes par contact, archivage logique.

@@ -14,7 +14,7 @@ async function createToken(authorization: string, scope: "READ" | "WRITE", expir
 }
 
 test("a personal API token authenticates and only its hash is stored", async () => {
-  const { authorization, user } = await seedAdminSession("PLATINIUM");
+  const { authorization, user } = await seedAdminSession("PRO");
   const created = await createToken(authorization, "WRITE");
 
   assert.match(created.token, /^abr_/);
@@ -34,7 +34,7 @@ test("a personal API token authenticates and only its hash is stored", async () 
 });
 
 test("a read-only token cannot write and no token can manage tokens", async () => {
-  const { authorization } = await seedAdminSession("PLATINIUM");
+  const { authorization } = await seedAdminSession("PRO");
   const readOnly = `Bearer ${(await createToken(authorization, "READ")).token}`;
   const write = `Bearer ${(await createToken(authorization, "WRITE")).token}`;
 
@@ -47,7 +47,7 @@ test("a read-only token cannot write and no token can manage tokens", async () =
 });
 
 test("revoked and expired tokens are rejected", async () => {
-  const { authorization } = await seedAdminSession("PLATINIUM");
+  const { authorization } = await seedAdminSession("PRO");
   const revoked = await createToken(authorization, "READ");
   assert.equal((await request("DELETE", `/api/account/api-tokens/${revoked.id}`, authorization)).statusCode, 200);
   assert.equal((await request("GET", "/api/events", `Bearer ${revoked.token}`)).statusCode, 401);
@@ -58,14 +58,14 @@ test("revoked and expired tokens are rejected", async () => {
   assert.equal((await request("GET", "/api/events", `Bearer ${expired.token}`)).statusCode, 401);
 });
 
-test("API tokens and the MCP server are reserved to the Platinium plan", async () => {
+test("API tokens and the MCP server are reserved to the Pro plan", async () => {
   const { authorization, user } = await seedAdminSession();
   const refused = await request("POST", "/api/account/api-tokens", authorization, { name: "Claude", scope: "READ" });
   assert.equal(refused.statusCode, 403);
-  assert.match(refused.body, /Platinium/);
+  assert.match(refused.body, /Pro/);
   assert.equal((await request("POST", "/mcp", authorization, { jsonrpc: "2.0", id: 1, method: "tools/list" }, { accept: "application/json, text/event-stream" })).statusCode, 403);
 
-  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
   const token = `Bearer ${(await createToken(authorization, "READ")).token}`;
   assert.equal((await request("GET", "/api/events", token)).statusCode, 200);
 

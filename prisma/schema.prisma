@@ -94,7 +94,9 @@ enum UserRole {
 
 enum UsagePlan {
   BETA_TEST
-  PLATINIUM
+  LITE
+  PLUS
+  PRO
 }
 
 enum InvoiceDirection {

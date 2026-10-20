@@ -78,7 +78,7 @@ describe("event notification settings", () => {
     });
 
     assert.equal(response.statusCode, 403);
-    assert.match(response.body, /plan Platinium/);
+    assert.match(response.body, /plan Pro/);
   });
 
   it("sends due discord reminders once for tasks and run of show items", async () => {
@@ -167,7 +167,7 @@ describe("event notification settings", () => {
   it("sends direct whatsapp reminders to assigned people", async () => {
     const { authorization, user } = await seedAdminSession();
     const { event, person } = await seedEventContext(authorization);
-    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
     await prisma.person.update({
       where: { id: person.id },
       data: { phone: "+33 6 12 34 56 78", discordUserId: null },

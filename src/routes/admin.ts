@@ -8,7 +8,7 @@ import { FUNNEL_PERIODS, getBudgetFunnel } from "../repositories/admin-funnel.re
 
 const userParamsSchema = z.object({ userId: z.string().min(1) });
 const updatePlanSchema = z.object({
-  usagePlan: z.enum(["BETA_TEST", "PLATINIUM"]),
+  usagePlan: z.enum(["BETA_TEST", "LITE", "PLUS", "PRO"]),
 });
 
 function assertAdmin(request: FastifyRequest) {

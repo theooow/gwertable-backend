@@ -25,7 +25,7 @@ type Account = { usagePlan: UsagePlan; archivedAt: Date | null };
 
 function requireAgentsPlan(user: Account) {
   if (user.archivedAt || !planCan(user.usagePlan, "ai.agents")) {
-    throw new OAuthError("invalid_grant", "Les agents IA nécessitent le plan Platinium.");
+    throw new OAuthError("invalid_grant", "Les agents IA nécessitent le plan Pro.");
   }
 }
 
@@ -63,7 +63,7 @@ export class OAuthService {
       redirect.searchParams.set("error", "access_denied");
       return { redirectTo: redirect.toString() };
     }
-    if (!planCan(user.usagePlan, "ai.agents")) throw new ForbiddenError("Les agents IA nécessitent le plan Platinium.");
+    if (!planCan(user.usagePlan, "ai.agents")) throw new ForbiddenError("Les agents IA nécessitent le plan Pro.");
     const scope: ApiTokenScope = query.allowWrite && scopeToTokenScope(query.scope) === "WRITE" ? "WRITE" : "READ";
     const code = await this.repository.createCode({
       clientId: query.client_id,

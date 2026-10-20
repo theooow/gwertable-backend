@@ -44,8 +44,8 @@ test("metadata advertises the authorization server and /mcp challenges unauthent
   assert.equal(unauthenticated.headers["www-authenticate"], 'Bearer resource_metadata="http://localhost:3000/.well-known/oauth-protected-resource/mcp"');
 });
 
-test("a Platinium user connects an AI agent end to end with PKCE and rotating refresh tokens", async () => {
-  const { authorization } = await seedAdminSession("PLATINIUM");
+test("a Pro user connects an AI agent end to end with PKCE and rotating refresh tokens", async () => {
+  const { authorization } = await seedAdminSession("PRO");
   const { clientId } = await register();
 
   const preview = await request("GET", `/api/oauth/authorize?${new URLSearchParams(authorizeQuery(clientId))}`, authorization);
@@ -97,7 +97,7 @@ test("authorization requests are validated and gated by plan and consent", async
   assert.equal(wrongRedirect.statusCode, 400);
   assert.equal((await request("POST", "/api/oauth/authorize", authorization, { ...authorizeQuery(clientId), approve: true, allowWrite: true })).statusCode, 403);
 
-  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
   const denied = new URL(json<{ redirectTo: string }>(await request("POST", "/api/oauth/authorize", authorization, { ...authorizeQuery(clientId), approve: false })).redirectTo);
   assert.equal(denied.searchParams.get("error"), "access_denied");
   assert.equal(denied.searchParams.get("code"), null);

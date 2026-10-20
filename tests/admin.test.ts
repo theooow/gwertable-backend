@@ -46,11 +46,11 @@ describe("admin routes", () => {
     assert.equal(overviewPayload.users.find((user) => user.id === target.id)?.usagePlan, "BETA_TEST");
 
     const updated = await request("PATCH", `/api/admin/users/${target.id}/plan`, authorization, {
-      usagePlan: "PLATINIUM",
+      usagePlan: "PRO",
     });
     assert.equal(updated.statusCode, 200);
-    assert.equal(json<{ user: { usagePlan: string } }>(updated).user.usagePlan, "PLATINIUM");
-    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).usagePlan, "PLATINIUM");
+    assert.equal(json<{ user: { usagePlan: string } }>(updated).user.usagePlan, "PRO");
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).usagePlan, "PRO");
 
     const list = await request("GET", "/api/admin/logs?activity=true&limit=1", authorization);
     assert.equal(list.statusCode, 200);
@@ -60,7 +60,7 @@ describe("admin routes", () => {
     assert.equal(logs[0].action, "Forfait modifié");
     const detail = await request("GET", `/api/admin/logs/${logs[0].id}`, authorization);
     assert.equal(detail.statusCode, 200);
-    assert.equal(json<{ requestBody: { usagePlan: string } }>(detail).requestBody.usagePlan, "PLATINIUM");
+    assert.equal(json<{ requestBody: { usagePlan: string } }>(detail).requestBody.usagePlan, "PRO");
     assert.equal((await request("GET", "/api/admin/logs?limit=1000", authorization)).statusCode, 400);
     assert.equal((await request("GET", "/api/admin/logs/missing", authorization)).statusCode, 404);
   });

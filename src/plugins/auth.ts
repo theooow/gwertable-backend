@@ -198,7 +198,7 @@ export const authPlugin = fp(async (fastify) => {
 
     const { apiTokenScope } = authenticated;
     if (apiTokenScope) {
-      // Tokens of an account that left Platinium stop working until it comes back.
+      // Tokens of an account that left Pro stop working until it comes back.
       requirePlanFeature(authenticated.user.usagePlan, "ai.agents");
       if (isApiTokenForbiddenRoute(request.method, request.url)) {
         throw new ForbiddenError("Action impossible avec un token d'API");

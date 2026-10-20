@@ -46,7 +46,7 @@ type BudgetPreview = {
 describe("budget document import", () => {
   it("previews expense lines and normalizes unknown categories", async () => {
     const { authorization, user } = await seedAdminSession();
-    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
     const { event } = await seedEventContext(authorization);
 
     await withOpenAiResponse({
@@ -86,7 +86,7 @@ describe("budget document import", () => {
 
   it("previews income lines with income categories", async () => {
     const { authorization, user } = await seedAdminSession();
-    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLATINIUM" } });
+    await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
     const { event } = await seedEventContext(authorization);
 
     await withOpenAiResponse({
@@ -120,7 +120,7 @@ describe("budget document import", () => {
     });
 
     assert.equal(response.statusCode, 403);
-    assert.match(response.body, /plan Platinium/);
+    assert.match(response.body, /plan Plus/);
   });
 
   it("confirms expenses with the stored document as receipt", async () => {
