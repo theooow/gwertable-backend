@@ -1,3 +1,5 @@
+import type { UsagePlan } from "@prisma/client";
+
 /**
  * Classe de base pour toutes les erreurs applicatives typées.
  * Permet de distinguer les erreurs métier des erreurs système via `instanceof`.
@@ -27,6 +29,16 @@ export class UnauthorizedError extends AppError {}
  * Correspond au statut HTTP 403.
  */
 export class ForbiddenError extends AppError {}
+
+/**
+ * Erreur levée lorsque le plan de l'utilisateur ne couvre pas l'action.
+ * Correspond au statut HTTP 403, avec le plan à souscrire pour débloquer l'action.
+ */
+export class PlanRequiredError extends ForbiddenError {
+  constructor(message: string, readonly requiredPlan: UsagePlan) {
+    super(message);
+  }
+}
 
 /**
  * Erreur levée en cas de conflit avec l'état actuel de la ressource.

@@ -1,5 +1,5 @@
 import type { EventStatus, UsagePlan } from "@prisma/client";
-import { ForbiddenError } from "./errors.js";
+import { PlanRequiredError } from "./errors.js";
 
 export type PlanFeature = "ai.documentImport" | "ai.agents" | "whatsapp.notifications" | "team.invite";
 
@@ -19,7 +19,8 @@ export function planCan(plan: UsagePlan, feature: PlanFeature) {
 
 export function requirePlanFeature(plan: UsagePlan, feature: PlanFeature) {
   if (!planCan(plan, feature)) {
-    throw new ForbiddenError(`Cette fonctionnalité nécessite le plan ${minimumPlanLabel(feature)}.`);
+    const requiredPlan = minimumPlan(feature);
+    throw new PlanRequiredError(`Cette fonctionnalité nécessite le plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
   }
 }
 
@@ -37,10 +38,14 @@ export function activeEventLimit(plan: UsagePlan) {
 export function requireActiveEventSlot(plan: UsagePlan, activeEvents: number) {
   const limit = activeEventLimits[plan];
   if (limit !== null && activeEvents >= limit) {
-    throw new ForbiddenError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Clôture ou archive un événement, ou passe à un plan supérieur.`);
+    const requiredPlan = upgradePath.find((candidate) => {
+      const candidateLimit = activeEventLimits[candidate];
+      return candidateLimit === null || candidateLimit > limit;
+    }) ?? "PRO";
+    throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Clôture ou archive un événement, ou passe au plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
   }
 }
 
-export function minimumPlanLabel(feature: PlanFeature) {
-  return usagePlanLabels[upgradePath.find((plan) => planCan(plan, feature)) ?? "PRO"];
+function minimumPlan(feature: PlanFeature): UsagePlan {
+  return upgradePath.find((plan) => planCan(plan, feature)) ?? "PRO";
 }

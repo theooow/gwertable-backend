@@ -5,6 +5,7 @@ import {
   ValidationError,
   UnauthorizedError,
   ForbiddenError,
+  PlanRequiredError,
   NotFoundError,
   ConflictError,
   EmailDeliveryError,
@@ -49,6 +50,10 @@ export const errorsPlugin = fp(async (fastify) => {
         error: "Unauthorized",
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+
+    if (error instanceof PlanRequiredError) {
+      return reply.status(403).send({ error: "Forbidden", code: "PLAN_REQUIRED", requiredPlan: error.requiredPlan, message: error.message });
     }
 
     if (error instanceof ForbiddenError || resolveErrorName(error) === "ForbiddenError") {

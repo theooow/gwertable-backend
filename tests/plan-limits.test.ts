@@ -13,6 +13,8 @@ test("Lite and Plus cap events in progress, closed events free a slot", async ()
   const refused = await createEvent(authorization);
   assert.equal(refused.statusCode, 403);
   assert.match(refused.body, /plan Lite est limité à 1 événement en cours/);
+  assert.equal(json<{ code: string }>(refused).code, "PLAN_REQUIRED");
+  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PLUS");
   assert.equal((await createEvent(authorization, "DONE")).statusCode, 201);
 
   await request("PUT", `/api/events/${first.id}`, authorization, { ...eventPayload, status: "ARCHIVED" });
@@ -46,6 +48,7 @@ test("inviting collaborators is reserved to the Pro plan", async () => {
   const refused = await invite();
   assert.equal(refused.statusCode, 403);
   assert.match(refused.body, /plan Pro/);
+  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PRO");
   assert.equal((await collaborate()).statusCode, 403);
 
   await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
