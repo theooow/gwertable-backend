@@ -52,6 +52,10 @@ describe("admin routes", () => {
     assert.equal(json<{ user: { usagePlan: string } }>(updated).user.usagePlan, "PRO");
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).usagePlan, "PRO");
 
+    // The API journal is written after the response is sent.
+    for (let attempt = 0; attempt < 40 && !(await prisma.apiLog.count({ where: { action: "Forfait modifié" } })); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const list = await request("GET", "/api/admin/logs?activity=true&limit=1", authorization);
     assert.equal(list.statusCode, 200);
     assert.equal(list.headers["cache-control"], "no-store");
