@@ -815,7 +815,6 @@ model EventNotificationSettings {
   enabled   Boolean  @default(false)
   discordChannelId String?
   discordBotToken String?
-  whatsappEnabled Boolean @default(false)
   taskReminderOffsetsMinutes Int[] @default([1440, 60])
   runOfShowReminderOffsetsMinutes Int[] @default([30])
   overdueEnabled Boolean @default(true)

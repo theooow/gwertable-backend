@@ -2,13 +2,12 @@ import type { FastifyBaseLogger } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { env } from "../env.js";
 import { DiscordBotClient } from "../lib/discord.js";
-import { WhatsAppCloudClient } from "../lib/whatsapp.js";
 import { ReminderWorkerService } from "../services/reminder-worker.service.js";
 
 export function startNotificationWorker(prisma: PrismaClient, logger: FastifyBaseLogger) {
   if (!env.NOTIFICATION_WORKER_ENABLED) return { stop: () => undefined };
 
-  const service = new ReminderWorkerService(prisma, new DiscordBotClient(), new WhatsAppCloudClient(), logger);
+  const service = new ReminderWorkerService(prisma, new DiscordBotClient(), logger);
   let running = false;
 
   const tick = async () => {

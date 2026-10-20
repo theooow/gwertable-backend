@@ -6,7 +6,6 @@ const defaultSettings = {
   enabled: false,
   discordChannelId: null,
   hasDiscordBotToken: false,
-  whatsappEnabled: false,
   taskReminderOffsetsMinutes: [1440, 60],
   runOfShowReminderOffsetsMinutes: [30],
   overdueEnabled: true,
@@ -14,7 +13,6 @@ const defaultSettings = {
   enabled: boolean;
   discordChannelId: string | null;
   hasDiscordBotToken: boolean;
-  whatsappEnabled: boolean;
   taskReminderOffsetsMinutes: number[];
   runOfShowReminderOffsetsMinutes: number[];
   overdueEnabled: boolean;
@@ -26,7 +24,6 @@ function serializeSettings(settings: {
   enabled: boolean;
   discordChannelId: string | null;
   discordBotToken?: string | null;
-  whatsappEnabled: boolean;
   taskReminderOffsetsMinutes: number[];
   runOfShowReminderOffsetsMinutes: number[];
   overdueEnabled: boolean;
@@ -66,7 +63,6 @@ export class NotificationRepository {
         enabled: data.enabled,
         discordChannelId: data.discordChannelId || null,
         discordBotToken: discordBotToken || null,
-        whatsappEnabled: data.whatsappEnabled,
         taskReminderOffsetsMinutes: data.taskReminderOffsetsMinutes,
         runOfShowReminderOffsetsMinutes: data.runOfShowReminderOffsetsMinutes,
         overdueEnabled: data.overdueEnabled,
@@ -75,7 +71,6 @@ export class NotificationRepository {
         enabled: data.enabled,
         discordChannelId: data.discordChannelId || null,
         ...(discordBotToken ? { discordBotToken } : {}),
-        whatsappEnabled: data.whatsappEnabled,
         taskReminderOffsetsMinutes: data.taskReminderOffsetsMinutes,
         runOfShowReminderOffsetsMinutes: data.runOfShowReminderOffsetsMinutes,
         overdueEnabled: data.overdueEnabled,

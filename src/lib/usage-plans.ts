@@ -1,13 +1,13 @@
 import type { EventStatus, UsagePlan } from "@prisma/client";
 import { PlanRequiredError } from "./errors.js";
 
-export type PlanFeature = "ai.documentImport" | "ai.agents" | "whatsapp.notifications" | "team.invite";
+export type PlanFeature = "ai.documentImport" | "ai.agents" | "team.invite";
 
 const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
   BETA_TEST: ["team.invite"],
   LITE: [],
   PLUS: ["ai.documentImport"],
-  PRO: ["ai.documentImport", "ai.agents", "whatsapp.notifications", "team.invite"],
+  PRO: ["ai.documentImport", "ai.agents", "team.invite"],
 };
 const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, LITE: 1, PLUS: 3, PRO: null };
 export const activeEventStatuses: EventStatus[] = ["DRAFT", "PLANNING", "LIVE"];

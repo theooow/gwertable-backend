@@ -3,12 +3,11 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import { env } from "../env.js";
 import type { DiscordSender } from "../lib/discord.js";
-import type { WhatsAppSender } from "../lib/whatsapp.js";
 import { ActivityRepository } from "../repositories/activity.repository.js";
 
 type ReminderTargetType = "TASK" | "RUN_OF_SHOW";
 type ReminderType = "REMINDER" | "OVERDUE";
-type ReminderChannel = "DISCORD" | "WHATSAPP" | "IN_APP";
+type ReminderChannel = "DISCORD" | "IN_APP";
 
 type ReminderCandidate = {
   eventId: string;
@@ -16,7 +15,6 @@ type ReminderCandidate = {
   channel: ReminderChannel;
   discordChannelId?: string;
   discordBotToken?: string;
-  whatsappPhone?: string;
   targetType: ReminderTargetType;
   targetId: string;
   reminderType: ReminderType;
@@ -60,7 +58,6 @@ export class ReminderWorkerService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly discord: DiscordSender,
-    private readonly whatsapp?: WhatsAppSender,
     private readonly logger?: FastifyBaseLogger,
   ) {
     this.activityRepository = new ActivityRepository(prisma);
@@ -71,7 +68,7 @@ export class ReminderWorkerService {
     const settings = await this.prisma.eventNotificationSettings.findMany({
       where: {
         enabled: true,
-        OR: [{ discordChannelId: { not: null } }, { whatsappEnabled: true }],
+        discordChannelId: { not: null },
       },
       include: {
         event: {
@@ -111,7 +108,6 @@ export class ReminderWorkerService {
             title: task.title,
             personName: task.assignee.fullName,
             discordUserId: task.assignee.discordUserId ?? undefined,
-            whatsappPhone: task.assignee.phone ?? undefined,
           }));
         }
         if (setting.overdueEnabled && isDue(task.dueAt, now, lookbackMs)) {
@@ -127,7 +123,6 @@ export class ReminderWorkerService {
             title: task.title,
             personName: task.assignee.fullName,
             discordUserId: task.assignee.discordUserId ?? undefined,
-            whatsappPhone: task.assignee.phone ?? undefined,
           }));
         }
       }
@@ -149,7 +144,6 @@ export class ReminderWorkerService {
             title: item.title,
             personName: item.responsiblePerson.fullName,
             discordUserId: item.responsiblePerson.discordUserId ?? undefined,
-            whatsappPhone: item.responsiblePerson.phone ?? undefined,
           }));
         }
         if (setting.overdueEnabled && isDue(item.startsAt, now, lookbackMs)) {
@@ -165,7 +159,6 @@ export class ReminderWorkerService {
             title: item.title,
             personName: item.responsiblePerson.fullName,
             discordUserId: item.responsiblePerson.discordUserId ?? undefined,
-            whatsappPhone: item.responsiblePerson.phone ?? undefined,
           }));
         }
       }
@@ -194,13 +187,6 @@ export class ReminderWorkerService {
           await this.discord.sendMessage({
             channelId: candidate.discordChannelId,
             botToken: candidate.discordBotToken,
-            content: buildMessage(candidate),
-          });
-        } else if (candidate.channel === "WHATSAPP") {
-          if (!this.whatsapp) throw new Error("WhatsApp sender is not configured");
-          if (!candidate.whatsappPhone) throw new Error("WhatsApp phone is missing");
-          await this.whatsapp.sendMessage({
-            to: candidate.whatsappPhone,
             content: buildMessage(candidate),
           });
         } else {
@@ -306,9 +292,8 @@ export class ReminderWorkerService {
     setting: {
       discordChannelId: string | null;
       discordBotToken: string | null;
-      whatsappEnabled: boolean;
     },
-    candidate: Omit<ReminderCandidate, "channel" | "discordChannelId" | "discordBotToken"> & { whatsappPhone?: string },
+    candidate: Omit<ReminderCandidate, "channel" | "discordChannelId" | "discordBotToken">,
   ): ReminderCandidate[] {
     const candidates: ReminderCandidate[] = [];
     if (setting.discordChannelId && candidate.discordUserId) {
@@ -317,12 +302,6 @@ export class ReminderWorkerService {
         channel: "DISCORD",
         discordChannelId: setting.discordChannelId,
         discordBotToken: setting.discordBotToken ?? undefined,
-      });
-    }
-    if (setting.whatsappEnabled && candidate.whatsappPhone) {
-      candidates.push({
-        ...candidate,
-        channel: "WHATSAPP",
       });
     }
     return candidates;

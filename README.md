@@ -129,10 +129,6 @@ Interface web MailHog : `http://localhost:8025`
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL du serveur Ollama |
 | `OLLAMA_MODEL` | `llava` | Modèle Ollama |
 | `DISCORD_BOT_TOKEN` | — | Token du bot Discord par défaut pour les notifications |
-| `WHATSAPP_ACCESS_TOKEN` | — | Token de l'API WhatsApp Cloud |
-| `WHATSAPP_PHONE_NUMBER_ID` | — | Identifiant du numéro WhatsApp émetteur |
-| `WHATSAPP_TEMPLATE_NAME` | — | Modèle de message WhatsApp |
-| `WHATSAPP_TEMPLATE_LANGUAGE` | `fr` | Langue du modèle WhatsApp |
 | `NOTIFICATION_WORKER_ENABLED` | `true` en production, `false` sinon | Active le worker de rappels |
 | `NOTIFICATION_WORKER_INTERVAL_MS` | `60000` | Intervalle du worker de rappels |
 | `NOTIFICATION_REMINDER_LOOKBACK_MINUTES` | `5` | Fenêtre de rattrapage des rappels |
@@ -291,7 +287,7 @@ Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/sw
 Gestion multi-tenant : création d'espaces, gestion des membres avec rôles (`ADMIN`, `ORGANIZER`, `TREASURER`, `VOLUNTEER`, `ARTIST`, `VIEWER`), invitations par email, transfert de contacts entre espaces, logo et couleur des emails, identité légale de la structure (émetteur des conventions). La matrice des permissions par rôle est définie dans `lib/permissions.ts`.
 
 ### Compte & offres
-Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST` par défaut, `LITE`, `PLUS`, `PRO`) qui conditionne l'import de documents par IA (Plus et Pro), les agents IA et les notifications WhatsApp (Pro) (`lib/usage-plans.ts`). Lite et Plus plafonnent les événements en cours (`DRAFT`, `PLANNING`, `LIVE`) à 1 et 3, comptés sur tous les espaces que l'utilisateur administre : création ou réactivation refusée (`403`) au-delà. Inviter dans l'espace ou sur un événement est réservé à Pro (et `BETA_TEST`). Ces refus répondent `403` avec `code: "PLAN_REQUIRED"` et `requiredPlan` (le plan qui débloque l'action), pour que le frontend propose le changement de plan.
+Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST` par défaut, `LITE`, `PLUS`, `PRO`) qui conditionne l'import de documents par IA (Plus et Pro), les agents IA (Pro) (`lib/usage-plans.ts`). Lite et Plus plafonnent les événements en cours (`DRAFT`, `PLANNING`, `LIVE`) à 1 et 3, comptés sur tous les espaces que l'utilisateur administre : création ou réactivation refusée (`403`) au-delà. Inviter dans l'espace ou sur un événement est réservé à Pro (et `BETA_TEST`). Ces refus répondent `403` avec `code: "PLAN_REQUIRED"` et `requiredPlan` (le plan qui débloque l'action), pour que le frontend propose le changement de plan.
 
 ### Personnes
 Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique de notes par contact, archivage logique.
@@ -312,7 +308,7 @@ Formulaire public d'inscription, candidatures à valider, postes et créneaux, r
 Gestion des tâches par événement avec statuts, priorités, catégories, assignés, commentaires et pièces jointes. Conducteur de show organisé en pistes et sections, avec dépendances entre éléments. Synchronisation bidirectionnelle tâche ↔ élément du conducteur de show (si la tâche est planifiée le même jour que l'événement). Export calendrier ICS avec abonnement via token public.
 
 ### Notifications & activité
-Paramètres de notification par événement (email, Discord, WhatsApp) et rappels envoyés par un worker périodique. Fil d'activité de l'espace, notifications in-app et préférences par utilisateur.
+Paramètres de notification par événement (email, Discord) et rappels envoyés par un worker périodique. Fil d'activité de l'espace, notifications in-app et préférences par utilisateur.
 
 Le fil couvre toutes les actions métier : événements, tâches, budget (y compris imports et synchronisation Shotgun), courses, participants et collaborateurs, conducteur, matériel (événement et catalogue), bénévoles (candidatures, plannings, échanges, pointage, repas, conventions), contacts, équipe et exercices comptables. Le catalogue des types, leur catégorie, la permission requise pour les lire et la préférence qui filtre leurs notifications sont centralisés dans `lib/activity-catalog.ts`. Les routes enregistrent l'activité via `lib/activity-recorder.ts`, sans jamais faire échouer l'action si l'écriture du fil échoue.
 
@@ -391,7 +387,7 @@ src/
 │   └── swagger.ts                # Plugin OpenAPI 3.0 / Swagger UI
 │
 ├── lib/                          # Helpers transverses : erreurs, permissions, offres, comptabilité,
-│                                 # calendrier ICS, emails, Discord, WhatsApp, Shotgun, chiffrement…
+│                                 # calendrier ICS, emails, Discord, Shotgun, chiffrement…
 │
 ├── dao/                          # Data Access Objects — une classe par modèle Prisma
 ├── repositories/                 # Requêtes domaine-spécifiques, orchestration des DAOs
