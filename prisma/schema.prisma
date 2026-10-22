@@ -94,6 +94,7 @@ enum UserRole {
 
 enum UsagePlan {
   BETA_TEST
+  NONE
   LITE
   PLUS
   PRO
@@ -279,6 +280,14 @@ model User {
   // permissions are granted exclusively by WorkspaceMember.role.
   role          UserRole  @default(VIEWER)
   usagePlan     UsagePlan @default(BETA_TEST)
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  subscriptionStatus   String?
+  subscriptionInterval String?
+  subscriptionPeriodEnd DateTime?
+  subscriptionCancelAtPeriodEnd Boolean @default(false)
+  trialStartedAt       DateTime?
+  trialEndsAt          DateTime?
   discordUserId String?   @unique
   defaultWorkspaceId String?
   defaultWorkspace   Workspace? @relation("DefaultWorkspace", fields: [defaultWorkspaceId], references: [id])
@@ -1574,4 +1583,11 @@ model Announcement {
   createdAt DateTime  @default(now())
 
   @@index([eventId])
+}
+
+// Stripe webhook deliveries already applied, so retries are acknowledged without replaying them.
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 }

@@ -32,6 +32,15 @@ test("Lite and Plus cap events in progress, closed events free a slot", async ()
   assert.equal((await createEvent(authorization)).statusCode, 201);
 });
 
+test("accounts without subscription keep closed events but cannot run one", async () => {
+  const { authorization } = await seedAdminSession("NONE");
+  assert.equal((await createEvent(authorization, "DONE")).statusCode, 201);
+  const refused = await createEvent(authorization);
+  assert.equal(refused.statusCode, 403);
+  assert.match(refused.body, /Choisis un abonnement/);
+  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "LITE");
+});
+
 test("events of another workspace the user administers count towards the cap", async () => {
   const { authorization, user } = await seedAdminSession("LITE");
   const other = await prisma.workspace.create({ data: { name: "Other", members: { create: { userId: user.id, role: "ADMIN" } } } });

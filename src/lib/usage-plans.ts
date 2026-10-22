@@ -5,11 +5,12 @@ export type PlanFeature = "ai.documentImport" | "ai.agents" | "team.invite";
 
 const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
   BETA_TEST: ["team.invite"],
+  NONE: [],
   LITE: [],
   PLUS: ["ai.documentImport"],
   PRO: ["ai.documentImport", "ai.agents", "team.invite"],
 };
-const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, LITE: 1, PLUS: 3, PRO: null };
+const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, NONE: 0, LITE: 1, PLUS: 3, PRO: null };
 export const activeEventStatuses: EventStatus[] = ["DRAFT", "PLANNING", "LIVE"];
 const upgradePath: UsagePlan[] = ["LITE", "PLUS", "PRO"];
 
@@ -26,6 +27,7 @@ export function requirePlanFeature(plan: UsagePlan, feature: PlanFeature) {
 
 export const usagePlanLabels: Record<UsagePlan, string> = {
   BETA_TEST: "Beta test",
+  NONE: "Sans abonnement",
   LITE: "Lite",
   PLUS: "Plus",
   PRO: "Pro",
@@ -42,6 +44,7 @@ export function requireActiveEventSlot(plan: UsagePlan, activeEvents: number) {
       const candidateLimit = activeEventLimits[candidate];
       return candidateLimit === null || candidateLimit > limit;
     }) ?? "PRO";
+    if (limit === 0) throw new PlanRequiredError(`Choisis un abonnement pour avoir un événement en cours, à partir du plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
     throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Clôture ou archive un événement, ou passe au plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
   }
 }
