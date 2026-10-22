@@ -9,7 +9,10 @@ import { EventRepository, type CollaboratorContext } from "../repositories/event
  * Applique les contrôles de permissions avant de déléguer au {@link EventRepository}.
  */
 export class EventService {
-  constructor(private readonly eventRepository: EventRepository) {}
+  constructor(
+    private readonly eventRepository: EventRepository,
+    private readonly onEventClosed?: (userId: string) => Promise<void>,
+  ) {}
 
   /**
    * Retourne la liste des événements de l'espace de travail.
@@ -71,11 +74,13 @@ export class EventService {
    */
   async update(id: string, workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, data: EventInput) {
     requireCan(role, "event.write");
-    if (activeEventLimit(usagePlan) !== null && activeEventStatuses.includes(data.status)
-      && !activeEventStatuses.includes(await this.eventRepository.findEventStatus(id, workspaceId))) {
+    const previousStatus = await this.eventRepository.findEventStatus(id, workspaceId);
+    if (activeEventLimit(usagePlan) !== null && activeEventStatuses.includes(data.status) && !activeEventStatuses.includes(previousStatus)) {
       await this.requireActiveEventSlot(userId, usagePlan);
     }
-    return this.eventRepository.updateEvent(id, workspaceId, userId, data);
+    const event = await this.eventRepository.updateEvent(id, workspaceId, userId, data);
+    if (data.status === "DONE" && previousStatus !== "DONE") await this.onEventClosed?.(userId);
+    return event;
   }
 
   /**

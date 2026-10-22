@@ -9,12 +9,16 @@ import { EventRepository } from "../repositories/event.repository.js";
 import { EventService } from "../services/event.service.js";
 import { ActivityRepository } from "../repositories/activity.repository.js";
 import { can } from "../lib/permissions.js";
+import { billingService } from "./billing.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const createVenueSchema = z.object({ name: requiredText("Le nom du lieu", LIMITS.name) });
 
+let log: FastifyInstance["log"] | undefined;
 const service = new EventService(
   new EventRepository(new EventDao(prisma), new VenueDao(prisma), new ActivityRepository(prisma)),
+  // A Stripe outage must not fail the event update that is already saved.
+  (userId) => billingService.endTrialAfterClosedEvent(userId).catch((error: unknown) => log?.error({ err: error, userId }, "Ending the trial after a closed event failed")),
 );
 
 export async function listVisibleEvents(request: FastifyRequest) {
@@ -33,6 +37,7 @@ export async function listVisibleEvents(request: FastifyRequest) {
 }
 
 export async function eventRoutes(fastify: FastifyInstance) {
+  log = fastify.log;
   fastify.get("/api/events", { config: { documentation: {  } } }, async (request) => listVisibleEvents(request));
 
   fastify.post("/api/events", { config: { documentation: { body: eventSchema, statusCodes: [201] } } }, async (request, reply) => {

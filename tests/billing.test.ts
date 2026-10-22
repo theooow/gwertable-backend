@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import type Stripe from "stripe";
 import { prisma } from "../src/prisma.js";
 import { stripe } from "../src/lib/stripe.js";
-import { json, request, seedAdminSession, setupTestApp } from "./helpers.js";
+import { eventPayload, json, request, seedAdminSession, setupTestApp } from "./helpers.js";
 
 setupTestApp();
 
@@ -102,4 +102,17 @@ test("subscribers change plan in the portal and accounts without customer have n
   assert.equal(json<{ url: string }>(response).url, "https://billing.stripe.test/p");
   assert.equal(portal?.flow_data?.type, "subscription_update");
   assert.equal(portal?.customer, "cus_abregi");
+});
+
+test("closing an event during the trial ends it", async () => {
+  const { authorization, user } = await seedAdminSession("PLUS");
+  await prisma.user.update({ where: { id: user.id }, data: { stripeCustomerId: "cus_abregi", stripeSubscriptionId: "sub_abregi", subscriptionStatus: "trialing" } });
+  const updates: Stripe.SubscriptionUpdateParams[] = [];
+  client.subscriptions.update = (async (_id: string, params: Stripe.SubscriptionUpdateParams) => { updates.push(params); return subscription({ status: "active" }); }) as never;
+  const event = json<{ id: string }>(await request("POST", "/api/events", authorization, eventPayload));
+
+  assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, name: "Renamed" })).statusCode, 200);
+  assert.equal(updates.length, 0);
+  assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, status: "DONE" })).statusCode, 200);
+  assert.deepEqual(updates, [{ trial_end: "now", proration_behavior: "none" }]);
 });
