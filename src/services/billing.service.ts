@@ -79,8 +79,8 @@ export class BillingService {
         metadata: { userId: user.id },
         ...(trial ? { trial_period_days: env.BILLING_TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: "cancel" } } } : {}),
       },
-      success_url: `${env.FRONTEND_URL}/settings?billing=success`,
-      cancel_url: `${env.FRONTEND_URL}/settings?billing=cancel`,
+      success_url: `${env.FRONTEND_URL}/settings?billing=success#subscription`,
+      cancel_url: `${env.FRONTEND_URL}/settings#subscription`,
     });
     if (!session.url) throw new ValidationError("La page de paiement n'a pas pu être créée.");
     return { url: session.url };
@@ -163,7 +163,7 @@ export class BillingService {
   }
 
   private async portal(customer: string, flow_data?: Stripe.BillingPortal.SessionCreateParams.FlowData) {
-    const session = await stripe().billingPortal.sessions.create({ customer, locale: "fr", return_url: `${env.FRONTEND_URL}/settings`, flow_data });
+    const session = await stripe().billingPortal.sessions.create({ customer, locale: "fr", return_url: `${env.FRONTEND_URL}/settings#subscription`, flow_data });
     return { url: session.url };
   }
 }
