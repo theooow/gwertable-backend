@@ -4,7 +4,7 @@ import { env } from "../env.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { stripe } from "../lib/stripe.js";
 import type { BillingRepository, BillingUser } from "../repositories/billing.repository.js";
-import type { CheckoutInput } from "../schemas/billing.js";
+import type { CheckoutInput, PortalInput } from "../schemas/billing.js";
 
 type PaidPlan = CheckoutInput["plan"];
 
@@ -55,13 +55,19 @@ export class BillingService {
 
   async startCheckout(userId: string, { plan, interval }: CheckoutInput) {
     const user = await this.repository.findUser(userId);
-    if (user.stripeCustomerId && user.stripeSubscriptionId && ENTITLED_STATUSES.has(user.subscriptionStatus ?? "")) {
-      // Existing subscribers switch plan in the portal, where Stripe handles proration.
-      return this.portal(user.stripeCustomerId, { type: "subscription_update", subscription_update: { subscription: user.stripeSubscriptionId } });
-    }
-
     const [price] = (await stripe().prices.list({ lookup_keys: [priceLookupKey(plan, interval)], active: true, limit: 1 })).data;
     if (!price) throw new ValidationError("Ce plan n'est pas encore disponible au paiement.");
+    if (user.stripeCustomerId && user.stripeSubscriptionId && ENTITLED_STATUSES.has(user.subscriptionStatus ?? "")) {
+      // Subscribers confirm the new price in the portal, where Stripe handles proration.
+      const [item] = (await stripe().subscriptions.retrieve(user.stripeSubscriptionId)).items.data;
+      if (!item) throw new ValidationError("Cet abonnement ne peut pas changer de plan.");
+      return this.portal(user.stripeCustomerId, {
+        type: "subscription_update_confirm",
+        subscription_update_confirm: { subscription: user.stripeSubscriptionId, items: [{ id: item.id, price: price.id, quantity: 1 }] },
+        after_completion: { type: "redirect", redirect: { return_url: `${env.FRONTEND_URL}/settings?billing=updated#subscription` } },
+      });
+    }
+
     const trial = !user.trialStartedAt && env.BILLING_TRIAL_DAYS > 0;
     const session = await stripe().checkout.sessions.create({
       mode: "subscription",
@@ -86,10 +92,15 @@ export class BillingService {
     return { url: session.url };
   }
 
-  async openPortal(userId: string) {
+  async openPortal(userId: string, { flow }: PortalInput) {
     const user = await this.repository.findUser(userId);
     if (!user.stripeCustomerId) throw new NotFoundError("Aucun abonnement à gérer pour ce compte.");
-    return this.portal(user.stripeCustomerId);
+    const subscription = user.stripeSubscriptionId;
+    if (flow === "manage" || !subscription || !ENTITLED_STATUSES.has(user.subscriptionStatus ?? "")) return this.portal(user.stripeCustomerId);
+    const back = { type: "redirect" as const, redirect: { return_url: `${env.FRONTEND_URL}/settings#subscription` } };
+    return this.portal(user.stripeCustomerId, flow === "cancel"
+      ? { type: "subscription_cancel", subscription_cancel: { subscription }, after_completion: back }
+      : { type: "subscription_update", subscription_update: { subscription }, after_completion: back });
   }
 
   async handleWebhook(payload: Buffer, signature: string | undefined) {

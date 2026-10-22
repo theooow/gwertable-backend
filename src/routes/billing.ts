@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../prisma.js";
 import { BillingRepository } from "../repositories/billing.repository.js";
-import { checkoutSchema, stripeEventSchema } from "../schemas/billing.js";
+import { checkoutSchema, portalSchema, stripeEventSchema } from "../schemas/billing.js";
 import { BillingService } from "../services/billing.service.js";
 
 export const billingService = new BillingService(new BillingRepository(prisma));
@@ -15,8 +15,8 @@ export async function billingRoutes(fastify: FastifyInstance) {
     return billingService.startCheckout(request.user!.id, checkoutSchema.parse(request.body));
   });
 
-  fastify.post("/api/billing/portal", { config: { documentation: {} } }, async (request) => {
-    return billingService.openPortal(request.user!.id);
+  fastify.post("/api/billing/portal", { config: { documentation: { body: portalSchema } } }, async (request) => {
+    return billingService.openPortal(request.user!.id, portalSchema.parse(request.body ?? {}));
   });
 
   await fastify.register(async (webhook) => {

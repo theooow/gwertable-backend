@@ -98,10 +98,19 @@ test("subscribers change plan in the portal and accounts without customer have n
   await prisma.user.update({ where: { id: user.id }, data: { stripeCustomerId: "cus_abregi", stripeSubscriptionId: "sub_abregi", subscriptionStatus: "active", trialStartedAt: new Date() } });
   let portal: Stripe.BillingPortal.SessionCreateParams | undefined;
   client.billingPortal.sessions.create = (async (params: Stripe.BillingPortal.SessionCreateParams) => { portal = params; return { url: "https://billing.stripe.test/p" }; }) as never;
+  client.prices.list = stub({ data: [{ id: "price_pro_month" }] });
+  client.subscriptions.retrieve = stub({ items: { data: [{ id: "si_abregi" }] } });
   const response = await request("POST", "/api/billing/checkout", authorization, { plan: "PRO" });
   assert.equal(json<{ url: string }>(response).url, "https://billing.stripe.test/p");
-  assert.equal(portal?.flow_data?.type, "subscription_update");
   assert.equal(portal?.customer, "cus_abregi");
+  assert.equal(portal?.flow_data?.type, "subscription_update_confirm");
+  assert.deepEqual(portal?.flow_data?.subscription_update_confirm?.items, [{ id: "si_abregi", price: "price_pro_month", quantity: 1 }]);
+
+  await request("POST", "/api/billing/portal", authorization, { flow: "cancel" });
+  assert.equal(portal?.flow_data?.type, "subscription_cancel");
+  assert.equal(portal?.flow_data?.subscription_cancel?.subscription, "sub_abregi");
+  await request("POST", "/api/billing/portal", authorization, {});
+  assert.equal(portal?.flow_data, undefined);
 });
 
 test("closing an event during the trial ends it", async () => {
