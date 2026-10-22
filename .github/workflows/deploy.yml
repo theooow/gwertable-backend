@@ -201,6 +201,9 @@ jobs:
                   SMTP_SECURE: "${SMTP_SECURE:-false}"
                   SMTP_USER: "${SMTP_USER:-}"
                   SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+                  STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+                  STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+                  STRIPE_AUTOMATIC_TAX: "${STRIPE_AUTOMATIC_TAX:-false}"
                 expose:
                   - "4000"
                 volumes:
