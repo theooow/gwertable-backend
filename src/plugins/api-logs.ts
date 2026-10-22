@@ -37,7 +37,7 @@ export const apiLogsPlugin = fp(async (app) => {
         workspaceId: request.workspaceId || null,
         action: logAction(request.method, route, reply.statusCode),
         query: sanitizeLog({ query: request.query, params: request.params }),
-        requestBody: route.includes("/volunteers") ? "[données bénévoles omises]" : sanitizeLog(request.body), responseBody: response?.body ?? "[réponse sans corps]",
+        requestBody: route.includes("/volunteers") ? "[données bénévoles omises]" : route.includes("/billing/webhook") ? "[événement Stripe omis]" : sanitizeLog(request.body), responseBody: response?.body ?? "[réponse sans corps]",
       } });
     } catch {
       app.log.error({ requestId: request.id }, "API journal persistence failed");

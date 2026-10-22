@@ -73,6 +73,7 @@ export const swaggerPlugin = fp(async (fastify) => {
         { name: "Notifications", description: "Notifications des événements" },
         { name: "OAuth", description: "Serveur d'autorisation OAuth 2.1 des agents IA (PKCE, enregistrement dynamique)" },
         { name: "MCP", description: "Serveur Model Context Protocol pour agents IA (token d'API personnel)" },
+        { name: "Abonnement", description: "Abonnement Stripe : paiement, espace client et webhook" },
         { name: "Administration", description: "Accès réservé aux administrateurs de la plateforme" },
       ],
     },

@@ -37,6 +37,15 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   NOTIFICATION_REMINDER_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(5),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Off while the business is under the VAT franchise (art. 293 B du CGI).
+  STRIPE_AUTOMATIC_TAX: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  STRIPE_INVOICE_FOOTER: z.string().default("TVA non applicable, art. 293 B du CGI"),
+  BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(60),
 });
 
 export const env = envSchema.parse(process.env);

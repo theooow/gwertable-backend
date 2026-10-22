@@ -84,6 +84,7 @@ export function isPublicRoute(url: string): boolean {
     url.startsWith("/api/public/volunteers/") ||
     url.startsWith("/api/public/tracking/") ||
     url.startsWith("/api/public/budget-trial") ||
+    url.startsWith("/api/public/billing/") ||
     url.startsWith("/docs") ||
     url.startsWith("/documentation") ||
     url.startsWith("/uploads/receipts/") ||

@@ -148,6 +148,12 @@ const groups: Record<string, [string, string][]> = {
     ["POST /api/public/budget-trial/:token/unsubscribe", "Ne plus recevoir de rappel pour l'essai"],
     ["POST /api/budget-trial/:token/claim", "Créer le premier événement et son budget prévisionnel depuis l'essai"],
   ],
+  Abonnement: [
+    ["GET /api/billing/subscription", "Consulter l'abonnement du compte et la disponibilité de l'essai"],
+    ["POST /api/billing/checkout", "Ouvrir la page de paiement Stripe d'un plan, ou le changement de plan pour un abonné"],
+    ["POST /api/billing/portal", "Ouvrir l'espace client Stripe (factures, carte, résiliation)"],
+    ["POST /api/public/billing/webhook", "Recevoir un événement Stripe signé et synchroniser l'abonnement"],
+  ],
   "Suivi produit": [
     ["POST /api/public/tracking/landing", "Enregistrer une visite anonyme de la page d'accueil et sa provenance"],
     ["POST /api/tracking/events", "Enregistrer un signal d'usage du budget (ouverture, simulation, export)"],

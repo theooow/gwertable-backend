@@ -137,6 +137,11 @@ Interface web MailHog : `http://localhost:8025`
 | `SUPER_PDP_REDIRECT_URI` | `https://www.abregi.com/api/integrations/super-pdp/oauth/callback` | URL de retour OAuth |
 | `SUPER_PDP_SCOPES` | — | Scopes OAuth demandés |
 | `PDP_CREDENTIAL_ENCRYPTION_KEY` | — | Clé de chiffrement des tokens OAuth (32 octets base64 ou 64 caractères hex) |
+| `STRIPE_SECRET_KEY` | — | Clé secrète (ou restreinte) Stripe ; sans elle, le paiement en ligne est indisponible |
+| `STRIPE_WEBHOOK_SECRET` | — | Secret de signature du webhook `POST /api/public/billing/webhook` |
+| `STRIPE_AUTOMATIC_TAX` | `false` | `true` active Stripe Tax au paiement (à activer en sortie de franchise de TVA) |
+| `STRIPE_INVOICE_FOOTER` | `TVA non applicable, art. 293 B du CGI` | Pied de page des factures Stripe des nouveaux clients |
+| `BILLING_TRIAL_DAYS` | `60` | Durée de l'essai gratuit (carte requise), proposé une seule fois par compte |
 | `DISABLE_ERD` | — | `true` désactive la génération du diagramme ERD (CI, Docker) |
 
 ---
@@ -250,7 +255,7 @@ Un `inviteToken` optionnel peut être fourni aux routes de connexion et d'inscri
 
 ### Routes publiques
 
-Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, la mesure d'audience de la page d'accueil `/api/public/tracking/landing`, l'essai du dashboard budget `/api/public/budget-trial/*`, l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
+Sans authentification : `/health`, `/docs`, les routes de connexion et d'inscription (sauf `/me` et `/logout`), les portails bénévoles `/api/public/volunteers/*`, la mesure d'audience de la page d'accueil `/api/public/tracking/landing`, l'essai du dashboard budget `/api/public/budget-trial/*`, le webhook Stripe `/api/public/billing/webhook` (authentifié par sa signature), l'abonnement calendrier `/calendar/tasks/:token` et la lecture des fichiers `/uploads/*` (hors documents de contacts).
 
 ### Multi-tenant
 
@@ -287,7 +292,12 @@ Vérification : `node --import tsx --import ./tests/setup-env.ts --test tests/sw
 Gestion multi-tenant : création d'espaces, gestion des membres avec rôles (`ADMIN`, `ORGANIZER`, `TREASURER`, `VOLUNTEER`, `ARTIST`, `VIEWER`), invitations par email, transfert de contacts entre espaces, logo et couleur des emails, identité légale de la structure (émetteur des conventions). La matrice des permissions par rôle est définie dans `lib/permissions.ts`.
 
 ### Compte & offres
-Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST` par défaut, `LITE`, `PLUS`, `PRO`) qui conditionne l'import de documents par IA (Plus et Pro), les agents IA (Pro) (`lib/usage-plans.ts`). Lite et Plus plafonnent les événements en cours (`DRAFT`, `PLANNING`, `LIVE`) à 1 et 3, comptés sur tous les espaces que l'utilisateur administre : création ou réactivation refusée (`403`) au-delà. Inviter dans l'espace ou sur un événement est réservé à Pro (et `BETA_TEST`). Ces refus répondent `403` avec `code: "PLAN_REQUIRED"` et `requiredPlan` (le plan qui débloque l'action), pour que le frontend propose le changement de plan.
+Profil, préférences (thème, langue, devise, fuseau horaire), espace actif et suppression du compte. Chaque utilisateur dispose d'une offre (`BETA_TEST` par défaut, `NONE` après la fin d'un abonnement, `LITE`, `PLUS`, `PRO`) qui conditionne l'import de documents par IA (Plus et Pro), les agents IA (Pro) (`lib/usage-plans.ts`). Lite et Plus plafonnent les événements en cours (`DRAFT`, `PLANNING`, `LIVE`) à 1 et 3, comptés sur tous les espaces que l'utilisateur administre : création ou réactivation refusée (`403`) au-delà. Inviter dans l'espace ou sur un événement est réservé à Pro (et `BETA_TEST`). Ces refus répondent `403` avec `code: "PLAN_REQUIRED"` et `requiredPlan` (le plan qui débloque l'action), pour que le frontend propose le changement de plan.
+
+### Abonnement
+Paiement par Stripe Billing (`services/billing.service.ts`). `POST /api/billing/checkout` ouvre Stripe Checkout hébergé pour un plan (`month` ou `year`) ; les prix sont retrouvés par `lookup_key` (`abregi_<plan>_monthly|yearly`), identiques en test et en live. Le premier abonnement inclut un essai de `BILLING_TRIAL_DAYS` jours avec carte, qui se termine plus tôt dès qu'un événement passe à `DONE`. Un abonné qui relance le checkout est envoyé vers le changement de plan du Customer Portal, et `POST /api/billing/portal` ouvre l'espace client (factures, carte, résiliation en fin de période). Le webhook vérifie la signature sur le corps brut, relit l'abonnement chez Stripe puis met à jour `usagePlan` : `trialing`, `active` et `past_due` donnent le plan payé, les autres statuts `NONE`. Les événements déjà traités sont ignorés (`StripeEvent`).
+
+En local : `stripe listen --forward-to localhost:4000/api/public/billing/webhook` fournit `STRIPE_WEBHOOK_SECRET`. En ligne, le webhook passe par le frontend (`/api/stripe/webhook`) et écoute `checkout.session.completed` et `customer.subscription.*`.
 
 ### Personnes
 Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique de notes par contact, archivage logique.
