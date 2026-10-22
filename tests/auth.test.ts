@@ -333,6 +333,7 @@ describe("auth and health routes", () => {
       data: {
         email: "owner@abregi.test",
         role: "ADMIN",
+        usagePlan: "PRO",
         defaultWorkspaceId: workspace.id,
         workspaceMemberships: {
           create: { workspaceId: workspace.id, role: "ADMIN" },

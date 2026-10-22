@@ -43,7 +43,7 @@ describe("admin routes", () => {
     const overview = await request("GET", "/api/admin/overview", authorization);
     assert.equal(overview.statusCode, 200);
     const overviewPayload = json<{ users: Array<{ id: string; usagePlan: string }> }>(overview);
-    assert.equal(overviewPayload.users.find((user) => user.id === target.id)?.usagePlan, "BETA_TEST");
+    assert.equal(overviewPayload.users.find((user) => user.id === target.id)?.usagePlan, "NONE");
 
     const updated = await request("PATCH", `/api/admin/users/${target.id}/plan`, authorization, {
       usagePlan: "PRO",

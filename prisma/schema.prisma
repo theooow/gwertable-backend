@@ -279,7 +279,7 @@ model User {
   // Legacy account-level field. It is no longer used for authorisation:
   // permissions are granted exclusively by WorkspaceMember.role.
   role          UserRole  @default(VIEWER)
-  usagePlan     UsagePlan @default(BETA_TEST)
+  usagePlan     UsagePlan @default(NONE)
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   subscriptionStatus   String?
