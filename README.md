@@ -140,7 +140,7 @@ Interface web MailHog : `http://localhost:8025`
 | `STRIPE_SECRET_KEY` | — | Clé secrète (ou restreinte) Stripe ; sans elle, le paiement en ligne est indisponible |
 | `STRIPE_WEBHOOK_SECRET` | — | Secret de signature du webhook `POST /api/public/billing/webhook` |
 | `STRIPE_AUTOMATIC_TAX` | `false` | `true` active Stripe Tax au paiement (à activer en sortie de franchise de TVA) |
-| `STRIPE_INVOICE_FOOTER` | `TVA non applicable, art. 293 B du CGI` | Pied de page des factures Stripe des nouveaux clients |
+| `STRIPE_INVOICE_FOOTER` | — | Remplace, pour les nouveaux clients, le pied de page du compte Stripe (mentions légales et TVA, réglé dans le Dashboard) |
 | `BILLING_TRIAL_DAYS` | `60` | Durée de l'essai gratuit (carte requise), proposé une seule fois par compte |
 | `DISABLE_ERD` | — | `true` désactive la génération du diagramme ERD (CI, Docker) |
 

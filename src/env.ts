@@ -44,7 +44,8 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  STRIPE_INVOICE_FOOTER: z.string().default("TVA non applicable, art. 293 B du CGI"),
+  // Overrides the account footer set in the Stripe Dashboard, which carries the legal mentions.
+  STRIPE_INVOICE_FOOTER: z.string().optional(),
   BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).default(60),
 });
 
