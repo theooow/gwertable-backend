@@ -28,6 +28,7 @@ export async function resetDatabase() {
       "RunOfShowItem",
       "Session",
       "Shift",
+      "StripeEvent",
       "ShoppingItem",
       "Supplier",
       "Task",
