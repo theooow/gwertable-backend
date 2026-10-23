@@ -85,8 +85,8 @@ export class BillingService {
         metadata: { userId: user.id },
         ...(trial ? { trial_period_days: env.BILLING_TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: "cancel" } } } : {}),
       },
-      success_url: `${env.FRONTEND_URL}/settings?billing=success#subscription`,
-      cancel_url: `${env.FRONTEND_URL}/settings#subscription`,
+      success_url: `${env.FRONTEND_URL}/abonnement?billing=success`,
+      cancel_url: `${env.FRONTEND_URL}/abonnement`,
     });
     if (!session.url) throw new ValidationError("La page de paiement n'a pas pu être créée.");
     return { url: session.url };
