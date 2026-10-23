@@ -101,7 +101,7 @@ describe("shotgun integration", () => {
     }
   });
 
-  it("lists every upcoming and past organizer event when no search is given", async () => {
+  it("lists every valid upcoming and past organizer event when no search is given", async () => {
     const originalFetch = globalThis.fetch;
     const requested: URL[] = [];
     const shotgunEvent = (id: number, startTime: string) => ({ id, name: `Event ${id}`, startTime, endTime: null, slug: `event-${id}`, description: null, coverUrl: null, url: null, deals: [] });
@@ -109,7 +109,7 @@ describe("shotgun integration", () => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       requested.push(url);
       const past = url.searchParams.get("past_events") === "true";
-      const data = past ? [shotgunEvent(1, "2025-01-10T20:00:00.000Z")] : [shotgunEvent(2, "2030-01-10T20:00:00.000Z")];
+      const data = past ? [shotgunEvent(1, "2025-01-10T20:00:00.000Z"), { id: 3, name: null }] : [shotgunEvent(2, "2030-01-10T20:00:00.000Z")];
       return new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
     };
 

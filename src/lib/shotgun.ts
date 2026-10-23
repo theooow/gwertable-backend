@@ -37,7 +37,7 @@ const shotgunEventSchema = z.object({
 }));
 
 const shotgunEventsResponseSchema = z.object({
-  data: z.array(shotgunEventSchema),
+  data: z.array(z.unknown()),
 });
 
 const shotgunTicketSchema = z.object({
@@ -126,17 +126,23 @@ export async function fetchShotgunEvents(config: ShotgunWorkspaceConfig, query: 
 
   const payload = await fetchShotgunJson(url);
   const parsed = shotgunEventsResponseSchema.parse(payload);
-  return parsed.data;
+  // One malformed event in the organizer history must not hide all the others.
+  return parsed.data.flatMap((item) => {
+    const shotgunEvent = shotgunEventSchema.safeParse(item);
+    return shotgunEvent.success ? [shotgunEvent.data] : [];
+  });
 }
 
 /** Événements à venir et passés de l'organisateur, filtrés par nom si une recherche est donnée. */
 export async function fetchShotgunEventsForSearch(config: ShotgunWorkspaceConfig, query?: string) {
-  const [futureEvents, pastEvents] = await Promise.all([
+  const results = await Promise.allSettled([
     fetchShotgunEvents(config, { name: query }),
     fetchShotgunEvents(config, { name: query, pastEvents: true }),
   ]);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure && results.every((result) => result.status === "rejected")) throw failure.reason;
 
-  const all = [...futureEvents, ...pastEvents];
+  const all = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
   return all.filter((shotgunEvent, index, array) => array.findIndex((candidate) => candidate.id === shotgunEvent.id) === index);
 }
 
