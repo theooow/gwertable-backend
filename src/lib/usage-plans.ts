@@ -67,7 +67,7 @@ export function requireActiveEventSlot(plan: UsagePlan, activeEvents: number) {
       return candidateLimit === null || candidateLimit > limit;
     }) ?? "PRO";
     if (limit === 0) throw new PlanRequiredError(`Choisis un abonnement pour avoir un événement en cours, à partir du plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
-    throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Clôture ou archive un événement, ou passe au plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
+    throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Archive un événement ou passe au plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
   }
 }
 
