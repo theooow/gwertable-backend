@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { json, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
+import { json, pastEventDates, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
 import { prisma } from "../src/prisma.js";
 
 setupTestApp();
@@ -23,7 +23,7 @@ type Report = {
 
 async function seed() {
   const { authorization } = await seedAdminSession("PRO");
-  const { event } = await seedEventContext(authorization);
+  const { event } = await seedEventContext(authorization, pastEventDates);
   const base = `/api/events/${event.id}`;
   await request("POST", `${base}/expenses`, authorization, { label: "Salle", amount: "500", category: "lieu", reimbursement: "NOT_OWED", paidAt: "2026-05-20", receiptUrl: "/api/uploads/receipts/salle.pdf" });
   await request("POST", `${base}/expenses`, authorization, { label: "Imprevus", amount: "200", category: "autre", phase: "FORECAST" });
@@ -37,7 +37,7 @@ describe("accounting", () => {
   it("reserves income statements to the Pro plan", async () => {
     for (const plan of ["PLUS", "BETA_TEST"] as const) {
       const { authorization } = await seedAdminSession(plan);
-      const { event } = await seedEventContext(authorization);
+      const { event } = await seedEventContext(authorization, pastEventDates);
       for (const url of ["/api/accounting/fiscal-years", `/api/events/${event.id}/accounting`]) {
         const response = await request("GET", url, authorization);
         assert.equal(response.statusCode, 403, url);

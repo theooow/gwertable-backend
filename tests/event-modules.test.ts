@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { json, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
+import { json, pastEventDates, request, seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
 import { prisma } from "../src/prisma.js";
 
 setupTestApp();
@@ -8,7 +8,7 @@ setupTestApp();
 describe("event module routes", () => {
   it("covers participants, tasks, expenses, shopping and people search", async () => {
     const { authorization } = await seedAdminSession();
-    const { person, event } = await seedEventContext(authorization);
+    const { person, event } = await seedEventContext(authorization, pastEventDates);
     const secondPerson = await prisma.person.create({
       data: {
         workspaceId: event.workspaceId,

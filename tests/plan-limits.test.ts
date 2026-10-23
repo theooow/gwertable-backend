@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { prisma } from "../src/prisma.js";
-import { eventPayload, json, request, seedAdminSession, setupTestApp } from "./helpers.js";
+import { eventPayload, json, pastEventDates, request, seedAdminSession, setupTestApp } from "./helpers.js";
 
 setupTestApp();
 
-const createEvent = (authorization: string, status = "PLANNING") => request("POST", "/api/events", authorization, { ...eventPayload, status });
+const createEvent = (authorization: string, dates: Partial<typeof pastEventDates> = {}) => request("POST", "/api/events", authorization, { ...eventPayload, ...dates });
 
 test("Lite and Plus cap events in progress, closed events free a slot", async () => {
   const { authorization, user } = await seedAdminSession("LITE");
@@ -15,7 +15,7 @@ test("Lite and Plus cap events in progress, closed events free a slot", async ()
   assert.match(refused.body, /plan Lite est limité à 1 événement en cours/);
   assert.equal(json<{ code: string }>(refused).code, "PLAN_REQUIRED");
   assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PLUS");
-  assert.equal((await createEvent(authorization, "DONE")).statusCode, 201);
+  assert.equal((await createEvent(authorization, pastEventDates)).statusCode, 201);
 
   await request("PUT", `/api/events/${first.id}`, authorization, { ...eventPayload, status: "ARCHIVED" });
   const second = await createEvent(authorization);
@@ -34,7 +34,7 @@ test("Lite and Plus cap events in progress, closed events free a slot", async ()
 
 test("accounts without subscription keep closed events but cannot run one", async () => {
   const { authorization } = await seedAdminSession("NONE");
-  assert.equal((await createEvent(authorization, "DONE")).statusCode, 201);
+  assert.equal((await createEvent(authorization, pastEventDates)).statusCode, 201);
   const refused = await createEvent(authorization);
   assert.equal(refused.statusCode, 403);
   assert.match(refused.body, /Choisis un abonnement/);

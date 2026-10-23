@@ -1,5 +1,6 @@
 import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
+import { resolveEventStatus } from "../lib/event-status.js";
 import { activeEventLimit, activeEventStatuses, requireActiveEventSlot } from "../lib/usage-plans.js";
 import type { EventInput } from "../schemas/event.js";
 import { EventRepository, type CollaboratorContext } from "../repositories/event.repository.js";
@@ -56,8 +57,9 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture ou si le plan n'a plus d'événement en cours disponible
    * @throws {NotFoundError} Si le lieu spécifié est introuvable
    */
-  async create(workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, data: EventInput) {
+  async create(workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, input: EventInput) {
     requireCan(role, "event.write");
+    const data = { ...input, status: resolveEventStatus({ ...input, status: "PLANNING" }) };
     if (activeEventStatuses.includes(data.status)) await this.requireActiveEventSlot(userId, usagePlan);
     return this.eventRepository.createEvent(workspaceId, userId, data);
   }
@@ -72,8 +74,9 @@ export class EventService {
    * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
    * @throws {NotFoundError} Si l'événement ou le lieu est introuvable
    */
-  async update(id: string, workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, data: EventInput) {
+  async update(id: string, workspaceId: string, role: UserRole, userId: string, usagePlan: UsagePlan, input: EventInput) {
     requireCan(role, "event.write");
+    const data = { ...input, status: resolveEventStatus(input) };
     const previousStatus = await this.eventRepository.findEventStatus(id, workspaceId);
     if (activeEventLimit(usagePlan) !== null && activeEventStatuses.includes(data.status) && !activeEventStatuses.includes(previousStatus)) {
       await this.requireActiveEventSlot(userId, usagePlan);

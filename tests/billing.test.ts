@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import type Stripe from "stripe";
 import { prisma } from "../src/prisma.js";
 import { stripe } from "../src/lib/stripe.js";
-import { eventPayload, json, request, seedAdminSession, setupTestApp } from "./helpers.js";
+import { eventPayload, json, pastEventDates, request, seedAdminSession, setupTestApp } from "./helpers.js";
 import { expirePlanGrants } from "../src/workers/retention-worker.js";
 
 setupTestApp();
@@ -123,7 +123,7 @@ test("closing an event during the trial ends it", async () => {
 
   assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, name: "Renamed" })).statusCode, 200);
   assert.equal(updates.length, 0);
-  assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, status: "DONE" })).statusCode, 200);
+  assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, ...pastEventDates })).statusCode, 200);
   assert.deepEqual(updates, [{ trial_end: "now", proration_behavior: "none" }]);
 });
 

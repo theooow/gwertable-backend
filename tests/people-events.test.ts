@@ -152,7 +152,7 @@ describe("people and event routes", () => {
     assert.equal(personById.statusCode, 404);
   });
 
-  it("marks events whose date has passed as done", async () => {
+  it("derives the event status from its dates and keeps archived events", async () => {
     const { authorization } = await seedAdminSession();
     const day = 24 * 60 * 60 * 1000;
     const iso = (offset: number) => new Date(Date.now() + offset).toISOString();
@@ -163,7 +163,8 @@ describe("people and event routes", () => {
     const startedYesterdayNoEnd = await create("No end, old", iso(-2 * day), null, "PLANNING");
     const startedRecentlyNoEnd = await create("No end, recent", iso(-60 * 60 * 1000), null);
     const upcoming = await create("Upcoming", iso(day), iso(2 * day), "PLANNING");
-    const archived = await create("Archived", iso(-2 * day), iso(-day), "ARCHIVED");
+    const archived = await create("Archived", iso(-2 * day), iso(-day));
+    await request("PUT", `/api/events/${archived}`, authorization, { name: "Archived", startsAt: iso(-2 * day), endsAt: iso(-day), status: "ARCHIVED" });
 
     const events = json<Array<{ id: string; status: string }>>(await request("GET", "/api/events", authorization));
     const statusOf = (id: string) => events.find((event) => event.id === id)?.status;
@@ -172,5 +173,8 @@ describe("people and event routes", () => {
     assert.equal(statusOf(startedRecentlyNoEnd), "LIVE");
     assert.equal(statusOf(upcoming), "PLANNING");
     assert.equal(statusOf(archived), "ARCHIVED");
+
+    const moved = json<{ status: string }>(await request("PUT", `/api/events/${ended}`, authorization, { name: "Ended", startsAt: iso(day), endsAt: iso(2 * day), status: "DONE" }));
+    assert.equal(moved.status, "PLANNING");
   });
 });

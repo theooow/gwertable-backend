@@ -125,13 +125,16 @@ export const personPayload = {
 
 export const eventPayload = {
   name: "Release Party",
-  startsAt: "2026-06-01T20:00:00.000Z",
-  endsAt: "2026-06-02T02:00:00.000Z",
+  startsAt: "2030-06-01T20:00:00.000Z",
+  endsAt: "2030-06-02T02:00:00.000Z",
   status: "PLANNING",
   description: "Soiree de lancement",
 };
 
-export async function seedEventContext(authorization: string) {
+/** Dates of the June 2026 release party that dated fixtures (fiscal year, schedules) refer to. */
+export const pastEventDates = { startsAt: "2026-06-01T20:00:00.000Z", endsAt: "2026-06-02T02:00:00.000Z" };
+
+export async function seedEventContext(authorization: string, eventOverrides: Partial<typeof eventPayload> = {}) {
   const createdPerson = await request("POST", "/api/people", authorization, personPayload);
   const person = json<{ id: string; fullName: string }>(createdPerson);
 
@@ -142,6 +145,7 @@ export async function seedEventContext(authorization: string) {
 
   const createdEvent = await request("POST", "/api/events", authorization, {
     ...eventPayload,
+    ...eventOverrides,
     venueId: venue.id,
   });
   const event = json<{ id: string; name: string; workspaceId: string }>(createdEvent);

@@ -81,7 +81,7 @@ export class EventRepository {
    * @param collaborator - Contexte collaborateur si l'utilisateur est en mode `eventScoped`
    */
   async listEvents(workspaceId: string, collaborator?: CollaboratorContext) {
-    await this.eventDao.completePastEvents(workspaceId);
+    await this.eventDao.syncDateStatuses(workspaceId);
     if (collaborator) {
       const ids = await this.eventDao.findCollaboratorEventIds(
         workspaceId,
@@ -115,7 +115,7 @@ export class EventRepository {
       if (!hasAccess) throw new NotFoundError("Evenement introuvable");
     }
 
-    await this.eventDao.completePastEvents(workspaceId);
+    await this.eventDao.syncDateStatuses(workspaceId);
     const event = await this.eventDao.findById(id, workspaceId);
     if (!event) throw new NotFoundError("Evenement introuvable");
     return event;

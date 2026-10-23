@@ -2,9 +2,8 @@ import type { PrismaClient } from "@prisma/client";
 import { EventStatus, TicketSource } from "@prisma/client";
 import type { EventInput } from "../schemas/event.js";
 import { activeEventStatuses } from "../lib/usage-plans.js";
+import { EVENT_DEFAULT_DURATION_MS } from "../lib/event-status.js";
 import { BaseDao } from "./base.dao.js";
-
-const EVENT_DEFAULT_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const listInclude = {
   venue: { select: { fullName: true, address: true } },
@@ -164,24 +163,32 @@ export class EventDao extends BaseDao {
   }
 
   /**
-   * Passe en `DONE` les événements dont la date est dépassée.
+   * Fait suivre aux événements non archivés le statut donné par leurs dates :
+   * à venir (`PLANNING`), en cours (`LIVE`) puis terminé (`DONE`).
    * Sans date de fin, un événement est considéré terminé 24 h après son début.
    *
    * @param workspaceId - Identifiant de l'espace de travail
    * @param now - Date de référence
    */
-  async completePastEvents(workspaceId: string, now: Date = new Date()) {
-    return this.prisma.event.updateMany({
-      where: {
-        workspaceId,
-        status: { in: [EventStatus.DRAFT, EventStatus.PLANNING, EventStatus.LIVE] },
-        OR: [
-          { endsAt: { lt: now } },
-          { endsAt: null, startsAt: { lt: new Date(now.getTime() - EVENT_DEFAULT_DURATION_MS) } },
-        ],
-      },
-      data: { status: EventStatus.DONE },
-    });
+  async syncDateStatuses(workspaceId: string, now: Date = new Date()) {
+    const ended = [
+      { endsAt: { lte: now } },
+      { endsAt: null, startsAt: { lte: new Date(now.getTime() - EVENT_DEFAULT_DURATION_MS) } },
+    ];
+    await this.prisma.$transaction([
+      this.prisma.event.updateMany({
+        where: { workspaceId, status: { in: [EventStatus.DRAFT, EventStatus.PLANNING, EventStatus.LIVE] }, OR: ended },
+        data: { status: EventStatus.DONE },
+      }),
+      this.prisma.event.updateMany({
+        where: { workspaceId, status: { in: [EventStatus.DRAFT, EventStatus.PLANNING, EventStatus.DONE] }, startsAt: { lte: now }, NOT: { OR: ended } },
+        data: { status: EventStatus.LIVE },
+      }),
+      this.prisma.event.updateMany({
+        where: { workspaceId, status: { in: [EventStatus.DRAFT, EventStatus.LIVE, EventStatus.DONE] }, startsAt: { gt: now } },
+        data: { status: EventStatus.PLANNING },
+      }),
+    ]);
   }
 
   /**
