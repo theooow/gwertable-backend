@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { PersonInput } from "../schemas/person.js";
 import { NotFoundError } from "../lib/errors.js";
+import { removeUploadedFiles } from "../lib/upload-files.js";
 import { PersonDao, type PersonFilters } from "../dao/person.dao.js";
 
 /**
@@ -111,6 +112,55 @@ export class PersonRepository {
   async archive(id: string, workspaceId: string) {
     await this.personDao.findByIdOrThrow(id, workspaceId);
     return this.personDao.setArchivedAt(id, workspaceId, new Date());
+  }
+
+  /**
+   * Efface une personne à la demande (droit à l'effacement).
+   * Supprime la fiche, ou l'anonymise lorsqu'un contrat de bénévolat, une annonce
+   * ou un compte utilisateur doit être conservé. Les montants budgétaires restent.
+   *
+   * @param id - Identifiant de la personne
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @throws {NotFoundError} Si la personne est introuvable
+   */
+  async erase(id: string, workspaceId: string): Promise<"deleted" | "anonymized"> {
+    const person = await this.prisma.person.findFirst({
+      where: { id, workspaceId, anonymizedAt: null },
+      include: { user: { select: { id: true } }, documents: true, _count: { select: { volunteerContracts: true, announcements: true } } },
+    });
+    if (!person) throw new NotFoundError("Personne introuvable");
+    const keep = Boolean(person.user) || person._count.volunteerContracts > 0 || person._count.announcements > 0;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.activityEntry.deleteMany({ where: { workspaceId, entityType: "PERSON", entityId: id } });
+      if (keep) {
+        await tx.personDocument.deleteMany({ where: { personId: id } });
+        await tx.personHistoryNote.deleteMany({ where: { personId: id } });
+        await tx.volunteerApplication.updateMany({ where: { personId: id }, data: {
+          fullName: "Contact supprimé", email: null, phone: "", dietary: "NONE", answers: [], accessToken: null, badgeToken: null,
+        } });
+        await tx.person.update({ where: { id }, data: {
+          fullName: "Contact supprimé", email: null, phone: null, discordUserId: null, flags: [], tags: [],
+          availability: null, negotiatedPrices: null, specialConditions: null, technicalConstraints: null, averageFee: null,
+          bookingContact: null, musicalStyle: null, riderNotes: null, venueCapacity: null, soundConstraints: null,
+          openingHours: null, electricalPower: null, securityContact: null, sensibleNeighborhood: false,
+          archivedAt: person.archivedAt ?? new Date(), anonymizedAt: new Date(),
+        } });
+        return;
+      }
+      await tx.expense.updateMany({ where: { sourceParticipant: { personId: id } }, data: { sourceParticipantId: null } });
+      await tx.expense.updateMany({ where: { paidById: id }, data: { paidById: null } });
+      await tx.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
+      await tx.shift.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
+      await tx.shoppingItem.updateMany({ where: { buyerId: id }, data: { buyerId: null } });
+      await tx.equipmentItem.updateMany({ where: { ownerId: id }, data: { ownerId: null } });
+      await tx.runOfShowItem.updateMany({ where: { responsiblePersonId: id }, data: { responsiblePersonId: null } });
+      await tx.volunteerSwap.deleteMany({ where: { targetPersonId: id } });
+      await tx.volunteerApplication.deleteMany({ where: { personId: id } });
+      await tx.eventParticipant.deleteMany({ where: { personId: id } });
+      await tx.person.delete({ where: { id } });
+    });
+    await removeUploadedFiles(person.documents.filter((d) => d.isUpload).map((d) => d.url));
+    return keep ? "anonymized" : "deleted";
   }
 
   /**

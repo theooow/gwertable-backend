@@ -21,6 +21,7 @@ export class PersonDao extends BaseDao {
 
     const where: Prisma.PersonWhereInput = {
       workspaceId,
+      anonymizedAt: null,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(search
         ? {

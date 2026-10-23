@@ -132,6 +132,15 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     return toPersonDTO(person);
   });
 
+  fastify.delete("/api/people/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const mode = await service.erase(id, request.workspaceId, request.userRole);
+    await recordRequestActivity(request, {
+      type: "PERSON_ERASED", title: "Contact supprimé à sa demande", entityType: "PERSON_ERASED", notify: false,
+    });
+    return { mode };
+  });
+
   fastify.post("/api/people/:id/restore", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     const person = await service.restore(id, request.workspaceId, request.userRole);

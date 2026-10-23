@@ -114,6 +114,20 @@ export class PersonService {
   }
 
   /**
+   * Efface une personne (suppression ou anonymisation).
+   *
+   * @param id - Identifiant de la personne
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param role - Rôle de l'utilisateur courant
+   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
+   * @throws {NotFoundError} Si la personne est introuvable
+   */
+  async erase(id: string, workspaceId: string, role: UserRole) {
+    requireCan(role, "person.write");
+    return this.personRepository.erase(id, workspaceId);
+  }
+
+  /**
    * Restaure une personne archivée.
    *
    * @param id - Identifiant de la personne

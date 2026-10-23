@@ -197,6 +197,13 @@ export const routeDocs: Record<string, RouteDoc> = {
     ],
     "summary": "Archiver une personne (suppression logique)"
   },
+  "DELETE /api/people/:id": {
+    "tags": [
+      "Personnes"
+    ],
+    "summary": "Effacer une personne (droit à l'effacement)",
+    "description": "Supprime la fiche et ses documents. Si un contrat de bénévolat, une annonce ou un compte utilisateur doit être conservé, la fiche est anonymisée (`mode: anonymized`). Les montants budgétaires sont conservés sans lien vers la personne."
+  },
   "POST /api/people/:id/restore": {
     "tags": [
       "Personnes"

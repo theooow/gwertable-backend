@@ -605,6 +605,7 @@ model Person {
   securityContact      String?
   sensibleNeighborhood Boolean   @default(false)
   archivedAt    DateTime?
+  anonymizedAt  DateTime?
 
   user          User?
   participations EventParticipant[]
