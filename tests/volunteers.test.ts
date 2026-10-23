@@ -6,7 +6,7 @@ import { prisma } from "../src/prisma.js";
 
 setupTestApp();
 const formInput = { availabilityPeriods: [{ id: "night", label: "Exploitation", startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], title: "Rejoignez l’équipe", description: "Présentation", confirmationMessage: "Merci !", published: true, closesAt: null, collectPhone: true, collectDietary: true, teams: ["Bar"], questions: [{ id: "experience", label: "Expérience", type: "select", required: true, options: ["Oui", "Non"] }] };
-const submission = { fullName: "Alice publique", email: "alice@abregi.test", phone: "0611111111", preferredTeams: ["Bar"], availability: [{ startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], dietary: "Végétarien", answers: { experience: "Oui" }, consent: true, mealIds: [] };
+const submission = { fullName: "Alice publique", email: "alice@abregi.test", phone: "0611111111", preferredTeams: ["Bar"], availability: [{ startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], dietary: "VEGETARIAN", answers: { experience: "Oui" }, consent: true, mealIds: [] };
 const review = { status: "APPROVED", team: "Bar", internalNotes: "À accueillir" };
 const shift = { position: "Bar 1", startsAt: "2026-06-01T20:00:00Z", endsAt: "2026-06-01T22:00:00Z", assigneeId: null };
 async function context() {
@@ -36,16 +36,17 @@ describe("volunteer management", () => {
 
   it("backfills existing volunteers without duplicating applications or changing assignments", async () => {
     const c = await context();
-    await prisma.eventParticipant.create({ data: { eventId: c.event.id, personId: c.person.id, roles: ["ARTIST", "VOLUNTEER"], dietary: "Sans gluten" } });
+    await prisma.eventParticipant.create({ data: { eventId: c.event.id, personId: c.person.id, roles: ["ARTIST", "VOLUNTEER"], dietary: "OTHER" } });
     const assigned = await prisma.shift.create({ data: { ...shift, eventId: c.event.id, assigneeId: c.person.id } });
     const migration = await readFile(new URL("../prisma/migrations/20260919140000_link_volunteer_participants/migration.sql", import.meta.url), "utf8");
-    const backfill = migration.slice(migration.indexOf('INSERT INTO'));
+    // Dietary became an enum after this migration: replay it against the current column type.
+    const backfill = migration.slice(migration.indexOf('INSERT INTO')).replace(`COALESCE(ep."dietary", '')`, `COALESCE(ep."dietary", 'NONE')`);
     await prisma.$executeRawUnsafe(backfill);
     await prisma.$executeRawUnsafe(backfill);
     assert.equal(await prisma.volunteerApplication.count(), 1);
     const application = await prisma.volunteerApplication.findFirstOrThrow();
     assert.equal(application.status, "APPROVED");
-    assert.equal(application.dietary, "Sans gluten");
+    assert.equal(application.dietary, "OTHER");
     assert.equal(application.consentAt, null);
     assert.equal((await prisma.shift.findUniqueOrThrow({ where: { id: assigned.id } })).assigneeId, c.person.id);
     await prisma.person.update({ where: { id: c.person.id }, data: { fullName: "Alice actualisée" } });
@@ -56,23 +57,23 @@ describe("volunteer management", () => {
   it("links participants without email to volunteers and synchronizes roles, dietary and shifts", async () => {
     const c = await context();
     const person = await prisma.person.create({ data: { workspaceId: c.workspace.id, fullName: "Sans email" } });
-    const payload = { personId: person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "Sans gluten" };
+    const payload = { personId: person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "OTHER" };
     const created = await request("POST", `/api/events/${c.event.id}/participants`, c.authorization, payload);
     assert.equal(created.statusCode, 201, created.body);
     const participant = json<{ id: string }>(created);
     let application = await prisma.volunteerApplication.findFirstOrThrow({ where: { personId: person.id } });
     assert.equal(application.status, "APPROVED");
-    assert.equal(application.dietary, "Sans gluten");
+    assert.equal(application.dietary, "OTHER");
     assert.equal(application.email, null);
     assert.equal(application.consentAt, null);
     assert.deepEqual(application.availability, []);
     assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: person.id })).statusCode, 409);
     await request("PATCH", `${c.base}/applications/${application.id}`, c.authorization, { ...review, availability: submission.availability });
     assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: person.id })).statusCode, 201);
-    const updated = await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, dietary: "Végétarien" });
+    const updated = await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, dietary: "VEGETARIAN" });
     assert.equal(updated.statusCode, 200, updated.body);
     application = await prisma.volunteerApplication.findUniqueOrThrow({ where: { id: application.id } });
-    assert.equal(application.dietary, "Végétarien");
+    assert.equal(application.dietary, "VEGETARIAN");
     assert.equal(await prisma.volunteerApplication.count({ where: { personId: person.id } }), 1);
     const removedRole = await request("PUT", `/api/participants/${participant.id}`, c.authorization, { ...payload, roles: ["GUEST"] });
     assert.equal(removedRole.statusCode, 200, removedRole.body);
@@ -88,7 +89,7 @@ describe("volunteer management", () => {
   it("reuses a public application when granting the volunteer role and protects served meals", async () => {
     const c = await context();
     await request("POST", c.publicPath, undefined, submission);
-    const payload = { personId: c.person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "Végétarien" };
+    const payload = { personId: c.person.id, roles: ["GUEST", "VOLUNTEER"], dietary: "VEGETARIAN" };
     const created = await request("POST", `/api/events/${c.event.id}/participants`, c.authorization, payload);
     assert.equal(created.statusCode, 201, created.body);
     const participant = json<{ id: string }>(created);
@@ -193,8 +194,9 @@ describe("volunteer management", () => {
     const created = await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: c.person.id });
     assert.equal(created.statusCode, 201, created.body);
     assert.equal((await request("PATCH", `${c.base}/applications/${app.id}`, c.authorization, { ...review, availability: [{ startsAt: "2026-06-01T23:00:00Z", endsAt: "2026-06-02T03:00:00Z" }] })).statusCode, 409);
-    assert.equal((await request("PATCH", `${c.base}/applications/${app.id}`, c.authorization, { ...review, dietary: "Sans gluten" })).statusCode, 200);
-    assert.equal((await prisma.eventParticipant.findFirstOrThrow()).dietary, "Sans gluten");
+    assert.equal((await request("PATCH", `${c.base}/applications/${app.id}`, c.authorization, { ...review, dietary: "OTHER" })).statusCode, 200);
+    assert.equal((await prisma.eventParticipant.findFirstOrThrow()).dietary, "OTHER");
+    assert.equal((await request("PATCH", `${c.base}/applications/${app.id}`, c.authorization, { ...review, dietary: "Sans gluten" })).statusCode, 400);
     assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, assigneeId: c.person.id })).statusCode, 409);
     assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, startsAt: "2026-06-01T16:00:00Z", assigneeId: c.person.id })).statusCode, 409);
     assert.equal((await request("POST", `${c.base}/shifts`, c.authorization, { ...shift, startsAt: "2026-06-01T22:00:00Z", endsAt: "2026-06-01T23:00:00Z", assigneeId: c.person.id })).statusCode, 201);
@@ -227,14 +229,14 @@ describe("volunteer management", () => {
 
   it("handles concurrent duplicate submissions and omits private answers from API logs", async () => {
     const c = await context();
-    const responses = await Promise.all([1, 2, 3].map(() => request("POST", c.publicPath, undefined, { ...submission, email: "new@example.test", dietary: "private-dietary-value" })));
+    const responses = await Promise.all([1, 2, 3].map(() => request("POST", c.publicPath, undefined, { ...submission, email: "new@example.test", phone: "0699887766" })));
     assert.ok(responses.every((r) => r.statusCode === 201), responses.map((r) => r.body).join("\n"));
     assert.equal(await prisma.volunteerApplication.count(), 1);
     assert.equal(await prisma.person.count({ where: { email: "new@example.test" } }), 1);
     await request("GET", c.base, c.authorization);
     const logs = await prisma.apiLog.findMany({ where: { route: { contains: "volunteers" } } });
     assert.ok(logs.length);
-    assert.equal(JSON.stringify(logs).includes("private-dietary-value"), false);
+    assert.equal(JSON.stringify(logs).includes("0699887766"), false);
     assert.equal(JSON.stringify(logs).includes(c.token), false);
   });
 });

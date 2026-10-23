@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dietarySchema } from "./participant.js";
 
 const text = z.string().trim().max(4000);
 const name = z.string().trim().min(1).max(200);
@@ -28,7 +29,7 @@ export const applicationSchema = z.object({
   phone: z.string().trim().max(40).default(""),
   preferredTeams: z.array(name).max(50).default([]),
   availability: z.array(intervalSchema).min(1, "Indiquez au moins une disponibilité").max(50),
-  dietary: text.default(""), notes: text.default(""),
+  dietary: dietarySchema.default("NONE"), notes: text.default(""),
   answers: z.record(z.string().max(60), z.union([text, z.boolean()])).default({}),
   mealIds: z.array(z.string().min(1).max(100)).max(100).default([]),
   consent: z.literal(true, { error: "Votre accord est nécessaire pour traiter votre inscription" }),
@@ -38,7 +39,7 @@ export const reviewSchema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]),
   team: z.string().trim().max(200), internalNotes: text,
   availability: z.array(intervalSchema).min(1).max(50).optional(),
-  dietary: text.optional(),
+  dietary: dietarySchema.optional(),
 });
 export const shiftSchema = z.object({
   swapAllowed: z.boolean().optional(),

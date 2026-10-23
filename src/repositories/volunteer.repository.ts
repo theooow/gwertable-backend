@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { DietaryPreference, Prisma, PrismaClient } from "@prisma/client";
 import { setTimeout as delay } from "node:timers/promises";
 import type { FastifyRequest } from "fastify";
 import { prisma } from "../prisma.js";
@@ -125,7 +125,7 @@ export class VolunteerRepository {
       if (await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId: form.eventId, personId: person.id } } })) return { message: form.confirmationMessage, application: null };
       const application = await tx.volunteerApplication.create({ data: {
         eventId: form.eventId, personId: person.id, email: data.email, fullName: data.fullName,
-        phone: form.collectPhone ? data.phone : "", dietary: form.collectDietary ? data.dietary : "",
+        phone: form.collectPhone ? data.phone : "", dietary: form.collectDietary ? data.dietary : "NONE",
         preferredTeams: [...new Set(data.preferredTeams)], availability, answers, notes: data.notes,
         meals: { create: mealIds.map((serviceId) => ({ serviceId })) },
       } });
@@ -137,7 +137,7 @@ export class VolunteerRepository {
     });
   }
 
-  async syncParticipant(tx: Prisma.TransactionClient, participant: { eventId: string; personId: string; roles: string[]; dietary: string | null }) {
+  async syncParticipant(tx: Prisma.TransactionClient, participant: { eventId: string; personId: string; roles: string[]; dietary: DietaryPreference | null }) {
     const { eventId, personId, dietary } = participant;
     let application = await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId, personId } } });
     if (!participant.roles.includes("VOLUNTEER")) {
@@ -150,11 +150,11 @@ export class VolunteerRepository {
       const person = await tx.person.findUniqueOrThrow({ where: { id: personId } });
       application = await tx.volunteerApplication.create({ data: {
         eventId, personId, email: null, fullName: person.fullName, phone: person.phone ?? "", consentAt: null,
-        dietary: dietary ?? "",
+        dietary: dietary ?? "NONE",
       } });
     }
     await this.reviewInTransaction(tx, eventId, application.id, {
-      status: "APPROVED", team: application.team, internalNotes: application.internalNotes, dietary: dietary ?? "",
+      status: "APPROVED", team: application.team, internalNotes: application.internalNotes, dietary: dietary ?? "NONE",
     });
   }
 

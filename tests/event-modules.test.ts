@@ -24,7 +24,7 @@ describe("event module routes", () => {
       roles: ["ARTIST"],
       rsvpStatus: "YES",
       plusOnes: 0,
-      dietary: "",
+      dietary: null,
       setStart: "",
       setEnd: "",
       fee: "12.50",

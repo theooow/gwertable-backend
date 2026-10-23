@@ -191,6 +191,14 @@ enum RsvpStatus {
   MAYBE
 }
 
+// Closed list on purpose: free text invited health or religious details (GDPR art. 9).
+enum DietaryPreference {
+  NONE
+  VEGETARIAN
+  VEGAN
+  OTHER
+}
+
 enum TicketSource {
   MANUAL
   API_SHOTGUN
@@ -933,7 +941,7 @@ model EventParticipant {
   // Champs invité
   rsvpStatus    RsvpStatus @default(UNKNOWN)
   plusOnes      Int        @default(0)
-  dietary       String?
+  dietary       DietaryPreference?
 
   // Champs artiste
   setStart      DateTime?
@@ -1107,7 +1115,7 @@ model VolunteerApplication {
   preferredTeams String[] @default([])
   team        String @default("")
   availability Json @default("[]")
-  dietary     String @default("")
+  dietary     DietaryPreference @default(NONE)
   answers     Json @default("[]")
   notes       String @default("")
   internalNotes String @default("")

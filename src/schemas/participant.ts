@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { LIMITS, optionalText, requiredText } from "./limits.js";
 
+export const dietarySchema = z.enum(["NONE", "VEGETARIAN", "VEGAN", "OTHER"]);
+
 export const participantSchema = z.object({
   personId: z.string().min(1, "La personne est requise"),
   roles: z
@@ -8,7 +10,7 @@ export const participantSchema = z.object({
     .min(1, "Au moins un role est requis"),
   rsvpStatus: z.enum(["UNKNOWN", "YES", "NO", "MAYBE"]).default("UNKNOWN"),
   plusOnes: z.number().int().min(0).max(50).default(0),
-  dietary: optionalText("Le regime alimentaire", LIMITS.mediumText),
+  dietary: dietarySchema.nullable().optional(),
   setStart: z.string().optional().or(z.literal("")),
   setEnd: z.string().optional().or(z.literal("")),
   fee: optionalText("Le cachet", LIMITS.money),

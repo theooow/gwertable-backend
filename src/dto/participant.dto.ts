@@ -1,4 +1,5 @@
 import type { Decimal } from "@prisma/client/runtime/library";
+import type { DietaryPreference } from "@prisma/client";
 
 type ParticipantRecord = {
   id: string;
@@ -8,7 +9,7 @@ type ParticipantRecord = {
   roles: string[];
   rsvpStatus: string;
   plusOnes: number;
-  dietary: string | null;
+  dietary: DietaryPreference | null;
   setStart: Date | null;
   setEnd: Date | null;
   fee: Decimal | null;
@@ -30,7 +31,7 @@ export type ParticipantDTO = {
   roles: string[];
   rsvpStatus: string;
   plusOnes: number;
-  dietary: string | null;
+  dietary: DietaryPreference | null;
   setStart: Date | null;
   setEnd: Date | null;
   fee: string | null;
