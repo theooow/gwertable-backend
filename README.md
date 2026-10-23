@@ -300,7 +300,7 @@ Paiement par Stripe Billing (`services/billing.service.ts`). `POST /api/billing/
 En local : `stripe listen --forward-to localhost:4000/api/public/billing/webhook` fournit `STRIPE_WEBHOOK_SECRET`. En ligne, le webhook passe par le frontend (`/api/stripe/webhook`) et écoute `checkout.session.completed` et `customer.subscription.*`.
 
 ### Personnes
-Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique de notes par contact, archivage logique.
+Répertoire de contacts partagé dans l'espace de travail. Recherche par nom/email/téléphone/tags, documents et historique des échanges par contact (type et date, sans texte libre), archivage logique.
 
 ### Événements
 CRUD d'événements avec gestion des lieux. Deux modes d'accès : membres de l'espace (accès complet) ou collaborateurs externes (accès limité à leurs événements).
