@@ -29,6 +29,7 @@ export class PersonDao extends BaseDao {
               { fullName: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
               { phone: { contains: search, mode: "insensitive" } },
+              { address: { contains: search, mode: "insensitive" } },
               { tags: { hasSome: [search.toLowerCase()] } },
             ],
           }
@@ -89,6 +90,7 @@ export class PersonDao extends BaseDao {
       fullName: data.fullName,
       email: data.email || null,
       phone: data.phone || null,
+      address: data.address || null,
       discordUserId: data.discordUserId || null,
       tags: data.tags,
       flags: data.flags,

@@ -139,7 +139,7 @@ export class PersonRepository {
           fullName: "Contact supprimé", email: null, phone: "", dietary: "NONE", answers: [], accessToken: null, badgeToken: null,
         } });
         await tx.person.update({ where: { id }, data: {
-          fullName: "Contact supprimé", email: null, phone: null, discordUserId: null, flags: [], tags: [],
+          fullName: "Contact supprimé", email: null, phone: null, address: null, discordUserId: null, flags: [], tags: [],
           availability: null, negotiatedPrices: null, specialConditions: null, technicalConstraints: null, averageFee: null,
           bookingContact: null, musicalStyle: null, riderNotes: null, venueCapacity: null, soundConstraints: null,
           openingHours: null, electricalPower: null, securityContact: null, sensibleNeighborhood: false,

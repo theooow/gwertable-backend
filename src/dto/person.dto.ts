@@ -30,6 +30,7 @@ export type PersonDTO = {
   fullName: string;
   email: string | null;
   phone: string | null;
+  address: string | null;
   discordUserId: string | null;
   flags: ContactFlag[];
   tags: string[];
@@ -63,6 +64,7 @@ type PersonRecord = {
   fullName: string;
   email: string | null;
   phone: string | null;
+  address: string | null;
   discordUserId: string | null;
   flags: ContactFlag[];
   tags: string[];
@@ -91,6 +93,7 @@ function toPersonFields(person: PersonRecord): PersonDTO {
     fullName: person.fullName,
     email: person.email,
     phone: person.phone,
+    address: person.address,
     discordUserId: person.discordUserId,
     flags: person.flags,
     tags: person.tags,

@@ -12,6 +12,8 @@ describe("contact spreadsheet edits", () => {
     assert.equal(response.statusCode, 200, response.body);
     const updated = await prisma.person.findUniqueOrThrow({ where: { id: person.id } });
     assert.equal(updated.phone, "0622222222"); assert.equal(updated.negotiatedPrices, "Keep this"); assert.equal(updated.contactType, "ARTIST"); assert.deepEqual(updated.tags, ["existing"]);
+    assert.equal((await request("PATCH", `/api/people/${person.id}`, authorization, { address: "12 rue Oberkampf, 75011 Paris" })).statusCode, 200);
+    assert.equal((await prisma.person.findUniqueOrThrow({ where: { id: person.id } })).address, "12 rue Oberkampf, 75011 Paris");
     assert.equal((await request("PATCH", `/api/people/${person.id}`, authorization, { workspaceId: "outside" })).statusCode, 400);
     assert.equal((await request("PATCH", `/api/people/${person.id}`, authorization, { fullName: "" })).statusCode, 400);
     assert.equal((await request("PATCH", `/api/people/${person.id}`, authorization, {})).statusCode, 400);

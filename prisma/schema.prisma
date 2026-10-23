@@ -591,6 +591,7 @@ model Person {
   fullName      String
   email         String?
   phone         String?
+  address       String?
   discordUserId String?
   flags         ContactFlag[] @default([])
   tags          String[]
