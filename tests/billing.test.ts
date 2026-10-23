@@ -125,3 +125,24 @@ test("closing an event during the trial ends it", async () => {
   assert.equal((await request("PUT", `/api/events/${event.id}`, authorization, { ...eventPayload, status: "DONE" })).statusCode, 200);
   assert.deepEqual(updates, [{ trial_end: "now", proration_behavior: "none" }]);
 });
+
+test("emails the customer on the first failed payment and when the subscription is suspended", async () => {
+  const { user } = await seedAdminSession("BETA_TEST");
+  await prisma.user.update({ where: { id: user.id }, data: { stripeCustomerId: "cus_abregi", billingEmail: "factures@abregi.test" } });
+  const issues: unknown[] = [];
+  const originalInfo = console.info;
+  console.info = (payload: unknown, message?: unknown) => { if (message === "Billing issue email skipped (log transport)") issues.push(payload); };
+  try {
+    for (const [status, id] of [["active", "a"], ["past_due", "b"], ["past_due", "c"], ["canceled", "d"]] as const) {
+      client.subscriptions.retrieve = stub(subscription({ status }));
+      assert.equal((await webhook("customer.subscription.updated", { id: "sub_abregi" }, `evt_${id}`)).statusCode, 200);
+    }
+  } finally {
+    console.info = originalInfo;
+  }
+  assert.deepEqual(issues, [
+    { email: "factures@abregi.test", issue: "payment_failed" },
+    { email: "factures@abregi.test", issue: "suspended" },
+  ]);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).usagePlan, "NONE");
+});

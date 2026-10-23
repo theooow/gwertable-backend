@@ -3,6 +3,7 @@ import type { UsagePlan } from "@prisma/client";
 import { env } from "../env.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { stripe } from "../lib/stripe.js";
+import { sendBillingIssueEmail, type BillingIssue } from "../lib/mailer.js";
 import type { BillingRepository, BillingUser } from "../repositories/billing.repository.js";
 import type { CheckoutInput, PortalInput } from "../schemas/billing.js";
 
@@ -155,6 +156,18 @@ export class BillingService {
       trialEndsAt: subscription.status === "trialing" ? fromUnix(subscription.trial_end) : null,
       ...(trialStartedAt && !user.trialStartedAt ? { trialStartedAt } : {}),
     });
+    await this.notifyBillingIssue(user, subscription.status);
+  }
+
+  /** Warns on the first failed payment, then when retries give up and the subscription ends. */
+  private async notifyBillingIssue(user: BillingUser, status: string) {
+    const previous = user.subscriptionStatus;
+    const issue: BillingIssue | null = status === "past_due" && previous !== "past_due" ? "payment_failed"
+      : (status === "canceled" || status === "unpaid") && previous === "past_due" ? "suspended"
+      : null;
+    if (!issue) return;
+    // The subscription state is already saved: a mail outage must not make Stripe retry the webhook.
+    await sendBillingIssueEmail({ email: user.billingEmail ?? user.email, issue, settingsUrl: `${env.FRONTEND_URL}/settings#subscription` }).catch(() => undefined);
   }
 
   private async ensureCustomer(user: BillingUser) {

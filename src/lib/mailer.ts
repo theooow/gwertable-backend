@@ -146,3 +146,26 @@ export async function sendInactivityWarningEmail({ email, loginUrl, deletionDate
   });
   await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text, html });
 }
+
+export type BillingIssue = "payment_failed" | "suspended";
+
+/** Sent by Abregi itself so the customer is warned even when Stripe's own dunning emails are off. */
+export async function sendBillingIssueEmail({ email, issue, settingsUrl }: { email: string; issue: BillingIssue; settingsUrl: string }) {
+  if (env.MAIL_TRANSPORT === "log") {
+    console.info({ email, issue }, "Billing issue email skipped (log transport)");
+    return;
+  }
+  const failed = issue === "payment_failed";
+  const subject = failed ? "Le paiement de ton abonnement Abregi a échoué" : "Ton abonnement Abregi est suspendu";
+  const hook = failed
+    ? "Le dernier prélèvement de ton abonnement Abregi n’a pas abouti. Ton accès reste ouvert pendant que nous retentons le paiement automatiquement."
+    : "Malgré plusieurs tentatives, le paiement de ton abonnement n’a pas pu être encaissé : ton abonnement est suspendu et l’accès à ton espace est bloqué.";
+  const next = failed
+    ? "Pour éviter une suspension, mets à jour ta carte depuis tes paramètres d’abonnement."
+    : "Tes événements, contacts et budgets sont conservés : reprends un abonnement depuis Abregi pour les retrouver.";
+  const label = failed ? "Mettre à jour ma carte" : "Reprendre mon abonnement";
+  const text = [hook, "", next, "", `${label} : ${settingsUrl}`].join("\n");
+  const html = renderEmailHtml({ preheader: hook, title: subject, paragraphs: [hook, next], action: { label, url: settingsUrl } });
+  await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text, html });
+}
+
