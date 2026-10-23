@@ -12,11 +12,7 @@ export async function shotgunRoutes(fastify: FastifyInstance) {
     requireCan(request.userRole, "event.read");
     const query = shotgunEventsQuerySchema.parse(request.query);
     const config = await getShotgunWorkspaceConfig(request.workspaceId);
-    const search = query.name?.trim() || "";
-    if (!search) {
-      return { events: [] };
-    }
-    const events = await fetchShotgunEventsForSearch(config, search);
+    const events = await fetchShotgunEventsForSearch(config, query.name?.trim() || undefined);
 
     return {
       events: events.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),

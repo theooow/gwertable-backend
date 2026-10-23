@@ -100,4 +100,28 @@ describe("shotgun integration", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("lists every upcoming and past organizer event when no search is given", async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: URL[] = [];
+    const shotgunEvent = (id: number, startTime: string) => ({ id, name: `Event ${id}`, startTime, endTime: null, slug: `event-${id}`, description: null, coverUrl: null, url: null, deals: [] });
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      requested.push(url);
+      const past = url.searchParams.get("past_events") === "true";
+      const data = past ? [shotgunEvent(1, "2025-01-10T20:00:00.000Z")] : [shotgunEvent(2, "2030-01-10T20:00:00.000Z")];
+      return new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    try {
+      const { authorization } = await seedAdminSession();
+      await request("PUT", "/api/workspace", authorization, { name: "Test workspace", shotgunOrganizerId: "1234", shotgunApiToken: "secret" });
+
+      const events = json<{ events: Array<{ id: number }> }>(await request("GET", "/api/shotgun/events", authorization)).events;
+      assert.deepEqual(events.map((event) => event.id), [1, 2]);
+      assert.ok(requested.every((url) => !url.searchParams.has("name")));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

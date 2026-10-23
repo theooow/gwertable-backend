@@ -129,7 +129,8 @@ export async function fetchShotgunEvents(config: ShotgunWorkspaceConfig, query: 
   return parsed.data;
 }
 
-export async function fetchShotgunEventsForSearch(config: ShotgunWorkspaceConfig, query: string) {
+/** Événements à venir et passés de l'organisateur, filtrés par nom si une recherche est donnée. */
+export async function fetchShotgunEventsForSearch(config: ShotgunWorkspaceConfig, query?: string) {
   const [futureEvents, pastEvents] = await Promise.all([
     fetchShotgunEvents(config, { name: query }),
     fetchShotgunEvents(config, { name: query, pastEvents: true }),
