@@ -779,6 +779,7 @@ model Event {
   avgBasketCents     Int     @default(0)
   vatMode            VatMode @default(NON_ASSUJETTI)
   defaultVatRateBasisPoints Int @default(2000)
+  sacemEnabled       Boolean @default(true)
   sacemRateBasisPoints Int @default(1150)
   sacemBase          SacemBase @default(TICKETING)
   profitSplitMode    ProfitSplitMode @default(EQUAL)
