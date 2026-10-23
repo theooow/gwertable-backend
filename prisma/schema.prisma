@@ -767,6 +767,7 @@ model Event {
   workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name          String
   shotgunEventId Int?        @unique
+  genres        String[]    @default([])
   startsAt      DateTime
   endsAt        DateTime?
   status        EventStatus @default(DRAFT)

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LIMITS, optionalText, requiredText } from "./limits.js";
+import { EVENT_GENRES } from "../lib/event-genres.js";
 
 export const eventSchema = z
   .object({
@@ -10,6 +11,7 @@ export const eventSchema = z
     status: z.enum(["DRAFT", "PLANNING", "LIVE", "DONE", "ARCHIVED"]).default("DRAFT"),
     description: optionalText("La description", LIMITS.longText),
     bannerUrl: optionalText("L'URL de la banniere", LIMITS.url),
+    genres: z.array(z.enum(EVENT_GENRES)).max(5, "5 genres maximum").optional(),
     venueId: z.string().optional().or(z.literal("")),
     nbCollectifs: z.number().int().min(1).optional().default(1),
     kegUnitPriceCents: z.number().int().min(0).optional().default(0),
