@@ -26,6 +26,8 @@ describe("volunteer management", () => {
       const result = await request("PUT", `${c.base}/form`, c.authorization, { ...formInput, availabilityPeriods });
       assert.equal(result.statusCode, 400, result.body);
     }
+    const freeText = { id: "health", label: "Santé", type: "text", required: false, options: [] };
+    assert.equal((await request("PUT", `${c.base}/form`, c.authorization, { ...formInput, questions: [freeText] })).statusCode, 400);
     await prisma.workspace.update({ where: { id: c.workspace.id }, data: { logoUrl: "/api/uploads/association-logos/test.png", emailPrimaryColor: "#123456" } });
     const result = await request("GET", c.publicPath);
     const body = json<{ availabilityPeriods: { label: string }[]; organization: { logoUrl: string; emailPrimaryColor: string } }>(result);

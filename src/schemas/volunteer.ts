@@ -9,7 +9,7 @@ export const intervalSchema = z.object({ startsAt: date, endsAt: date })
 export const availabilityPeriodSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,60}$/), label: name, startsAt: date, endsAt: date }).refine((v) => v.endsAt > v.startsAt, "La fin doit suivre le début");
 export const questionSchema = z.object({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,60}$/), label: name,
-  type: z.enum(["text", "select", "checkbox"]), required: z.boolean(),
+  type: z.enum(["select", "checkbox"]), required: z.boolean(),
   options: z.array(name).max(30).default([]),
 }).refine((q) => q.type !== "select" || q.options.length > 0, "Ajoutez des choix");
 export const volunteerFormSchema = z.object({
