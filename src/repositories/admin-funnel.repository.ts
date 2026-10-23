@@ -12,11 +12,13 @@ export const FUNNEL_PERIODS = ["30", "90", "365", "all"] as const;
 export type FunnelPeriod = (typeof FUNNEL_PERIODS)[number];
 
 type Stage = "acquisition" | "activation" | "retention" | "referral" | "revenue";
-type UserStep = "verified" | "eventCreated" | "budgetOpened" | "firstBudgetLine" | "budgetComplete"
-  | "returnedLaterDay" | "active7d" | "active30d" | "invited" | "inviteAccepted" | "exported" | "multiEvent";
+type UserStep = "verified" | "trialStarted" | "eventCreated" | "budgetOpened" | "firstBudgetLine" | "budgetComplete"
+  | "returnedLaterDay" | "active7d" | "active30d" | "invited" | "inviteAccepted" | "exported" | "multiEvent" | "subscribed";
 
 const USER_STEPS: { key: UserStep; stage: Stage; label: string; minAgeDays?: number }[] = [
   { key: "verified", stage: "activation", label: "Email vérifié" },
+  // Invited members use their team's plan, so they may skip the trial and still activate.
+  { key: "trialStarted", stage: "activation", label: "Essai gratuit démarré (carte enregistrée)" },
   { key: "eventCreated", stage: "activation", label: "Premier événement" },
   { key: "budgetOpened", stage: "activation", label: "Budget ouvert" },
   { key: "firstBudgetLine", stage: "activation", label: "Première ligne de budget" },
@@ -24,11 +26,13 @@ const USER_STEPS: { key: UserStep; stage: Stage; label: string; minAgeDays?: num
   { key: "returnedLaterDay", stage: "retention", label: "Revenu sur le budget un autre jour", minAgeDays: 1 },
   { key: "active7d", stage: "retention", label: "Actif sur le budget 7 j après", minAgeDays: 7 },
   { key: "active30d", stage: "retention", label: "Actif sur le budget 30 j après", minAgeDays: 30 },
+  { key: "exported", stage: "retention", label: "Budget ou compta exporté" },
+  { key: "multiEvent", stage: "retention", label: "Budget sur 2 événements ou plus" },
   { key: "invited", stage: "referral", label: "A invité un membre" },
   { key: "inviteAccepted", stage: "referral", label: "Invitation acceptée" },
-  { key: "exported", stage: "revenue", label: "Budget ou compta exporté" },
-  { key: "multiEvent", stage: "revenue", label: "Budget sur 2 événements ou plus" },
+  { key: "subscribed", stage: "revenue", label: "Abonnement payant" },
 ];
+const PAYING_STATUSES = new Set(["active", "past_due"]);
 /** Activation is sequential: reaching a later step implies the earlier ones (e.g. budget lines added before view tracking existed). */
 const ACTIVATION_CHAIN: UserStep[] = ["eventCreated", "budgetOpened", "firstBudgetLine", "budgetComplete"];
 
@@ -57,7 +61,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
   const since = periodStart && periodStart > trackingStart ? periodStart : trackingStart;
   const users = await prisma.user.findMany({
     where: { archivedAt: null, email: { not: ADMIN_EMAIL }, createdAt: { gte: since } },
-    select: { id: true, createdAt: true, emailVerified: true },
+    select: { id: true, createdAt: true, emailVerified: true, trialStartedAt: true, stripeSubscriptionId: true, subscriptionStatus: true, subscriptionPlan: true },
   });
   const userIds = users.map((user) => user.id);
 
@@ -75,8 +79,14 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
 
   const journeys = new Map<string, UserJourney>(users.map((user) => [user.id, {
     touches: [], budgetEvents: new Set(), firstLineAt: null, anonymousIds: new Set(),
-    steps: new Set<UserStep>(user.emailVerified ? ["verified"] : []),
+    steps: new Set<UserStep>([
+      ...(user.emailVerified ? ["verified" as const] : []),
+      ...(user.trialStartedAt || user.stripeSubscriptionId ? ["trialStarted" as const] : []),
+      ...(user.subscriptionPlan && PAYING_STATUSES.has(user.subscriptionStatus ?? "") ? ["subscribed" as const] : []),
+    ]),
   }]));
+  // Only checkouts whose trial is over could have turned into a payment.
+  const trialsOver = users.filter((user) => (user.trialStartedAt || user.stripeSubscriptionId) && user.subscriptionStatus !== "trialing").length;
   const invitedScopes: { userId: string; workspaceId: string | null; eventId: string | null; at: Date }[] = [];
 
   for (const activity of activities) {
@@ -159,14 +169,15 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
   for (const landing of landings) {
     if (landing.anonymousId && !firstLanding.has(landing.anonymousId)) firstLanding.set(landing.anonymousId, { source: sourceOf(landing.properties), at: landing.createdAt });
   }
-  const sources = new Map<string, { visitors: number; signups: number; activated: number }>();
-  const sourceRow = (source: string) => sources.get(source) ?? sources.set(source, { visitors: 0, signups: 0, activated: 0 }).get(source)!;
+  const sources = new Map<string, { visitors: number; signups: number; activated: number; subscribed: number }>();
+  const sourceRow = (source: string) => sources.get(source) ?? sources.set(source, { visitors: 0, signups: 0, activated: 0, subscribed: 0 }).get(source)!;
   for (const visit of firstLanding.values()) if (visit.at >= since) sourceRow(visit.source).visitors += 1;
   for (const journey of journeys.values()) {
     const origin = [...journey.anonymousIds].map((id) => firstLanding.get(id)).filter((visit) => visit !== undefined).sort((a, b) => a.at.getTime() - b.at.getTime())[0];
     const row = sourceRow(origin?.source ?? "inconnue");
     row.signups += 1;
     if (journey.steps.has("firstBudgetLine")) row.activated += 1;
+    if (journey.steps.has("subscribed")) row.subscribed += 1;
   }
 
   const visitors = [...firstLanding.values()].filter((visit) => visit.at >= since).length;
@@ -190,7 +201,7 @@ export async function getBudgetFunnel(prisma: PrismaClient, period: FunnelPeriod
           journey.firstLineAt && journey.firstLineAt.getTime() <= now.getTime() - step.minAgeDays! * DAY_MS);
         return { key: step.key, stage: step.stage, label: step.label,
           users: mature.filter(({ journey }) => journey.steps.has(step.key)).length,
-          eligible: step.minAgeDays === undefined ? null : mature.length };
+          eligible: step.key === "subscribed" ? trialsOver : step.minAgeDays === undefined ? null : mature.length };
       }),
     ],
     sources: [...sources].map(([source, row]) => ({ source, ...row })).sort((a, b) => b.signups - a.signups || b.visitors - a.visitors),
