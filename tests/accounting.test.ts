@@ -22,7 +22,7 @@ type Report = {
 };
 
 async function seed() {
-  const { authorization } = await seedAdminSession();
+  const { authorization } = await seedAdminSession("PRO");
   const { event } = await seedEventContext(authorization);
   const base = `/api/events/${event.id}`;
   await request("POST", `${base}/expenses`, authorization, { label: "Salle", amount: "500", category: "lieu", reimbursement: "NOT_OWED", paidAt: "2026-05-20", receiptUrl: "/api/uploads/receipts/salle.pdf" });
@@ -34,6 +34,18 @@ async function seed() {
 }
 
 describe("accounting", () => {
+  it("reserves income statements to the Pro plan", async () => {
+    for (const plan of ["PLUS", "BETA_TEST"] as const) {
+      const { authorization } = await seedAdminSession(plan);
+      const { event } = await seedEventContext(authorization);
+      for (const url of ["/api/accounting/fiscal-years", `/api/events/${event.id}/accounting`]) {
+        const response = await request("GET", url, authorization);
+        assert.equal(response.statusCode, 403, url);
+        assert.equal(json<{ code: string; requiredPlan: string }>(response).requiredPlan, "PRO");
+      }
+      await prisma.user.deleteMany();
+    }
+  });
   it("builds the statements of a fiscal year from actual budget lines", async () => {
     const { authorization, fiscalYear: { id } } = await seed();
     const response = await request("GET", `/api/accounting/fiscal-years/${id}/report`, authorization);

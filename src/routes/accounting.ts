@@ -5,6 +5,7 @@ import { fiscalYearSchema } from "../schemas/fiscal-year.js";
 import { AccountingRepository } from "../repositories/accounting.repository.js";
 import { AccountingService } from "../services/accounting.service.js";
 import { recordRequestActivity } from "../lib/activity-recorder.js";
+import { requirePlanFeature } from "../lib/usage-plans.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 const eventParamsSchema = z.object({ eventId: z.string().min(1) });
@@ -12,6 +13,11 @@ const eventParamsSchema = z.object({ eventId: z.string().min(1) });
 const service = new AccountingService(new AccountingRepository(prisma));
 
 export async function accountingRoutes(fastify: FastifyInstance) {
+  // Income statements (workspace and per event) are a Pro feature.
+  fastify.addHook("preHandler", async (request) => {
+    requirePlanFeature(request.user!.usagePlan, "accounting.statements");
+  });
+
   fastify.get("/api/accounting/fiscal-years", { config: { documentation: {} } }, async (request) => {
     return service.listFiscalYears(request.workspaceId, request.userRole);
   });
