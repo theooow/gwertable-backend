@@ -329,10 +329,14 @@ describe("workspace routes", () => {
     });
     assert.equal(deleted.statusCode, 200);
     assert.deepEqual(json(deleted), { ok: true, deletedWorkspace: false });
-    assert.equal(await prisma.workspace.count({ where: { id: workspace.id } }), 1);
-    assert.equal(await prisma.event.count({ where: { workspaceId: workspace.id } }), 0);
+    // Members continue in a fresh workspace; the old one is anonymised with its events kept for statistics.
+    const fresh = (await prisma.user.findUniqueOrThrow({ where: { id: (await prisma.workspaceMember.findFirstOrThrow({ where: { workspace: { name: workspace.name } } })).userId } })).defaultWorkspaceId!;
+    assert.notEqual(fresh, workspace.id);
+    assert.equal(await prisma.event.count({ where: { workspaceId: fresh } }), 0);
+    assert.equal(await prisma.person.count({ where: { workspaceId: fresh } }), 0);
+    assert.ok((await prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).anonymizedAt);
     assert.equal(await prisma.person.count({ where: { workspaceId: workspace.id } }), 0);
-    assert.equal(await prisma.equipmentItem.count({ where: { workspaceId: workspace.id } }), 0);
+    assert.equal(await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } }), 0);
   });
 
   it("deletes the current workspace and switches to another workspace when available", async () => {
@@ -354,7 +358,8 @@ describe("workspace routes", () => {
     });
     assert.equal(deleted.statusCode, 200);
     assert.deepEqual(json(deleted), { ok: true, deletedWorkspace: true });
-    assert.equal(await prisma.workspace.count({ where: { id: workspace.id } }), 0);
+    assert.ok((await prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).anonymizedAt);
+    assert.equal(await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } }), 0);
     assert.equal(
       (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).defaultWorkspaceId,
       fallbackWorkspace.id,

@@ -51,7 +51,7 @@ export const routeDocs: Record<string, RouteDoc> = {
       "Compte"
     ],
     "summary": "Supprimer le compte (confirmation par email)",
-    "description": "Supprime le compte. Si l'utilisateur est le seul membre de son workspace, supprime aussi le workspace."
+    "description": "Supprime le compte. Si l'utilisateur est le seul membre de son workspace, celui-ci est anonymisé : données personnelles et fichiers effacés, événements conservés sans nom pour les statistiques."
   },
   "PUT /api/account/workspace": {
     "tags": [
@@ -99,7 +99,7 @@ export const routeDocs: Record<string, RouteDoc> = {
       "Workspace"
     ],
     "summary": "Supprimer l'espace de travail (confirmation par nom)",
-    "description": "Seul un ADMIN peut supprimer. Si d'autres membres existent, leurs `defaultWorkspaceId` sont migrés vers un autre workspace."
+    "description": "Seul un ADMIN peut supprimer. L'espace est anonymisé (événements conservés sans données personnelles pour les statistiques). Si c'est le seul espace de l'utilisateur, ses membres continuent dans un nouvel espace vide du même nom (`deletedWorkspace: false`) ; sinon leurs `defaultWorkspaceId` sont migrés vers un autre workspace."
   },
   "GET /api/workspace/invited-events": {
     "tags": [

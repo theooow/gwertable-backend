@@ -176,19 +176,17 @@ export class WorkspaceRepository {
 
     const nextMembership = await this.memberDao.findFirstFallback(currentUserId, workspaceId);
 
-    const deletedWorkspace = await this.prisma.$transaction(async (tx) => {
+    // Events are never deleted: the old workspace is anonymised and kept for statistics.
+    const { deletedWorkspace, files } = await this.prisma.$transaction(async (tx) => {
       if (!nextMembership) {
-        await tx.event.deleteMany({ where: { workspaceId } });
-        await tx.equipmentItem.deleteMany({ where: { workspaceId } });
-        await tx.workspaceInvitation.deleteMany({ where: { workspaceId } });
-        await tx.supplier.deleteMany({ where: { workspaceId } });
-        await tx.venue.deleteMany({ where: { workspaceId } });
-        await tx.user.updateMany({
-          where: { person: { workspaceId } },
-          data: { personId: null },
-        });
-        await tx.person.deleteMany({ where: { workspaceId } });
-        return false;
+        // Resetting the only workspace: members continue in a fresh one with the same name and branding.
+        const fresh = await tx.workspace.create({ data: {
+          name: workspace.name, logoUrl: workspace.logoUrl, emailPrimaryColor: workspace.emailPrimaryColor,
+        } });
+        await tx.workspaceMember.updateMany({ where: { workspaceId }, data: { workspaceId: fresh.id } });
+        await tx.user.updateMany({ where: { defaultWorkspaceId: workspaceId }, data: { defaultWorkspaceId: fresh.id } });
+        await tx.workspace.update({ where: { id: workspaceId }, data: { logoUrl: null } });
+        return { deletedWorkspace: false, files: await anonymizeWorkspace(tx, workspaceId) };
       }
 
       const defaultUsers = await tx.user.findMany({
@@ -208,9 +206,10 @@ export class WorkspaceRepository {
         });
       }
 
-      await tx.workspace.delete({ where: { id: workspaceId } });
-      return true;
+      await tx.workspaceMember.deleteMany({ where: { workspaceId } });
+      return { deletedWorkspace: true, files: await anonymizeWorkspace(tx, workspaceId) };
     });
+    await removeUploadedFiles(files);
 
     return { ok: true, deletedWorkspace };
   }
