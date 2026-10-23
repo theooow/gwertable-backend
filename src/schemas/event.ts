@@ -18,6 +18,7 @@ export const eventSchema = z
     avgBasketCents: z.number().int().min(0).optional().default(0),
     vatMode: z.enum(["NON_ASSUJETTI", "ASSUJETTI"]).optional().default("NON_ASSUJETTI"),
     defaultVatRateBasisPoints: z.number().int().min(0).max(10000).optional().default(2000),
+    sacemEnabled: z.boolean().optional().default(true),
     sacemRateBasisPoints: z.number().int().min(0).max(10000).optional().default(1150),
     sacemBase: z.enum(["TICKETING", "TOTAL_REVENUE"]).optional().default("TICKETING"),
   })

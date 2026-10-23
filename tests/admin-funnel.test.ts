@@ -10,7 +10,7 @@ const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS);
 
 type Funnel = {
   steps: { key: string; users: number; eligible: number | null }[];
-  sources: { source: string; visitors: number; signups: number; activated: number }[];
+  sources: { source: string; visitors: number; signups: number; activated: number; subscribed: number }[];
   medianHoursToFirstBudgetLine: number | null;
 };
 
@@ -20,6 +20,7 @@ async function seedJourneys() {
     workspaceMemberships: { create: { workspaceId: workspace.id, role: "ADMIN" } } } });
   const session = await prisma.session.create({ data: { sessionToken: "funnel-admin", userId: admin.id, expires: new Date(Date.now() + 3600000) } });
   const orga = await prisma.user.create({ data: { email: "orga@abregi.test", createdAt: daysAgo(40), emailVerified: daysAgo(40),
+    trialStartedAt: daysAgo(40), stripeSubscriptionId: "sub_orga", subscriptionStatus: "active", subscriptionPlan: "LITE", usagePlan: "LITE",
     workspaceMemberships: { create: { workspaceId: workspace.id, role: "ADMIN" } } } });
   await prisma.user.create({ data: { email: "idle@abregi.test", createdAt: daysAgo(10) } });
 
@@ -61,15 +62,15 @@ describe("admin budget funnel", () => {
     const funnel = json<Funnel>(response);
     const steps = Object.fromEntries(funnel.steps.map((step) => [step.key, [step.users, step.eligible]]));
     assert.deepEqual(steps, {
-      visited: [2, null], leadCaptured: [3, null], trialCompleted: [2, null], trialConverted: [1, null], signedUp: [2, null], verified: [1, null], eventCreated: [1, null], budgetOpened: [1, null],
+      visited: [2, null], leadCaptured: [3, null], trialCompleted: [2, null], trialConverted: [1, null], signedUp: [2, null], verified: [1, null], trialStarted: [1, null], eventCreated: [1, null], budgetOpened: [1, null],
       firstBudgetLine: [1, null], budgetComplete: [1, null], returnedLaterDay: [1, 1], active7d: [1, 1], active30d: [1, 1],
-      invited: [1, null], inviteAccepted: [1, null], exported: [1, null], multiEvent: [1, null],
+      invited: [1, null], inviteAccepted: [1, null], exported: [1, null], multiEvent: [1, null], subscribed: [1, 1],
     });
     assert.equal(funnel.medianHoursToFirstBudgetLine, 2);
     assert.deepEqual(funnel.sources, [
-      { source: "instagram.com", visitors: 1, signups: 1, activated: 1 },
-      { source: "inconnue", visitors: 0, signups: 1, activated: 0 },
-      { source: "direct", visitors: 1, signups: 0, activated: 0 },
+      { source: "instagram.com", visitors: 1, signups: 1, activated: 1, subscribed: 1 },
+      { source: "inconnue", visitors: 0, signups: 1, activated: 0, subscribed: 0 },
+      { source: "direct", visitors: 1, signups: 0, activated: 0, subscribed: 0 },
     ]);
   });
 
