@@ -1,14 +1,15 @@
 import type { EventStatus, UsagePlan } from "@prisma/client";
 import { PlanRequiredError } from "./errors.js";
 
-export type PlanFeature = "ai.documentImport" | "ai.agents" | "team.invite" | "accounting.statements";
+export type PlanFeature = "ai.documentImport" | "ai.agents" | "team.invite" | "accounting.statements" | "workspace.create";
 
 const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
-  BETA_TEST: ["team.invite"],
+  BETA_TEST: ["team.invite", "workspace.create"],
+  // Invited collaborators without a plan use the workspace they join but cannot open their own.
   NONE: [],
-  LITE: [],
-  PLUS: ["ai.documentImport"],
-  PRO: ["ai.documentImport", "ai.agents", "team.invite", "accounting.statements"],
+  LITE: ["workspace.create"],
+  PLUS: ["ai.documentImport", "workspace.create"],
+  PRO: ["ai.documentImport", "ai.agents", "team.invite", "accounting.statements", "workspace.create"],
 };
 const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, NONE: 0, LITE: 1, PLUS: 3, PRO: null };
 export const activeEventStatuses: EventStatus[] = ["DRAFT", "PLANNING", "LIVE"];

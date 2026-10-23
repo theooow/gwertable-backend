@@ -252,6 +252,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/workspaces", { config: { documentation: { body: updateWorkspaceSchema, statusCodes: [201] } } }, async (request, reply) => {
+    requirePlanFeature(request.user!.usagePlan, "workspace.create");
     const parsed = updateWorkspaceSchema.parse(request.body);
     const workspace = await service.createWorkspace(request.user!.id, parsed.name);
     return reply.status(201).send({ workspace });

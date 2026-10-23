@@ -182,6 +182,9 @@ describe("auth and health routes", () => {
     assert.ok(stored.termsAcceptedAt);
     assert.equal(stored.termsVersion, CURRENT_TERMS_VERSION);
 
+    // Opening another workspace needs a plan; new accounts start without one.
+    assert.equal((await request("POST", "/api/workspaces", `Bearer ${payload.sessionToken}`, { name: "Deuxieme espace" })).statusCode, 403);
+    await prisma.user.update({ where: { email: "new-user@abregi.test" }, data: { usagePlan: "LITE" } });
     const additionalWorkspace = await request("POST", "/api/workspaces", `Bearer ${payload.sessionToken}`, {
       name: "Deuxieme espace",
     });
