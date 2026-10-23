@@ -4,16 +4,19 @@ import { prisma } from "./prisma.js";
 import { startNotificationWorker } from "./workers/notification-worker.js";
 import { startVolunteerEmailWorker } from "./workers/volunteer-email-worker.js";
 import { startBudgetLeadReminderWorker } from "./workers/budget-lead-reminder-worker.js";
+import { startRetentionWorker } from "./workers/retention-worker.js";
 
 const app = await buildApp();
 const notificationWorker = startNotificationWorker(prisma, app.log);
 const volunteerEmailWorker = startVolunteerEmailWorker(prisma, app.log);
 const budgetLeadReminderWorker = startBudgetLeadReminderWorker(prisma, app.log);
+const retentionWorker = startRetentionWorker(prisma, app.log);
 
 const shutdown = async () => {
   app.log.info("Stopping server");
   notificationWorker.stop();
   budgetLeadReminderWorker.stop();
+  retentionWorker.stop();
   await volunteerEmailWorker.stop();
   await app.close();
   await prisma.$disconnect();
