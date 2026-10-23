@@ -1,7 +1,7 @@
 import type { EventInput } from "../schemas/event.js";
 import { NotFoundError } from "../lib/errors.js";
 import { EventDao } from "../dao/event.dao.js";
-import { VenueDao } from "../dao/venue.dao.js";
+import { PersonDao } from "../dao/person.dao.js";
 import { ActivityRepository } from "./activity.repository.js";
 
 type EventListRow = Awaited<ReturnType<EventDao["findAll"]>>[number];
@@ -60,14 +60,14 @@ export type CollaboratorContext = {
 
 /**
  * Repository pour le domaine événement.
- * Orchestre l'accès aux données via {@link EventDao} et {@link VenueDao}.
+ * Orchestre l'accès aux données via {@link EventDao} et {@link PersonDao}.
  */
 export class EventRepository {
   private readonly activityRepository: ActivityRepository;
 
   constructor(
     private readonly eventDao: EventDao,
-    private readonly venueDao: VenueDao,
+    private readonly personDao: PersonDao,
     activityRepository: ActivityRepository,
   ) {
     this.activityRepository = activityRepository;
@@ -140,7 +140,7 @@ export class EventRepository {
 
   async createEvent(workspaceId: string, userId: string, data: EventInput) {
     if (data.venueId) {
-      await this.venueDao.findByIdOrThrow(data.venueId, workspaceId);
+      await this.personDao.findByIdOrThrow(data.venueId, workspaceId);
     }
     const event = await this.eventDao.create(workspaceId, data);
     await this.activityRepository.record({
@@ -170,7 +170,7 @@ export class EventRepository {
     if (!current) throw new NotFoundError("Evenement introuvable");
 
     if (data.venueId) {
-      await this.venueDao.findByIdOrThrow(data.venueId, workspaceId);
+      await this.personDao.findByIdOrThrow(data.venueId, workspaceId);
     }
 
     const updated = await this.eventDao.update(id, workspaceId, data);
@@ -214,24 +214,5 @@ export class EventRepository {
       notify: false,
     });
     return deleted;
-  }
-
-  /**
-   * Retourne tous les lieux actifs d'un espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   */
-  async listVenues(workspaceId: string) {
-    return this.venueDao.findAllActive(workspaceId);
-  }
-
-  /**
-   * Crée un nouveau lieu dans l'espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param name - Nom du lieu
-   */
-  async createVenue(workspaceId: string, name: string) {
-    return this.venueDao.create(workspaceId, name);
   }
 }

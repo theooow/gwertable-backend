@@ -71,12 +71,22 @@ export async function anonymizeWorkspace(tx: Prisma.TransactionClient, workspace
   await tx.fiscalYear.deleteMany({ where: ofWorkspace });
   await tx.legalEntity.deleteMany({ where: ofWorkspace });
   await tx.equipmentImportMatchMemory.deleteMany({ where: ofWorkspace });
-  await tx.person.deleteMany({ where: ofWorkspace });
+  // Venues used by events stay as anonymous places: locality and capacity feed regional statistics.
+  const venues = await tx.person.findMany({ where: { workspaceId, venueEvents: { some: {} } }, select: { id: true, address: true } });
+  const venueIds = venues.map((venue) => venue.id);
+  await tx.personDocument.deleteMany({ where: { personId: { in: venueIds } } });
+  await tx.personHistoryNote.deleteMany({ where: { personId: { in: venueIds } } });
+  for (const venue of venues) {
+    await tx.person.update({ where: { id: venue.id }, data: {
+      fullName: "Lieu anonymisé", address: localityOf(venue.address), email: null, phone: null, discordUserId: null, flags: [], tags: [],
+      availability: null, negotiatedPrices: null, specialConditions: null, technicalConstraints: null, averageFee: null,
+      bookingContact: null, musicalStyle: null, riderNotes: null, soundConstraints: null, openingHours: null,
+      electricalPower: null, securityContact: null, archivedAt: new Date(), anonymizedAt: new Date(),
+    } });
+  }
+  await tx.person.deleteMany({ where: { workspaceId, id: { notIn: venueIds } } });
   await tx.supplier.deleteMany({ where: ofWorkspace });
 
-  for (const venue of await tx.venue.findMany({ where: { workspaceId }, select: { id: true, address: true } })) {
-    await tx.venue.update({ where: { id: venue.id }, data: { name: "Lieu anonymisé", address: localityOf(venue.address), notes: null } });
-  }
   await tx.event.updateMany({ where: { workspaceId }, data: { name: ANONYMIZED_EVENT_NAME, description: null, bannerUrl: null, shotgunEventId: null } });
   await tx.user.updateMany({ where: { defaultWorkspaceId: workspaceId }, data: { defaultWorkspaceId: null } });
   await tx.workspace.update({ where: { id: workspaceId }, data: {

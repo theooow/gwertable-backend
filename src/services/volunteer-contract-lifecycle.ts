@@ -30,7 +30,7 @@ export async function contractContext(tx: Prisma.TransactionClient, applicationI
     contact: form?.contractContact || issuer.email || event.workspace.members[0]?.user.email || "",
     retentionYears: form?.contractRetentionYears ?? 3,
     event: { id: event.id, name: event.name, startsAt: event.startsAt.toISOString(), endsAt: event.endsAt?.toISOString() ?? null,
-      location: [event.venue?.name, event.venue?.address].filter(Boolean).join(" — ") || "Lieu à confirmer auprès de l’organisateur" },
+      location: [event.venue?.fullName, event.venue?.address].filter(Boolean).join(" — ") || "Lieu à confirmer auprès de l’organisateur" },
     shifts: shifts.map((s) => ({ ...s, team: s.team ?? "", notes: s.notes ?? "", startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() })),
   };
   return { app, shifts, snapshot, assignmentHash: hash(JSON.stringify(snapshot)), eligible: app.status === "APPROVED" && !app.person.archivedAt && shifts.length > 0 };

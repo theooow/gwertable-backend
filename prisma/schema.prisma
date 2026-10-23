@@ -345,7 +345,6 @@ model Workspace {
   invitations  WorkspaceInvitation[]
   eventCollaborators EventCollaborator[]
   persons      Person[]
-  venues       Venue[]
   suppliers    Supplier[]
   equipmentItems  EquipmentItem[]
   equipmentGroups EquipmentGroup[]
@@ -628,6 +627,7 @@ model Person {
   documents            PersonDocument[]
   historyNotes         PersonHistoryNote[]
   volunteerApplications VolunteerApplication[]
+  venueEvents           Event[] @relation("EventVenue")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -660,21 +660,6 @@ model PersonHistoryNote {
   createdAt DateTime  @default(now())
 
   @@index([personId])
-}
-
-model Venue {
-  id         String    @id @default(cuid())
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name       String
-  address    String?
-  capacity   Int?
-  notes      String?
-  archivedAt DateTime?
-
-  events     Event[]
-
-  @@index([workspaceId])
 }
 
 model Supplier {
@@ -781,7 +766,8 @@ model Event {
   description   String?
   bannerUrl     String?
   venueId       String?
-  venue         Venue?      @relation(fields: [venueId], references: [id])
+  // Venues are address book contacts (contactType VENUE).
+  venue         Person?     @relation("EventVenue", fields: [venueId], references: [id], onDelete: SetNull)
   parentEventId      String?     // si cloné depuis un autre event
   nbCollectifs       Int     @default(1)
   kegUnitPriceCents  Int     @default(0)

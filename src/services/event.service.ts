@@ -97,31 +97,6 @@ export class EventService {
     return this.eventRepository.deleteEvent(id, workspaceId, userId);
   }
 
-  /**
-   * Retourne la liste des lieux actifs de l'espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param role - Rôle de l'utilisateur courant
-   * @throws {ForbiddenError} Si le rôle ne permet pas la lecture
-   */
-  async listVenues(workspaceId: string, role: UserRole) {
-    requireCan(role, "event.read");
-    return this.eventRepository.listVenues(workspaceId);
-  }
-
-  /**
-   * Crée un lieu dans l'espace de travail.
-   *
-   * @param workspaceId - Identifiant de l'espace de travail
-   * @param role - Rôle de l'utilisateur courant
-   * @param name - Nom du lieu
-   * @throws {ForbiddenError} Si le rôle ne permet pas l'écriture
-   */
-  async createVenue(workspaceId: string, role: UserRole, name: string) {
-    requireCan(role, "event.write");
-    return this.eventRepository.createVenue(workspaceId, name);
-  }
-
   private async requireActiveEventSlot(userId: string, usagePlan: UsagePlan) {
     if (activeEventLimit(usagePlan) === null) return;
     requireActiveEventSlot(usagePlan, await this.eventRepository.countActiveEventsAdministeredBy(userId));

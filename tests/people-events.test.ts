@@ -58,15 +58,11 @@ describe("people and event routes", () => {
     assert.equal((await request("POST", `/api/people/${person.id}/archive`, authorization)).statusCode, 200);
     assert.equal((await request("POST", `/api/people/${person.id}/restore`, authorization)).statusCode, 200);
 
-    const createdVenue = await request("POST", "/api/events/venues", authorization, {
-      name: "Warehouse",
+    const createdVenue = await request("POST", "/api/people", authorization, {
+      fullName: "Warehouse", contactType: "VENUE",
     });
     assert.equal(createdVenue.statusCode, 201);
-    const venue = json<{ id: string; name: string }>(createdVenue);
-
-    const venues = await request("GET", "/api/events/venues", authorization);
-    assert.equal(venues.statusCode, 200);
-    assert.equal(json<unknown[]>(venues).length, 1);
+    const venue = json<{ id: string; fullName: string }>(createdVenue);
 
     const createdEvent = await request("POST", "/api/events", authorization, {
       ...eventPayload,
@@ -74,6 +70,8 @@ describe("people and event routes", () => {
     });
     assert.equal(createdEvent.statusCode, 201);
     const event = json<{ id: string; name: string }>(createdEvent);
+    const detail = json<{ venue: { fullName: string } }>(await request("GET", `/api/events/${event.id}`, authorization));
+    assert.equal(detail.venue.fullName, "Warehouse");
 
     const events = await request("GET", "/api/events", authorization);
     assert.equal(events.statusCode, 200);
@@ -105,10 +103,12 @@ describe("people and event routes", () => {
         tags: ["hidden"],
       },
     });
-    const otherVenue = await prisma.venue.create({
+    const otherVenue = await prisma.person.create({
       data: {
         workspaceId: otherWorkspace.id,
-        name: "Hidden Venue",
+        fullName: "Hidden Venue",
+        contactType: "VENUE",
+        tags: [],
       },
     });
     await prisma.event.create({
@@ -133,9 +133,10 @@ describe("people and event routes", () => {
     assert.equal(search.statusCode, 200);
     assert.deepEqual(json(search), []);
 
-    const venues = await request("GET", "/api/events/venues", authorization);
+    const venues = await request("GET", "/api/people?contactType=VENUE", authorization);
     assert.equal(venues.statusCode, 200);
     assert.deepEqual(json(venues), []);
+    assert.equal((await request("POST", "/api/events", authorization, { ...eventPayload, venueId: otherVenue.id })).statusCode, 404);
 
     const events = await request("GET", "/api/events", authorization);
     assert.equal(events.statusCode, 200);

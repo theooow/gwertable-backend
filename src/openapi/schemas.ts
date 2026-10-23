@@ -223,18 +223,6 @@ export const routeDocs: Record<string, RouteDoc> = {
     ],
     "summary": "Créer un événement"
   },
-  "GET /api/events/venues": {
-    "tags": [
-      "Événements"
-    ],
-    "summary": "Lister les lieux actifs de l'espace de travail"
-  },
-  "POST /api/events/venues": {
-    "tags": [
-      "Événements"
-    ],
-    "summary": "Créer un lieu"
-  },
   "GET /api/events/:id": {
     "tags": [
       "Événements"

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../prisma.js";
 import { EventDao } from "../dao/event.dao.js";
 import { ExpenseDao } from "../dao/expense.dao.js";
-import { VenueDao } from "../dao/venue.dao.js";
+import { PersonDao } from "../dao/person.dao.js";
 import { ActivityRepository } from "../repositories/activity.repository.js";
 import { BudgetLeadRepository } from "../repositories/budget-lead.repository.js";
 import { BudgetRepository } from "../repositories/budget.repository.js";
@@ -14,7 +14,7 @@ import { EventService } from "../services/event.service.js";
 
 const service = new BudgetTrialService(
   new BudgetLeadRepository(prisma),
-  new EventService(new EventRepository(new EventDao(prisma), new VenueDao(prisma), new ActivityRepository(prisma))),
+  new EventService(new EventRepository(new EventDao(prisma), new PersonDao(prisma), new ActivityRepository(prisma))),
   new BudgetService(new BudgetRepository(new ExpenseDao(prisma), prisma)),
 );
 

@@ -39,7 +39,6 @@ export async function resetDatabase() {
       "EventNotificationSettings",
       "NotificationDelivery",
       "User",
-      "Venue",
       "VerificationToken",
       "WorkspaceMember",
       "WorkspaceInvitation",
@@ -136,10 +135,10 @@ export async function seedEventContext(authorization: string) {
   const createdPerson = await request("POST", "/api/people", authorization, personPayload);
   const person = json<{ id: string; fullName: string }>(createdPerson);
 
-  const createdVenue = await request("POST", "/api/events/venues", authorization, {
-    name: "Warehouse",
+  const createdVenue = await request("POST", "/api/people", authorization, {
+    fullName: "Warehouse", contactType: "VENUE", address: "1 quai de Seine, 75019 Paris",
   });
-  const venue = json<{ id: string; name: string }>(createdVenue);
+  const venue = json<{ id: string; fullName: string }>(createdVenue);
 
   const createdEvent = await request("POST", "/api/events", authorization, {
     ...eventPayload,

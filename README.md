@@ -480,7 +480,7 @@ Le modèle de données est défini dans `prisma/schema.prisma`, organisé en plu
 
 - **Auth** : `User`, `Session`, `ApiToken`, `OAuthClient`, `OAuthAuthorizationCode`, `OAuthGrant`, `VerificationToken`, `Account`
 - **Multi-tenant** : `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `LegalEntity`
-- **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote`, `Venue`, `Supplier`
+- **Répertoire** : `Person`, `PersonDocument`, `PersonHistoryNote` (les lieux sont des contacts de type `VENUE`), `Supplier`
 - **Événements** : `Event`, `EventCollaborator`, `EventParticipant`
 - **Bénévoles** : `VolunteerForm`, `VolunteerApplication`, `VolunteerContract`, `VolunteerContractAccess`, `VolunteerEmail`, `VolunteerSwap`, `Shift`, `CateringService`, `CateringBooking`
 - **Tâches** : `Task`, `TaskComment`, `TaskCategory`, `TaskAttachment`, `TaskAssignee`, `TaskCalendarSubscription`

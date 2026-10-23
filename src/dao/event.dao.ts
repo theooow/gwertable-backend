@@ -7,7 +7,7 @@ import { BaseDao } from "./base.dao.js";
 const EVENT_DEFAULT_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const listInclude = {
-  venue: { select: { name: true } },
+  venue: { select: { fullName: true, address: true } },
   _count: { select: { participants: true, tasks: true, expenses: true, runOfShow: true } },
   expenses: { select: { amountCents: true } },
   incomes: { select: { amountCents: true } },

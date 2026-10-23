@@ -9,7 +9,7 @@ describe("workspace anonymization", () => {
   it("keeps events, genres, locality and amounts when the last member deletes the account", async () => {
     const { authorization, user } = await seedAdminSession();
     const { event, person } = await seedEventContext(authorization);
-    const venue = await prisma.venue.create({ data: { workspaceId: event.workspaceId, name: "Chez Paul", address: "12 rue Oberkampf, 75011 Paris", capacity: 300, notes: "Code 1234" } });
+    const venue = await prisma.person.create({ data: { workspaceId: event.workspaceId, fullName: "Chez Paul", contactType: "VENUE", address: "12 rue Oberkampf, 75011 Paris", venueCapacity: 300, specialConditions: "Code 1234", phone: "0611223344", tags: [] } });
     await prisma.event.update({ where: { id: event.id }, data: { genres: ["TECHNO"], venueId: venue.id, description: "Avec Paul" } });
     const participant = await prisma.eventParticipant.create({ data: { eventId: event.id, personId: person.id, roles: ["ARTIST"] } });
     await prisma.expense.create({ data: { eventId: event.id, label: "Cachet DJ Paul", category: "artistes", amountCents: 50000, paidById: person.id, sourceParticipantId: participant.id, notes: "IBAN FR76…" } });
@@ -25,11 +25,12 @@ describe("workspace anonymization", () => {
     assert.ok(workspace.anonymizedAt); assert.equal(workspace.name, "Espace anonymisé");
     const kept = await prisma.event.findUniqueOrThrow({ where: { id: event.id }, include: { venue: true, expenses: true, incomes: true, ticketTiers: true } });
     assert.equal(kept.name, "Événement anonymisé"); assert.equal(kept.description, null); assert.deepEqual(kept.genres, ["TECHNO"]);
-    assert.equal(kept.venue?.address, "75011 Paris"); assert.equal(kept.venue?.capacity, 300); assert.equal(kept.venue?.notes, null);
+    assert.equal(kept.venue?.fullName, "Lieu anonymisé"); assert.equal(kept.venue?.address, "75011 Paris"); assert.equal(kept.venue?.venueCapacity, 300);
+    assert.equal(kept.venue?.specialConditions, null); assert.equal(kept.venue?.phone, null);
     assert.deepEqual(kept.expenses.map((e) => [e.label, e.amountCents, e.paidById, e.notes]), [["artistes", 50000, null, null]]);
     assert.deepEqual(kept.incomes.map((i) => [i.label, i.amountCents]), [["dons", 2000]]);
     assert.equal(kept.ticketTiers[0]?.sold, 80);
-    assert.equal(await prisma.person.count({ where: { workspaceId: event.workspaceId } }), 0);
+    assert.equal(await prisma.person.count({ where: { workspaceId: event.workspaceId, contactType: { not: "VENUE" } } }), 0);
     assert.equal(await prisma.volunteerApplication.count(), 0);
     assert.equal(await prisma.activityEntry.count({ where: { workspaceId: event.workspaceId } }), 0);
   });

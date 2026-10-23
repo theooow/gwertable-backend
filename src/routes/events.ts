@@ -4,7 +4,7 @@ import { prisma } from "../prisma.js";
 import { eventSchema } from "../schemas/event.js";
 import { LIMITS, requiredText } from "../schemas/limits.js";
 import { EventDao } from "../dao/event.dao.js";
-import { VenueDao } from "../dao/venue.dao.js";
+import { PersonDao } from "../dao/person.dao.js";
 import { EventRepository } from "../repositories/event.repository.js";
 import { EventService } from "../services/event.service.js";
 import { ActivityRepository } from "../repositories/activity.repository.js";
@@ -12,11 +12,10 @@ import { can } from "../lib/permissions.js";
 import { billingService } from "./billing.js";
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
-const createVenueSchema = z.object({ name: requiredText("Le nom du lieu", LIMITS.name) });
 
 let log: FastifyInstance["log"] | undefined;
 const service = new EventService(
-  new EventRepository(new EventDao(prisma), new VenueDao(prisma), new ActivityRepository(prisma)),
+  new EventRepository(new EventDao(prisma), new PersonDao(prisma), new ActivityRepository(prisma)),
   // A Stripe outage must not fail the event update that is already saved.
   (userId) => billingService.endTrialAfterClosedEvent(userId).catch((error: unknown) => log?.error({ err: error, userId }, "Ending the trial after a closed event failed")),
 );
@@ -44,16 +43,6 @@ export async function eventRoutes(fastify: FastifyInstance) {
     const data = eventSchema.parse(request.body);
     const event = await service.create(request.workspaceId, request.userRole, request.user!.id, request.user!.usagePlan, data);
     return reply.status(201).send(event);
-  });
-
-  fastify.get("/api/events/venues", { config: { documentation: {  } } }, async (request) => {
-    return service.listVenues(request.workspaceId, request.userRole);
-  });
-
-  fastify.post("/api/events/venues", { config: { documentation: { body: createVenueSchema, statusCodes: [201] } } }, async (request, reply) => {
-    const { name } = createVenueSchema.parse(request.body);
-    const venue = await service.createVenue(request.workspaceId, request.userRole, name);
-    return reply.status(201).send(venue);
   });
 
   fastify.get("/api/events/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
