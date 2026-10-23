@@ -4,6 +4,7 @@ import { env } from "../env.js";
 import { sendInactivityWarningEmail } from "../lib/mailer.js";
 import { removeUploadedFiles } from "../lib/upload-files.js";
 import { anonymizeWorkspace } from "../lib/workspace-anonymization.js";
+import { effectivePlan } from "../lib/usage-plans.js";
 
 const DAY_MS = 24 * 3600_000;
 const YEAR_MS = 365 * DAY_MS;
@@ -99,11 +100,27 @@ export async function deleteInactiveAccounts(db: PrismaClient, now = new Date())
   return users.length;
 }
 
+/** Ends admin plan grants past their date: the Stripe subscription, if any, takes over again. */
+export async function expirePlanGrants(db: PrismaClient, now = new Date()) {
+  const users = await db.user.findMany({
+    where: { planGrant: { not: null }, planGrantUntil: { lte: now } },
+    select: { id: true, subscriptionPlan: true, subscriptionStatus: true },
+  });
+  for (const user of users) {
+    await db.user.update({ where: { id: user.id }, data: {
+      planGrant: null, planGrantUntil: null,
+      usagePlan: effectivePlan({ ...user, planGrant: null, planGrantUntil: null }, now),
+    } });
+  }
+  return users.length;
+}
+
 export function startRetentionWorker(db: PrismaClient, logger: FastifyBaseLogger) {
   let active: Promise<unknown> | undefined;
   const tick = () => {
     if (active) return;
-    active = purgeVolunteerData(db)
+    active = expirePlanGrants(db)
+      .then(() => purgeVolunteerData(db))
       .then(() => warnInactiveAccounts(db, logger))
       .then(() => deleteInactiveAccounts(db))
       .catch(() => logger.error("Retention purge failed"))

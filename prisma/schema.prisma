@@ -294,6 +294,11 @@ model User {
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   subscriptionStatus   String?
+  // Plan paid through Stripe; usagePlan is the effective plan once admin grants are applied.
+  subscriptionPlan     UsagePlan?
+  // Plan granted from the admin panel: Stripe webhooks never override it until planGrantUntil.
+  planGrant            UsagePlan?
+  planGrantUntil       DateTime?
   subscriptionInterval String?
   subscriptionPeriodEnd DateTime?
   subscriptionCancelAtPeriodEnd Boolean @default(false)

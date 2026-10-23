@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { prisma } from "../src/prisma.js";
 import { stripe } from "../src/lib/stripe.js";
 import { eventPayload, json, request, seedAdminSession, setupTestApp } from "./helpers.js";
+import { expirePlanGrants } from "../src/workers/retention-worker.js";
 
 setupTestApp();
 
@@ -146,3 +147,22 @@ test("emails the customer on the first failed payment and when the subscription 
   ]);
   assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).usagePlan, "NONE");
 });
+
+test("an admin grant survives subscription webhooks and gives the plan back when it expires", async () => {
+  const { authorization, user } = await seedAdminSession("NONE");
+  await prisma.user.update({ where: { id: user.id }, data: { stripeCustomerId: "cus_abregi", planGrant: "PRO", planGrantUntil: new Date("2099-01-01"), usagePlan: "PRO" } });
+  client.subscriptions.retrieve = stub(subscription({ status: "active" }));
+  assert.equal((await webhook("customer.subscription.updated", { id: "sub_abregi" }, "evt_grant")).statusCode, 200);
+  const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+  assert.equal(stored.usagePlan, "PRO");
+  assert.equal(stored.subscriptionPlan, "PLUS");
+  const billing = json<{ grantedPlan: string | null; grantedUntil: string | null }>(await request("GET", "/api/billing/subscription", authorization));
+  assert.equal(billing.grantedPlan, "PRO");
+  assert.ok(billing.grantedUntil);
+
+  assert.equal(await expirePlanGrants(prisma, new Date("2099-01-02")), 1);
+  const expired = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+  assert.equal(expired.usagePlan, "PLUS");
+  assert.equal(expired.planGrant, null);
+});
+

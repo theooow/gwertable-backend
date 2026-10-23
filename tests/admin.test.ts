@@ -52,6 +52,15 @@ describe("admin routes", () => {
     assert.equal(json<{ user: { usagePlan: string } }>(updated).user.usagePlan, "PRO");
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).usagePlan, "PRO");
 
+    // A grant wins over Stripe until it is removed or expires.
+    await prisma.user.update({ where: { id: target.id }, data: { subscriptionPlan: "LITE", subscriptionStatus: "active" } });
+    const granted = await request("PATCH", `/api/admin/users/${target.id}/plan`, authorization, { usagePlan: "PRO", until: "2099-12-31" });
+    assert.deepEqual(json<{ user: { usagePlan: string; planGrant: string; subscriptionPlan: string } }>(granted).user.usagePlan, "PRO");
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: target.id } })).planGrantUntil?.toISOString(), "2099-12-31T23:59:59.999Z");
+    const released = await request("PATCH", `/api/admin/users/${target.id}/plan`, authorization, { usagePlan: null });
+    assert.equal(json<{ user: { usagePlan: string } }>(released).user.usagePlan, "LITE");
+    await request("PATCH", `/api/admin/users/${target.id}/plan`, authorization, { usagePlan: "PRO" });
+
     // The API journal is written after the response is sent.
     for (let attempt = 0; attempt < 40 && !(await prisma.apiLog.count({ where: { action: "Forfait modifié" } })); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 25));

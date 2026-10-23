@@ -4,13 +4,12 @@ import { env } from "../env.js";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
 import { stripe } from "../lib/stripe.js";
 import { sendBillingIssueEmail, type BillingIssue } from "../lib/mailer.js";
+import { activeGrant, effectivePlan, ENTITLED_SUBSCRIPTION_STATUSES as ENTITLED_STATUSES } from "../lib/usage-plans.js";
 import type { BillingRepository, BillingUser } from "../repositories/billing.repository.js";
 import type { CheckoutInput, PortalInput } from "../schemas/billing.js";
 
 type PaidPlan = CheckoutInput["plan"];
 
-// past_due keeps access while Smart Retries try to recover the payment.
-const ENTITLED_STATUSES = new Set<string>(["trialing", "active", "past_due"]);
 const SUBSCRIPTION_EVENTS = new Set<string>([
   "customer.subscription.created",
   "customer.subscription.updated",
@@ -51,6 +50,8 @@ export class BillingService {
       trialAvailable: !user.trialStartedAt,
       trialDays: env.BILLING_TRIAL_DAYS,
       canManage: Boolean(user.stripeCustomerId),
+      grantedPlan: activeGrant(user),
+      grantedUntil: activeGrant(user) ? user.planGrantUntil : null,
     };
   }
 
@@ -143,13 +144,15 @@ export class BillingService {
 
     const item = subscription.items.data[0];
     const plan = planFromPrice(item?.price);
-    const usagePlan: UsagePlan = entitled && plan ? plan : "NONE";
+    const subscriptionPlan: UsagePlan | null = entitled && plan ? plan : null;
+    const usagePlan = effectivePlan({ ...user, subscriptionPlan, subscriptionStatus: subscription.status });
     const trialStartedAt = fromUnix(subscription.trial_start);
     await this.repository.applySubscription(user.id, {
       usagePlan,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscription.id,
       subscriptionStatus: subscription.status,
+      subscriptionPlan,
       subscriptionInterval: item?.price.recurring?.interval ?? null,
       subscriptionPeriodEnd: fromUnix(item?.current_period_end),
       subscriptionCancelAtPeriodEnd: subscription.cancel_at_period_end,

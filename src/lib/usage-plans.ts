@@ -11,6 +11,27 @@ const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
   PLUS: ["ai.documentImport", "workspace.create"],
   PRO: ["ai.documentImport", "ai.agents", "team.invite", "accounting.statements", "workspace.create"],
 };
+// past_due keeps access while Smart Retries try to recover the payment.
+export const ENTITLED_SUBSCRIPTION_STATUSES = new Set<string>(["trialing", "active", "past_due"]);
+
+type PlanSources = {
+  planGrant: UsagePlan | null;
+  planGrantUntil: Date | null;
+  subscriptionPlan: UsagePlan | null;
+  subscriptionStatus: string | null;
+};
+
+export function activeGrant({ planGrant, planGrantUntil }: Pick<PlanSources, "planGrant" | "planGrantUntil">, now = new Date()) {
+  return planGrant && (!planGrantUntil || planGrantUntil > now) ? planGrant : null;
+}
+
+/** A running admin grant wins over Stripe; otherwise the paid plan while the subscription is entitled. */
+export function effectivePlan(sources: PlanSources, now = new Date()): UsagePlan {
+  const grant = activeGrant(sources, now);
+  if (grant) return grant;
+  return sources.subscriptionPlan && ENTITLED_SUBSCRIPTION_STATUSES.has(sources.subscriptionStatus ?? "") ? sources.subscriptionPlan : "NONE";
+}
+
 const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, NONE: 0, LITE: 1, PLUS: 3, PRO: null };
 export const activeEventStatuses: EventStatus[] = ["DRAFT", "PLANNING", "LIVE"];
 const upgradePath: UsagePlan[] = ["LITE", "PLUS", "PRO"];

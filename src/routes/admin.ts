@@ -3,13 +3,17 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { isAdminEmail } from "../lib/admin.js";
 import { ForbiddenError, NotFoundError } from "../lib/errors.js";
+import { effectivePlan } from "../lib/usage-plans.js";
 import { getAdminKpis } from "../repositories/admin-kpi.repository.js";
 import { FUNNEL_PERIODS, getBudgetFunnel } from "../repositories/admin-funnel.repository.js";
 
 const userParamsSchema = z.object({ userId: z.string().min(1) });
+// A null plan removes the grant and gives the Stripe subscription back control of the plan.
 const updatePlanSchema = z.object({
-  usagePlan: z.enum(["BETA_TEST", "NONE", "LITE", "PLUS", "PRO"]),
+  usagePlan: z.enum(["BETA_TEST", "NONE", "LITE", "PLUS", "PRO"]).nullable(),
+  until: z.iso.date().nullable().optional(),
 });
+const planSelect = { usagePlan: true, planGrant: true, planGrantUntil: true, subscriptionPlan: true, subscriptionStatus: true } as const;
 
 function assertAdmin(request: FastifyRequest) {
   if (!request.user || !isAdminEmail(request.user.email)) {
@@ -76,7 +80,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       prisma.apiLog.aggregate({ where, _avg: { durationMs: true } }),
       prisma.apiLog.count({ where: { ...where, durationMs: { gte: 1000 } } }),
       prisma.user.findMany({ where: { archivedAt: null }, orderBy: { createdAt: "desc" }, take: 100,
-        select: { id: true, email: true, name: true, usagePlan: true, emailVerified: true, createdAt: true,
+        select: { id: true, email: true, name: true, ...planSelect, emailVerified: true, createdAt: true,
           defaultWorkspace: { select: { id: true, name: true } } } }),
     ]);
     return { generatedAt: new Date().toISOString(), kpis: { totalUsers, totalWorkspaces, totalEvents, activeSessions,
@@ -91,23 +95,26 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.patch("/api/admin/users/:userId/plan", { config: { documentation: { params: userParamsSchema, body: updatePlanSchema } } }, async (request) => {
     assertAdmin(request);
     const { userId } = userParamsSchema.parse(request.params);
-    const { usagePlan } = updatePlanSchema.parse(request.body);
+    const { usagePlan, until } = updatePlanSchema.parse(request.body);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true },
+      select: planSelect,
     });
     if (!user) throw new NotFoundError("Utilisateur introuvable");
 
+    // The grant ends at the close of its last day.
+    const planGrantUntil = usagePlan && until ? new Date(`${until}T23:59:59.999Z`) : null;
+    const grant = { planGrant: usagePlan, planGrantUntil };
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { usagePlan },
+      data: { ...grant, usagePlan: effectivePlan({ ...user, ...grant }) },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
-        usagePlan: true,
+        ...planSelect,
         emailVerified: true,
         createdAt: true,
         defaultWorkspace: { select: { id: true, name: true } },
@@ -125,6 +132,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
         name: updated.name,
         role: updated.role,
         usagePlan: updated.usagePlan,
+        planGrant: updated.planGrant,
+        planGrantUntil: updated.planGrantUntil?.toISOString() ?? null,
+        subscriptionPlan: updated.subscriptionPlan,
+        subscriptionStatus: updated.subscriptionStatus,
         emailVerified: updated.emailVerified?.toISOString() ?? null,
         createdAt: updated.createdAt.toISOString(),
         defaultWorkspace: updated.defaultWorkspace

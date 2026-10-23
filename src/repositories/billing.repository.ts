@@ -10,6 +10,9 @@ const billingUser = {
   stripeCustomerId: true,
   stripeSubscriptionId: true,
   subscriptionStatus: true,
+  subscriptionPlan: true,
+  planGrant: true,
+  planGrantUntil: true,
   subscriptionInterval: true,
   subscriptionPeriodEnd: true,
   subscriptionCancelAtPeriodEnd: true,
@@ -24,6 +27,7 @@ export type SubscriptionState = {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   subscriptionStatus: string;
+  subscriptionPlan: UsagePlan | null;
   subscriptionInterval: string | null;
   subscriptionPeriodEnd: Date | null;
   subscriptionCancelAtPeriodEnd: boolean;
