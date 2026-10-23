@@ -8,7 +8,7 @@ const planFeatures: Record<UsagePlan, readonly PlanFeature[]> = {
   // Invited collaborators without a plan use the workspace they join but cannot open their own.
   NONE: [],
   LITE: ["workspace.create"],
-  PLUS: ["ai.documentImport", "workspace.create"],
+  PLUS: ["ai.documentImport", "team.invite", "workspace.create"],
   PRO: ["ai.documentImport", "ai.agents", "team.invite", "accounting.statements", "workspace.create"],
 };
 // past_due keeps access while Smart Retries try to recover the payment.

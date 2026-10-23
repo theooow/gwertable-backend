@@ -48,19 +48,19 @@ test("events of another workspace the user administers count towards the cap", a
   assert.equal((await createEvent(authorization)).statusCode, 403);
 });
 
-test("inviting collaborators is reserved to the Pro plan", async () => {
-  const { authorization, user } = await seedAdminSession("PLUS");
+test("inviting collaborators starts with the Plus plan", async () => {
+  const { authorization, user } = await seedAdminSession("LITE");
   const event = json<{ id: string }>(await createEvent(authorization));
   const invite = () => request("POST", "/api/workspace/invitations", authorization, { email: "collab@abregi.test", role: "VOLUNTEER" });
   const collaborate = () => request("POST", `/api/events/${event.id}/collaborators`, authorization, { email: "guest@abregi.test", role: "VOLUNTEER" });
 
   const refused = await invite();
   assert.equal(refused.statusCode, 403);
-  assert.match(refused.body, /plan Pro/);
-  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PRO");
+  assert.match(refused.body, /plan Plus/);
+  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PLUS");
   assert.equal((await collaborate()).statusCode, 403);
 
-  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
+  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLUS" } });
   assert.equal((await invite()).statusCode, 201);
   assert.equal((await collaborate()).statusCode, 201);
 });
