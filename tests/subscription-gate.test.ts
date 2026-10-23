@@ -23,5 +23,8 @@ describe("subscription gate", () => {
     assert.equal(ownWorkspace.statusCode, 403);
     assert.equal(json<{ requiredPlan: string }>(ownWorkspace).requiredPlan, "LITE");
     assert.equal((await request("POST", "/api/workspaces", authorization, { name: "Second espace" })).statusCode, 201);
+
+    await prisma.user.updateMany({ where: { email: "admin@abregi.test" }, data: { subscriptionStatus: "past_due" } });
+    assert.equal(json<{ user: { subscriptionStatus: string } }>(await request("GET", "/api/auth/me", authorization)).user.subscriptionStatus, "past_due");
   });
 });

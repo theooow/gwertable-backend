@@ -15,6 +15,8 @@ import { requirePlanFeature } from "../lib/usage-plans.js";
  */
 type AuthUser = Pick<User, "id" | "email" | "name" | "image" | "personId"> & {
   usagePlan: User["usagePlan"];
+  /** Lets clients warn about a failed payment while Stripe retries it. */
+  subscriptionStatus: User["subscriptionStatus"];
   firstName: User["firstName"];
   lastName: User["lastName"];
   phone: User["phone"];
@@ -142,6 +144,7 @@ const authUserSelect = {
   themePrimaryColor: true,
   termsVersion: true,
   usagePlan: true,
+  subscriptionStatus: true,
   personId: true,
   defaultWorkspaceId: true,
   archivedAt: true,
