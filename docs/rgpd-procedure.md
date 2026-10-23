@@ -17,7 +17,7 @@ Les purges tournent dans `src/workers/retention-worker.ts` (toutes les 6 heures)
 | Données | Déclencheur | Sort | Code |
 |---|---|---|---|
 | Compte utilisateur | 3 ans sans connexion (`User.lastSeenAt`), email d'avertissement 30 jours avant ; jamais pour un abonnement actif | Supprimé | `warnInactiveAccounts`, `deleteInactiveAccounts` |
-| Espace de travail | Dernier membre parti (suppression de compte ou inactivité) | Anonymisé : événements gardés pour les statistiques | `anonymizeWorkspace` |
+| Espace de travail | Suppression de l'espace, ou dernier membre parti (suppression de compte ou inactivité) | Anonymisé : événements gardés pour les statistiques | `anonymizeWorkspace` |
 | Candidature bénévole, préférence alimentaire des participants | 1 an après la fin de l'événement (sauf contrat encore conservé) | Supprimée, le contact reste dans le carnet | `purgeVolunteerData` |
 | Contrat de bénévolat | Durée choisie par l'organisation (3 ans par défaut) après la fin de l'événement | Supprimé | `purgeVolunteerData` |
 | Contact supprimé par le client | Demande du client | Supprimé, ou anonymisé s'il reste lié à un contrat, une annonce ou un compte | `DELETE /api/people/:id` |
