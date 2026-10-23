@@ -284,6 +284,9 @@ model User {
   emailVerified DateTime?
   termsAcceptedAt DateTime?
   termsVersion    String?
+  // Drives the inactivity purge announced in the privacy policy.
+  lastSeenAt         DateTime @default(now())
+  inactivityWarnedAt DateTime?
   // Legacy account-level field. It is no longer used for authorisation:
   // permissions are granted exclusively by WorkspaceMember.role.
   role          UserRole  @default(VIEWER)

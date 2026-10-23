@@ -150,6 +150,18 @@ const authUserSelect = {
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MCP_PATH = "/mcp";
 const API_TOKEN_TOUCH_INTERVAL_MS = 60_000;
+const LAST_SEEN_TOUCH_INTERVAL_MS = 3_600_000;
+const lastSeenTouches = new Map<string, number>();
+
+async function touchLastSeen(userId: string) {
+  const now = Date.now();
+  if ((lastSeenTouches.get(userId) ?? 0) > now - LAST_SEEN_TOUCH_INTERVAL_MS) return;
+  lastSeenTouches.set(userId, now);
+  await prisma.user.updateMany({
+    where: { id: userId, lastSeenAt: { lt: new Date(now - LAST_SEEN_TOUCH_INTERVAL_MS) } },
+    data: { lastSeenAt: new Date(now), inactivityWarnedAt: null },
+  });
+}
 
 async function findAccount(token: string) {
   if (!isApiToken(token)) {
@@ -196,6 +208,7 @@ export const authPlugin = fp(async (fastify) => {
     if (!authenticated || authenticated.user.archivedAt) {
       throw new UnauthorizedError("Non authentifie");
     }
+    await touchLastSeen(authenticated.user.id);
 
     const { apiTokenScope } = authenticated;
     if (apiTokenScope) {
