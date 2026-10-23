@@ -126,3 +126,23 @@ export async function sendBudgetTrialReminderEmail({ email, resumeUrl, unsubscri
     headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
   });
 }
+
+export async function sendInactivityWarningEmail({ email, loginUrl, deletionDate }: { email: string; loginUrl: string; deletionDate: Date }) {
+  if (env.MAIL_TRANSPORT === "log") {
+    console.info({ email }, "Inactivity warning skipped (log transport)");
+    return;
+  }
+  const date = deletionDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" });
+  const subject = "Votre compte Abregi sera supprimé faute d’activité";
+  const hook = `Vous ne vous êtes pas connecté à Abregi depuis bientôt trois ans. Sans connexion de votre part, votre compte sera supprimé le ${date}.`;
+  const detail = "Si vous êtes le dernier membre de votre espace, ses contacts, bénévoles et documents seront effacés ; les événements ne seront conservés que sous forme anonyme. Pensez à exporter ce dont vous avez besoin.";
+  const keep = "Pour conserver votre compte, il suffit de vous connecter.";
+  const text = [hook, "", detail, "", keep, `Me connecter : ${loginUrl}`].join("\n");
+  const html = renderEmailHtml({
+    preheader: hook,
+    title: "Votre compte va être supprimé",
+    paragraphs: [hook, detail, keep],
+    action: { label: "Me connecter", url: loginUrl },
+  });
+  await createTransport().sendMail({ from: env.MAIL_FROM, to: email, subject, text, html });
+}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { seedAdminSession, seedEventContext, setupTestApp } from "./helpers.js";
 import { prisma } from "../src/prisma.js";
-import { purgeVolunteerData } from "../src/workers/retention-worker.js";
+import { deleteInactiveAccounts, purgeVolunteerData, warnInactiveAccounts } from "../src/workers/retention-worker.js";
 setupTestApp();
 
 const YEAR_MS = 365 * 24 * 3600_000;
@@ -29,5 +29,32 @@ describe("retention", () => {
 
     assert.deepEqual(await purgeVolunteerData(prisma, new Date(now.getTime() + 1.5 * YEAR_MS)), { contracts: 1, applications: 1 });
     assert.equal(await prisma.volunteerApplication.count(), 0);
+  });
+
+  it("warns then deletes inactive accounts, sparing paying customers and keeping shared workspaces", async () => {
+    const now = new Date("2030-06-01T00:00:00Z");
+    const longAgo = new Date(now.getTime() - 3 * YEAR_MS - 1000);
+    const account = async (email: string) => {
+      const workspace = await prisma.workspace.create({ data: { name: email } });
+      return prisma.user.create({ data: { email, workspaceMemberships: { create: { workspaceId: workspace.id, role: "ADMIN" } } } });
+    };
+    const [solo, paying, soon, admin] = await Promise.all(["solo", "paying", "soon", "admin"].map((name) => account(`${name}@example.test`)));
+    const soloWorkspace = (await prisma.workspaceMember.findFirstOrThrow({ where: { userId: solo.id } })).workspaceId;
+    const sharedWorkspace = (await prisma.workspaceMember.findFirstOrThrow({ where: { userId: admin.id } })).workspaceId;
+    const colleague = await prisma.user.create({ data: { email: "colleague@example.test", lastSeenAt: now, workspaceMemberships: { create: { workspaceId: sharedWorkspace, role: "ORGANIZER" } } } });
+    const warned = new Date(now.getTime() - 31 * 24 * 3600_000);
+    await prisma.user.update({ where: { id: solo.id }, data: { lastSeenAt: longAgo, inactivityWarnedAt: warned } });
+    await prisma.user.update({ where: { id: admin.id }, data: { lastSeenAt: longAgo, inactivityWarnedAt: warned } });
+    await prisma.user.update({ where: { id: paying.id }, data: { lastSeenAt: longAgo, subscriptionStatus: "active" } });
+    await prisma.user.update({ where: { id: soon.id }, data: { lastSeenAt: new Date(now.getTime() - 3 * YEAR_MS + 10 * 24 * 3600_000) } });
+
+    assert.equal(await warnInactiveAccounts(prisma, undefined, now), 1);
+    assert.ok((await prisma.user.findUniqueOrThrow({ where: { id: soon.id } })).inactivityWarnedAt);
+    assert.equal(await deleteInactiveAccounts(prisma, now), 2);
+
+    assert.deepEqual((await prisma.user.findMany({ where: { id: { in: [solo.id, admin.id, paying.id, soon.id] } }, select: { id: true } })).map((u) => u.id).sort(), [paying.id, soon.id].sort());
+    assert.ok((await prisma.workspace.findUniqueOrThrow({ where: { id: soloWorkspace } })).anonymizedAt);
+    assert.equal((await prisma.workspace.findUniqueOrThrow({ where: { id: sharedWorkspace } })).anonymizedAt, null);
+    assert.equal((await prisma.workspaceMember.findFirstOrThrow({ where: { userId: colleague.id } })).role, "ADMIN");
   });
 });
