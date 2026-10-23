@@ -40,7 +40,7 @@ const documentBodySchema = z.object({
 });
 
 const historyNoteBodySchema = z.object({
-  body: z.string().min(1).max(2000),
+  kind: z.enum(["CALL", "EMAIL", "MEETING", "QUOTE_OR_CONTRACT", "PAYMENT", "OTHER"]),
   eventDate: z.string().datetime().optional().nullable(),
 });
 
@@ -171,13 +171,13 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     requireCan(request.userRole, "person.write");
     const person = await dao.findByIdOrThrow(id, request.workspaceId);
-    const { body, eventDate } = historyNoteBodySchema.parse(request.body);
+    const { kind, eventDate } = historyNoteBodySchema.parse(request.body);
     const note = await dao.createHistoryNote(id, {
-      body,
+      kind,
       eventDate: eventDate ? new Date(eventDate) : null,
     });
     await recordRequestActivity(request, {
-      type: "PERSON_NOTE_ADDED", title: `Note ajoutée à l'historique de ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
+      type: "PERSON_NOTE_ADDED", title: `Échange ajouté à l'historique de ${person.fullName}`, entityType: "PERSON", entityId: person.id, notify: false,
     });
     return reply.status(201).send(note);
   });
@@ -188,10 +188,10 @@ export async function peopleRoutes(fastify: FastifyInstance) {
     const existing = await prisma.personHistoryNote.findFirst({
       where: { id: noteId, person: { workspaceId: request.workspaceId } },
     });
-    if (!existing) throw new NotFoundError("Note introuvable");
+    if (!existing) throw new NotFoundError("Échange introuvable");
     await dao.deleteHistoryNote(noteId, existing.personId);
     await recordRequestActivity(request, {
-      type: "PERSON_NOTE_DELETED", title: `Note retirée de l'historique d'un contact`, entityType: "PERSON", entityId: existing.personId, notify: false,
+      type: "PERSON_NOTE_DELETED", title: `Échange retiré de l'historique d'un contact`, entityType: "PERSON", entityId: existing.personId, notify: false,
     });
     return reply.status(204).send();
   });

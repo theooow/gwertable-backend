@@ -560,6 +560,15 @@ model VerificationToken {
 }
 
 // Predefined, factual statuses only: free-text notes about people are not allowed (GDPR).
+enum PersonInteractionKind {
+  CALL
+  EMAIL
+  MEETING
+  QUOTE_OR_CONTRACT
+  PAYMENT
+  OTHER
+}
+
 enum ContactFlag {
   PAYMENT_PENDING
   DISPUTE_ONGOING
@@ -639,7 +648,7 @@ model PersonHistoryNote {
   id        String    @id @default(cuid())
   personId  String
   person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
-  body      String
+  kind      PersonInteractionKind
   eventDate DateTime?
   createdAt DateTime  @default(now())
 

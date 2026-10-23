@@ -1,4 +1,4 @@
-import type { ContactFlag, PersonType } from "@prisma/client";
+import type { ContactFlag, PersonInteractionKind, PersonType } from "@prisma/client";
 
 export type PersonDocumentDTO = {
   id: string;
@@ -13,7 +13,7 @@ export type PersonDocumentDTO = {
 export type PersonHistoryNoteDTO = {
   id: string;
   personId: string;
-  body: string;
+  kind: PersonInteractionKind;
   eventDate: Date | null;
   createdAt: Date;
 };
@@ -130,7 +130,7 @@ type PersonWithDetails = PersonRecord & {
   historyNotes: Array<{
     id: string;
     personId: string;
-    body: string;
+    kind: PersonInteractionKind;
     eventDate: Date | null;
     createdAt: Date;
   }>;

@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PersonInteractionKind, Prisma, PrismaClient } from "@prisma/client";
 import type { PersonInput, PersonCellInput } from "../schemas/person.js";
 import { BaseDao } from "./base.dao.js";
 import { NotFoundError, ConflictError } from "../lib/errors.js";
@@ -149,9 +149,9 @@ export class PersonDao extends BaseDao {
     await this.prisma.personDocument.deleteMany({ where: { id: documentId, personId } });
   }
 
-  async createHistoryNote(personId: string, data: { body: string; eventDate?: Date | null }) {
+  async createHistoryNote(personId: string, data: { kind: PersonInteractionKind; eventDate?: Date | null }) {
     return this.prisma.personHistoryNote.create({
-      data: { personId, body: data.body, eventDate: data.eventDate ?? null },
+      data: { personId, kind: data.kind, eventDate: data.eventDate ?? null },
     });
   }
 
