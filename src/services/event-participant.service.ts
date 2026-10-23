@@ -92,7 +92,7 @@ export class EventParticipantService {
   }
 
   /**
-   * Retourne si l'utilisateur peut voir les champs sensibles (cachet, notes internes).
+   * Retourne si l'utilisateur peut voir les champs sensibles (cachet).
    *
    * @param role - Rôle de l'utilisateur courant
    */

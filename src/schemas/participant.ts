@@ -15,7 +15,6 @@ export const participantSchema = z.object({
   setEnd: z.string().optional().or(z.literal("")),
   fee: optionalText("Le cachet", LIMITS.money),
   contractSigned: z.boolean().default(false),
-  internalNotes: optionalText("Les notes internes", LIMITS.longText),
 });
 
 export type ParticipantInput = z.infer<typeof participantSchema>;

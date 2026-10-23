@@ -76,7 +76,6 @@ describe("event notification settings", () => {
       setEnd: "",
       fee: "",
       contractSigned: false,
-      internalNotes: "",
     });
 
     const now = new Date("2026-06-01T17:00:00.000Z");

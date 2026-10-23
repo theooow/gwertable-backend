@@ -19,7 +19,7 @@ async function context() {
   return { authorization, workspace, event, person, base, application };
 }
 async function approve(c: Awaited<ReturnType<typeof context>>) {
-  const response = await request("PATCH", `${c.base}/applications/${c.application.id}`, c.authorization, { status: "APPROVED", team: "Accueil", internalNotes: "" });
+  const response = await request("PATCH", `${c.base}/applications/${c.application.id}`, c.authorization, { status: "APPROVED", team: "Accueil" });
   assert.equal(response.statusCode, 200, response.body);
   return json<{ accessToken: string; badgeToken: string }>(response);
 }
@@ -109,7 +109,7 @@ describe("volunteer email and confirmation flow", () => {
   it("does not send an approval link after the application is revoked", async () => {
     const c = await context();
     await approve(c);
-    const r = await request("PATCH", `${c.base}/applications/${c.application.id}`, c.authorization, { status: "CANCELLED", team: "", internalNotes: "" });
+    const r = await request("PATCH", `${c.base}/applications/${c.application.id}`, c.authorization, { status: "CANCELLED", team: "" });
     assert.equal(r.statusCode, 200, r.body);
     await prisma.volunteerEmail.updateMany({ data: { availableAt: new Date(0) } });
     let sent = 0;

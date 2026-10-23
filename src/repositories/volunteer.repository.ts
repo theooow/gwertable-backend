@@ -126,7 +126,7 @@ export class VolunteerRepository {
       const application = await tx.volunteerApplication.create({ data: {
         eventId: form.eventId, personId: person.id, email: data.email, fullName: data.fullName,
         phone: form.collectPhone ? data.phone : "", dietary: form.collectDietary ? data.dietary : "NONE",
-        preferredTeams: [...new Set(data.preferredTeams)], availability, answers, notes: data.notes,
+        preferredTeams: [...new Set(data.preferredTeams)], availability, answers,
         meals: { create: mealIds.map((serviceId) => ({ serviceId })) },
       } });
       await tx.volunteerEmail.create({ data: { applicationId: application.id, kind: "REGISTERED", dedupeKey: `registered:${application.id}` } });
@@ -142,7 +142,7 @@ export class VolunteerRepository {
     let application = await tx.volunteerApplication.findUnique({ where: { eventId_personId: { eventId, personId } } });
     if (!participant.roles.includes("VOLUNTEER")) {
       if (application?.status === "APPROVED") await this.reviewInTransaction(tx, eventId, application.id, {
-        status: "CANCELLED", team: application.team, internalNotes: application.internalNotes,
+        status: "CANCELLED", team: application.team,
       });
       return;
     }
@@ -154,7 +154,7 @@ export class VolunteerRepository {
       } });
     }
     await this.reviewInTransaction(tx, eventId, application.id, {
-      status: "APPROVED", team: application.team, internalNotes: application.internalNotes, dietary: dietary ?? "NONE",
+      status: "APPROVED", team: application.team, dietary: dietary ?? "NONE",
     });
   }
 

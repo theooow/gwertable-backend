@@ -29,7 +29,6 @@ describe("event module routes", () => {
       setEnd: "",
       fee: "12.50",
       contractSigned: true,
-      internalNotes: "Arrive early",
     };
     const createdParticipant = await request(
       "POST",

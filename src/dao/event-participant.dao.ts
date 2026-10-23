@@ -95,7 +95,6 @@ export class EventParticipantDao extends BaseDao {
         setEnd: data.setEnd ? new Date(data.setEnd) : null,
         fee: normalizedFee,
         contractSigned: data.contractSigned,
-        internalNotes: data.internalNotes || null,
       },
       include: { person: { select: personSelectShort } },
     });
@@ -120,7 +119,6 @@ export class EventParticipantDao extends BaseDao {
         setEnd: data.setEnd ? new Date(data.setEnd) : null,
         fee: normalizedFee,
         contractSigned: data.contractSigned,
-        internalNotes: data.internalNotes || null,
       },
       include: { person: { select: personSelectShort } },
     });

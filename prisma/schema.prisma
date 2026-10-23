@@ -950,8 +950,6 @@ model EventParticipant {
   rider         Json?
   contractSigned Boolean   @default(false)
 
-  // Notes internes orga (sensibles)
-  internalNotes String?
   autoExpense   Expense?
   collectiveMembership EventCollectiveMember?
 
@@ -1117,8 +1115,6 @@ model VolunteerApplication {
   availability Json @default("[]")
   dietary     DietaryPreference @default(NONE)
   answers     Json @default("[]")
-  notes       String @default("")
-  internalNotes String @default("")
   consentAt   DateTime? @default(now())
   reviewedAt  DateTime?
   createdAt   DateTime @default(now())

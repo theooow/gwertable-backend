@@ -11,7 +11,7 @@ async function context() {
   const { authorization, workspace } = await seedAdminSession();
   const { event, person } = await seedEventContext(authorization);
   const bob = await prisma.person.create({ data: { workspaceId: workspace.id, fullName: "Bob", email: "bob@example.test" } });
-  const applications = await Promise.all([person, bob].map((p) => prisma.volunteerApplication.create({ data: { eventId: event.id, personId: p.id, fullName: p.fullName, status: "APPROVED", availability, internalNotes: "SECRET", dietary: "VEGAN", team: "Accueil" } })));
+  const applications = await Promise.all([person, bob].map((p) => prisma.volunteerApplication.create({ data: { eventId: event.id, personId: p.id, fullName: p.fullName, status: "APPROVED", availability, dietary: "VEGAN", team: "Accueil" } })));
   const base = `/api/events/${event.id}/volunteers`;
   const shift = { eventId: event.id, position: "Accueil", startsAt, endsAt, team: "Accueil" };
   return { authorization, workspace, event, person, bob, applications, base, shift };
@@ -132,7 +132,7 @@ describe("volunteer operations", () => {
     assert.equal(r.statusCode, 200, r.body);
     assert.equal(json<{ assignments: unknown[] }>(r).assignments.length, 1);
     assert.equal(await prisma.shift.count({ where: { assigneeId: { not: null } } }), 0);
-    for (const secret of ["Alice", "bob@example.test", "SECRET", "VEGAN"]) assert.equal(body.includes(secret), false);
+    for (const secret of ["Alice", "bob@example.test", "VEGAN"]) assert.equal(body.includes(secret), false);
   });
 
   it("requires organizer access and separates badges from personal links", async () => {
@@ -146,7 +146,7 @@ describe("volunteer operations", () => {
     assert.equal(json<{ checkedInAt: string }>(again).checkedInAt, json<{ checkedInAt: string }>(r).checkedInAt);
     const portal = await request("GET", `/api/public/volunteers/portal/${token.accessToken}`);
     assert.equal(portal.statusCode, 200, portal.body);
-    assert.equal(portal.body.includes("SECRET"), false); assert.equal(portal.body.includes("VEGAN"), false);
+    assert.equal(portal.body.includes("VEGAN"), false);
     assert.equal((await request("GET", `/api/public/volunteers/portal/${token.badgeToken}`)).statusCode, 404);
     await request("POST", `${c.base}/applications/${c.applications[0]!.id}/badge`, c.authorization, { rotate: true });
     assert.equal((await request("GET", `/api/public/volunteers/portal/${token.accessToken}`)).statusCode, 404);
@@ -157,7 +157,7 @@ describe("volunteer operations", () => {
     const c = await context(); const [token] = await badges(c);
     const other = await prisma.event.create({ data: { workspaceId: c.workspace.id, name: "Other", startsAt } });
     assert.equal((await request("POST", `/api/events/${other.id}/volunteers/check-in`, c.authorization, { badgeToken: token!.badgeToken })).statusCode, 404);
-    await request("PATCH", `${c.base}/applications/${c.applications[0]!.id}`, c.authorization, { status: "CANCELLED", team: "", internalNotes: "" });
+    await request("PATCH", `${c.base}/applications/${c.applications[0]!.id}`, c.authorization, { status: "CANCELLED", team: "" });
     assert.equal((await request("GET", `/api/public/volunteers/portal/${token!.accessToken}`)).statusCode, 404);
     assert.equal((await request("POST", `${c.base}/check-in`, c.authorization, { badgeToken: token!.badgeToken })).statusCode, 404);
   });

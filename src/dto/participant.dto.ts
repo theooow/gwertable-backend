@@ -14,14 +14,13 @@ type ParticipantRecord = {
   setEnd: Date | null;
   fee: Decimal | null;
   contractSigned: boolean;
-  internalNotes: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 /**
  * Représentation publique d'un participant à un événement.
- * Les champs sensibles (`fee`, `internalNotes`) sont masqués selon le rôle.
+ * Le cachet (`fee`) est masqué selon le rôle.
  */
 export type ParticipantDTO = {
   id: string;
@@ -36,17 +35,16 @@ export type ParticipantDTO = {
   setEnd: Date | null;
   fee: string | null;
   contractSigned: boolean;
-  internalNotes: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 /**
  * Convertit un enregistrement Prisma EventParticipant en DTO public.
- * Masque le cachet et les notes internes selon les droits de l'utilisateur.
+ * Masque le cachet selon les droits de l'utilisateur.
  *
  * @param participant - Enregistrement Prisma
- * @param canSeeSensitive - Si `true`, expose le cachet et les notes internes
+ * @param canSeeSensitive - Si `true`, expose le cachet
  * @returns DTO du participant
  */
 export function toParticipantDTO(
@@ -66,7 +64,6 @@ export function toParticipantDTO(
     setEnd: participant.setEnd,
     fee: canSeeSensitive && participant.fee ? participant.fee.toString() : null,
     contractSigned: participant.contractSigned,
-    internalNotes: canSeeSensitive ? participant.internalNotes : null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
   };

@@ -191,7 +191,6 @@ export class EventParticipantRepository {
           setEnd: data.setEnd ? new Date(data.setEnd) : null,
           fee,
           contractSigned: data.contractSigned,
-          internalNotes: data.internalNotes || null,
         },
         include: { person: { select: { id: true, fullName: true } } },
       });
@@ -243,7 +242,6 @@ export class EventParticipantRepository {
           setEnd: data.setEnd ? new Date(data.setEnd) : null,
           fee,
           contractSigned: data.contractSigned,
-          internalNotes: data.internalNotes || null,
         },
         include: { person: { select: { id: true, fullName: true } } },
       });

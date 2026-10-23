@@ -7,7 +7,7 @@ import { prisma } from "../src/prisma.js";
 setupTestApp();
 const formInput = { availabilityPeriods: [{ id: "night", label: "Exploitation", startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], title: "Rejoignez l’équipe", description: "Présentation", confirmationMessage: "Merci !", published: true, closesAt: null, collectPhone: true, collectDietary: true, teams: ["Bar"], questions: [{ id: "experience", label: "Expérience", type: "select", required: true, options: ["Oui", "Non"] }] };
 const submission = { fullName: "Alice publique", email: "alice@abregi.test", phone: "0611111111", preferredTeams: ["Bar"], availability: [{ startsAt: "2026-06-01T18:00:00Z", endsAt: "2026-06-02T03:00:00Z" }], dietary: "VEGETARIAN", answers: { experience: "Oui" }, consent: true, mealIds: [] };
-const review = { status: "APPROVED", team: "Bar", internalNotes: "À accueillir" };
+const review = { status: "APPROVED", team: "Bar" };
 const shift = { position: "Bar 1", startsAt: "2026-06-01T20:00:00Z", endsAt: "2026-06-01T22:00:00Z", assigneeId: null };
 async function context() {
   const { authorization, workspace, user } = await seedAdminSession();

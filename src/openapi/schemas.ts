@@ -258,7 +258,7 @@ export const routeDocs: Record<string, RouteDoc> = {
       "Participants"
     ],
     "summary": "Lister les participants d'un événement",
-    "description": "Les champs `fee` et `internalNotes` sont masqués selon le rôle (visibles uniquement pour ADMIN, ORGANIZER, TREASURER)."
+    "description": "Le champ `fee` est masqué selon le rôle (visible uniquement pour ADMIN, ORGANIZER, TREASURER)."
   },
   "POST /api/events/:eventId/participants": {
     "tags": [
