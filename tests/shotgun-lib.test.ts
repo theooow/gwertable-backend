@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { fetchShotgunTickets, groupShotgunSoldTickets } from "../src/lib/shotgun.js";
+import { fetchShotgunEvents, fetchShotgunTickets, groupShotgunSoldTickets } from "../src/lib/shotgun.js";
+import { matchEventGenres } from "../src/lib/event-genres.js";
 
 describe("shotgun client", () => {
   it("follows every ticket page before returning sales", async () => {
@@ -60,6 +61,22 @@ describe("shotgun client", () => {
       const counts = groupShotgunSoldTickets(tickets);
 
       assert.equal(counts.get(284482), 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps optional genre labels to the closed list and tolerates their absence", async () => {
+    assert.deepEqual(matchEventGenres(["Hard Techno", "Drum'n'Bass", "Électronique", "Polka"]), ["HARD_MUSIC", "DRUM_AND_BASS", "ELECTRO"]);
+    const originalFetch = globalThis.fetch;
+    const event = { id: 1, name: "Rave", startTime: "2026-06-01T20:00:00Z", deals: [] };
+    globalThis.fetch = async () => new Response(JSON.stringify({ data: [
+      { ...event, genres: ["Techno", { name: "House" }] },
+      { ...event, id: 2, tags: "not-an-array" },
+    ] }), { status: 200, headers: { "content-type": "application/json" } });
+    try {
+      const events = await fetchShotgunEvents({ organizerId: "1234", apiToken: "secret" });
+      assert.deepEqual(events.map((e) => e.genres), [["TECHNO", "HOUSE"], []]);
     } finally {
       globalThis.fetch = originalFetch;
     }

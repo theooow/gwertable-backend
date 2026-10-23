@@ -663,7 +663,7 @@ export class BudgetRepository {
   async syncShotgunTicketTiers(eventId: string, workspaceId: string) {
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, workspaceId },
-      select: { id: true, shotgunEventId: true },
+      select: { id: true, shotgunEventId: true, genres: true },
     });
     if (!event?.shotgunEventId) {
       throw new ValidationError("Cet evenement n'est pas lie a Shotgun");
@@ -684,6 +684,9 @@ export class BudgetRepository {
     const remoteDealIds = new Set(shotgunEvent.deals.map((d) => d.product_id));
 
     await this.prisma.$transaction(async (tx) => {
+      if (!event.genres.length && shotgunEvent.genres.length) {
+        await tx.event.update({ where: { id: eventId }, data: { genres: shotgunEvent.genres } });
+      }
       for (const deal of shotgunEvent.deals) {
         const sold = soldCounts.get(deal.product_id) ?? 0;
         await tx.ticketTier.upsert({

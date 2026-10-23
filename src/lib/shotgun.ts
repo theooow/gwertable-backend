@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { ValidationError } from "./errors.js";
+import { matchEventGenres } from "./event-genres.js";
 
 const shotgunDealSchema = z.object({
   product_id: z.coerce.number().int(),
@@ -10,6 +11,12 @@ const shotgunDealSchema = z.object({
   organizer_fees: z.coerce.number().optional().nullable(),
   user_fees: z.coerce.number().optional().nullable(),
 });
+
+// Genre fields are not documented publicly: accept strings or { name } objects and ignore anything else.
+const shotgunLabelsSchema = z
+  .array(z.union([z.string(), z.object({ name: z.string() }).transform((label) => label.name)]))
+  .optional()
+  .catch(undefined);
 
 const shotgunEventSchema = z.object({
   id: z.coerce.number().int(),
@@ -21,7 +28,13 @@ const shotgunEventSchema = z.object({
   coverUrl: z.string().nullable().optional(),
   url: z.string().nullable().optional(),
   deals: z.array(shotgunDealSchema).default([]),
-});
+  genres: shotgunLabelsSchema,
+  musicGenres: shotgunLabelsSchema,
+  tags: shotgunLabelsSchema,
+}).transform(({ genres, musicGenres, tags, ...event }) => ({
+  ...event,
+  genres: matchEventGenres([...(genres ?? []), ...(musicGenres ?? []), ...(tags ?? [])]),
+}));
 
 const shotgunEventsResponseSchema = z.object({
   data: z.array(shotgunEventSchema),
