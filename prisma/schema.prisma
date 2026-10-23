@@ -337,6 +337,8 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   expenseClaimAnalytics String[] @default(["FEST", "TRAJ", "AUTRE"])
+  // Set once personal data is stripped; events remain for statistics.
+  anonymizedAt DateTime?
 
   defaultUsers User[] @relation("DefaultWorkspace")
   members      WorkspaceMember[]

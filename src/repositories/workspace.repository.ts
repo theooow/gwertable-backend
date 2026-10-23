@@ -4,6 +4,8 @@ import { WorkspaceDao } from "../dao/workspace.dao.js";
 import { WorkspaceMemberDao } from "../dao/workspace-member.dao.js";
 import { WorkspaceInvitationDao } from "../dao/workspace-invitation.dao.js";
 import { EventCollaboratorDao } from "../dao/event-collaborator.dao.js";
+import { anonymizeWorkspace } from "../lib/workspace-anonymization.js";
+import { removeUploadedFiles } from "../lib/upload-files.js";
 
 export type AccountUpdateInput = Pick<
   Prisma.UserUpdateInput,
@@ -543,17 +545,13 @@ export class WorkspaceRepository {
       throw new ValidationError("Invite un autre admin avant de supprimer ce compte");
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const files = await this.prisma.$transaction(async (tx) => {
       await tx.user.delete({ where: { id: userId } });
       const remaining = await tx.workspaceMember.count({ where: { workspaceId } });
-      if (remaining === 0) {
-        await tx.user.updateMany({
-          where: { defaultWorkspaceId: workspaceId },
-          data: { defaultWorkspaceId: null },
-        });
-        await tx.workspace.delete({ where: { id: workspaceId } });
-      }
+      // Events are kept anonymised for statistics instead of being deleted.
+      return remaining === 0 ? anonymizeWorkspace(tx, workspaceId) : [];
     });
+    await removeUploadedFiles(files);
   }
 
   /**
