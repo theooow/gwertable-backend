@@ -78,12 +78,13 @@ function nullableString(value: string | undefined) {
   return value || null;
 }
 
+const memberDao = new WorkspaceMemberDao(prisma);
 const service = new AuthService(
   new AuthRepository(
     new SessionDao(prisma),
     new VerificationTokenDao(prisma),
     new WorkspaceInvitationDao(prisma),
-    new WorkspaceMemberDao(prisma),
+    memberDao,
     new EventCollaboratorDao(prisma),
     prisma,
   ),
@@ -161,7 +162,8 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/auth/me", { config: { documentation: {  } } }, async (request) => ({
-    user: request.user,
+    // Without a plan, the app is reserved to collaborators of a workspace someone already pays for.
+    user: { ...request.user, requiresSubscription: request.user!.usagePlan === "NONE" && !(await memberDao.hasMemberWithPlan(request.workspaceId)) },
   }));
 
   fastify.post("/api/auth/terms/accept", { config: { documentation: {  } } }, async (request) =>

@@ -66,6 +66,19 @@ export class WorkspaceMemberDao extends BaseDao {
   }
 
   /**
+   * Indique si un membre de l'espace dispose d'un plan (payant ou beta).
+   *
+   * @param workspaceId - Identifiant de l'espace de travail
+   */
+  async hasMemberWithPlan(workspaceId: string) {
+    const member = await this.prisma.workspaceMember.findFirst({
+      where: { workspaceId, user: { usagePlan: { not: "NONE" } } },
+      select: { id: true },
+    });
+    return Boolean(member);
+  }
+
+  /**
    * Recherche le premier membre d'un utilisateur en dehors d'un workspace donné.
    * Utilisé pour trouver un espace de travail de repli.
    *
