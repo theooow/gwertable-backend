@@ -1,0 +1,2105 @@
+[
+  {
+    "name": "EQUAL shared 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "EQUAL",
+    "stakesFirst": false,
+    "payouts": [
+      35001,
+      11701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL shared -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "EQUAL",
+    "stakesFirst": false,
+    "payouts": [
+      25188,
+      1888
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL shared -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "EQUAL",
+    "stakesFirst": false,
+    "payouts": [
+      5000,
+      -18299
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL shared -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "EQUAL",
+    "stakesFirst": false,
+    "payouts": [
+      -10000,
+      -33299
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL shared 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "EQUAL",
+    "stakesFirst": false,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL stakes first 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      35001,
+      11701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL stakes first -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      26352,
+      28724
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL stakes first -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      7034,
+      7667
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL stakes first -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      -7649,
+      -7650
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "EQUAL stakes first 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT shared 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": false,
+    "payouts": [
+      34785,
+      11917
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT shared -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": false,
+    "payouts": [
+      25395,
+      1681
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT shared -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": false,
+    "payouts": [
+      6077,
+      -19376
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT shared -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": false,
+    "payouts": [
+      -8277,
+      -35022
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT shared 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": false,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT stakes first 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      34785,
+      11917
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT stakes first -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      26352,
+      28724
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT stakes first -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      7034,
+      7667
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT stakes first -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      -7320,
+      -7979
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "PRO_RATA_INVESTMENT stakes first 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM shared 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "CUSTOM",
+    "stakesFirst": false,
+    "payouts": [
+      36001,
+      10701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM shared -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "CUSTOM",
+    "stakesFirst": false,
+    "payouts": [
+      24225,
+      2851
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM shared -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "CUSTOM",
+    "stakesFirst": false,
+    "payouts": [
+      0,
+      -13299
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM shared -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "CUSTOM",
+    "stakesFirst": false,
+    "payouts": [
+      -18000,
+      -25299
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM shared 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "CUSTOM",
+    "stakesFirst": false,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM stakes first 10001",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 10001,
+    "mode": "CUSTOM",
+    "stakesFirst": true,
+    "payouts": [
+      36001,
+      10701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM stakes first -9625",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -9625,
+    "mode": "CUSTOM",
+    "stakesFirst": true,
+    "payouts": [
+      26352,
+      28724
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM stakes first -50000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -50000,
+    "mode": "CUSTOM",
+    "stakesFirst": true,
+    "payouts": [
+      7034,
+      7667
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM stakes first -80000",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": -80000,
+    "mode": "CUSTOM",
+    "stakesFirst": true,
+    "payouts": [
+      -9179,
+      -6120
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "CUSTOM stakes first 0",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "h1",
+        "amountCents": 30000,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "h2",
+        "amountCents": 5000,
+        "reimbursement": "DONE"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 26000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 6701,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 2000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "outsider",
+        "amountCents": 1500,
+        "reimbursement": "PENDING"
+      },
+      {
+        "paidById": null,
+        "amountCents": 8000,
+        "reimbursement": "NOT_OWED"
+      }
+    ],
+    "resultCents": 0,
+    "mode": "CUSTOM",
+    "stakesFirst": true,
+    "payouts": [
+      30000,
+      6701
+    ],
+    "pending": [
+      30000,
+      6701
+    ]
+  },
+  {
+    "name": "single collective without weights",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 0,
+        "personIds": []
+      }
+    ],
+    "expenses": [],
+    "resultCents": 1234,
+    "mode": "PRO_RATA_INVESTMENT",
+    "stakesFirst": true,
+    "payouts": [
+      1234
+    ],
+    "pending": [
+      0
+    ]
+  },
+  {
+    "name": "outside gifts beyond the loss",
+    "collectives": [
+      {
+        "id": "host",
+        "shareBasisPoints": 6000,
+        "personIds": [
+          "h1",
+          "h2"
+        ]
+      },
+      {
+        "id": "partner",
+        "shareBasisPoints": 4000,
+        "personIds": [
+          "p1"
+        ]
+      }
+    ],
+    "expenses": [
+      {
+        "paidById": "outsider",
+        "amountCents": 20000,
+        "reimbursement": "NOT_OWED"
+      },
+      {
+        "paidById": "p1",
+        "amountCents": 3000,
+        "reimbursement": "PENDING"
+      }
+    ],
+    "resultCents": -5000,
+    "mode": "EQUAL",
+    "stakesFirst": true,
+    "payouts": [
+      7500,
+      10500
+    ],
+    "pending": [
+      0,
+      3000
+    ]
+  }
+]
