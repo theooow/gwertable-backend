@@ -784,6 +784,9 @@ model Event {
   sacemBase          SacemBase @default(TICKETING)
   profitSplitMode    ProfitSplitMode @default(EQUAL)
   stakesFirst        Boolean @default(false)
+  budgetGuideHidden  Boolean @default(false)
+  budgetGuideSkippedSteps String[] @default([])
+  budgetGuideSettingsChecked Boolean @default(false)
 
   participants    EventParticipant[]
   volunteerForm   VolunteerForm?

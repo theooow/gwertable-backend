@@ -9,6 +9,7 @@ import { INCOME_CATEGORIES, type incomeSchema } from "../schemas/income.js";
 import { previewBudgetDocument, type BudgetDocumentKind } from "./document-extraction.service.js";
 import type { ticketTierSchema } from "../schemas/ticket-tier.js";
 import type { consumableSchema } from "../schemas/consumable.js";
+import type { BudgetGuideInput } from "../schemas/budget-guide.js";
 import { BudgetRepository } from "../repositories/budget.repository.js";
 
 type ExpenseInput = z.infer<typeof expenseSchema>;
@@ -144,6 +145,11 @@ export class BudgetService {
   async updateConsumable(id: string, workspaceId: string, role: UserRole, userId: string, data: ConsumableInput) {
     requireCan(role, "budget.write");
     return this.budgetRepository.updateConsumable(id, workspaceId, userId, data);
+  }
+
+  async updateBudgetGuide(eventId: string, workspaceId: string, role: UserRole, data: BudgetGuideInput) {
+    requireCan(role, "budget.write");
+    return this.budgetRepository.updateBudgetGuide(eventId, workspaceId, data);
   }
 
   async deleteConsumable(id: string, workspaceId: string, role: UserRole, userId: string) {

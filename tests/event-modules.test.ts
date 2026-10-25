@@ -614,4 +614,22 @@ describe("event module routes", () => {
     assert.equal((await request("DELETE", `/api/collectives/${collectiveB.id}`, authorization)).statusCode, 200);
     assert.equal(await prisma.eventCollectiveMember.count({ where: { participantId: second!.id } }), 0);
   });
+
+  it("saves the budget guide progress on the event", async () => {
+    const { authorization } = await seedAdminSession();
+    const { event } = await seedEventContext(authorization);
+
+    const skipped = await request("PATCH", `/api/events/${event.id}/budget-guide`, authorization, { skippedSteps: ["tickets", "tickets", "consumables"] });
+    assert.equal(skipped.statusCode, 200);
+    assert.deepEqual(json(skipped), { hidden: false, skippedSteps: ["tickets", "consumables"], settingsChecked: false });
+
+    const hidden = json(await request("PATCH", `/api/events/${event.id}/budget-guide`, authorization, { hidden: true, settingsChecked: true }));
+    assert.deepEqual(hidden, { hidden: true, skippedSteps: ["tickets", "consumables"], settingsChecked: true });
+
+    const loaded = json<{ budgetGuideHidden: boolean; budgetGuideSkippedSteps: string[] }>(await request("GET", `/api/events/${event.id}`, authorization));
+    assert.equal(loaded.budgetGuideHidden, true);
+    assert.deepEqual(loaded.budgetGuideSkippedSteps, ["tickets", "consumables"]);
+
+    assert.equal((await request("PATCH", `/api/events/${event.id}/budget-guide`, authorization, { skippedSteps: ["expenses"] })).statusCode, 400);
+  });
 });

@@ -15,6 +15,7 @@ import { incomeSchema } from "../../schemas/income.js";
 import { ticketTierSchema } from "../../schemas/ticket-tier.js";
 import { consumableSchema } from "../../schemas/consumable.js";
 import { collectiveSchema, profitSplitSchema } from "../../schemas/collective.js";
+import { budgetGuideSchema } from "../../schemas/budget-guide.js";
 import { ExpenseDao } from "../../dao/expense.dao.js";
 import { BudgetRepository } from "../../repositories/budget.repository.js";
 import { BudgetService } from "../../services/budget.service.js";
@@ -226,6 +227,14 @@ export async function budgetRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/consumables/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {
     const { id } = idParamsSchema.parse(request.params);
     return service.deleteConsumable(id, request.workspaceId, request.userRole, request.user!.id);
+  });
+
+  // ── Budget guide ──────────────────────────────────────────────────────────────
+
+  fastify.patch("/api/events/:eventId/budget-guide", { config: { documentation: { params: eventParamsSchema, body: budgetGuideSchema } } }, async (request) => {
+    const { eventId } = eventParamsSchema.parse(request.params);
+    const data = budgetGuideSchema.parse(request.body);
+    return service.updateBudgetGuide(eventId, request.workspaceId, request.userRole, data);
   });
 
   // ── Collectives ───────────────────────────────────────────────────────────────

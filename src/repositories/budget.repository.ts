@@ -20,6 +20,7 @@ import {
 } from "../lib/shotgun.js";
 import { ExpenseDao } from "../dao/expense.dao.js";
 import { ActivityRepository } from "./activity.repository.js";
+import type { BudgetGuideInput } from "../schemas/budget-guide.js";
 
 type ExpenseInput = {
   label: string;
@@ -842,6 +843,31 @@ export class BudgetRepository {
   }
 
   // ── Equipment Expenses Sync ──────────────────────────────────────────────────
+
+  /**
+   * Enregistre la progression du guide de saisie du budget, partagée par toute l'équipe de l'événement.
+   *
+   * @param eventId - Identifiant de l'événement
+   * @param workspaceId - Identifiant de l'espace de travail
+   * @param data - Champs à modifier ; les autres restent inchangés
+   */
+  async updateBudgetGuide(eventId: string, workspaceId: string, data: BudgetGuideInput) {
+    await this.assertEventInWorkspace(eventId, workspaceId);
+    const event = await this.prisma.event.update({
+      where: { id: eventId },
+      data: {
+        budgetGuideHidden: data.hidden,
+        budgetGuideSkippedSteps: data.skippedSteps && [...new Set(data.skippedSteps)],
+        budgetGuideSettingsChecked: data.settingsChecked,
+      },
+      select: { budgetGuideHidden: true, budgetGuideSkippedSteps: true, budgetGuideSettingsChecked: true },
+    });
+    return {
+      hidden: event.budgetGuideHidden,
+      skippedSteps: event.budgetGuideSkippedSteps,
+      settingsChecked: event.budgetGuideSettingsChecked,
+    };
+  }
 
   /**
    * Resynchronise les dépenses équipement d'un événement.

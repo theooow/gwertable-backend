@@ -610,6 +610,13 @@ export const routeDocs: Record<string, RouteDoc> = {
     ],
     "summary": "Lister les collectifs et le mode de partage du résultat"
   },
+  "PATCH /api/events/:eventId/budget-guide": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Enregistrer la progression du guide de saisie du budget",
+    "description": "Champs partiels : seuls les champs envoyés sont modifiés. La progression est partagée par l'équipe de l'événement et exposée sur l'événement (`budgetGuideHidden`, `budgetGuideSkippedSteps`, `budgetGuideSettingsChecked`)."
+  },
   "PUT /api/events/:eventId/profit-split": {
     "tags": [
       "Budget"
