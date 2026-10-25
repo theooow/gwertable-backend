@@ -66,7 +66,14 @@ export class AccountingRepository {
   async loadLedger(workspaceId: string, eventId?: string): Promise<LedgerData> {
     const eventWhere = { workspaceId, ...(eventId ? { id: eventId } : {}) };
     const [events, expenses, incomes, ticketTiers] = await Promise.all([
-      this.prisma.event.findMany({ where: eventWhere, select: { id: true, name: true, startsAt: true, vatMode: true, defaultVatRateBasisPoints: true } }),
+      this.prisma.event.findMany({
+        where: eventWhere,
+        select: {
+          id: true, name: true, startsAt: true, vatMode: true, defaultVatRateBasisPoints: true, profitSplitMode: true, stakesFirst: true,
+          participants: { select: { personId: true } },
+          collectives: { select: { id: true, name: true, shareBasisPoints: true, members: { select: { participant: { select: { personId: true } } } } } },
+        },
+      }),
       this.prisma.expense.findMany({
         where: { event: eventWhere },
         select: {
@@ -81,7 +88,15 @@ export class AccountingRepository {
       this.prisma.ticketTier.findMany({ where: { event: eventWhere }, select: { id: true, eventId: true, name: true, organizerRevenueCents: true, sold: true } }),
     ]);
     return {
-      events,
+      events: events.map(({ profitSplitMode, stakesFirst, participants, collectives, ...event }) => ({
+        ...event,
+        collectiveSplit: {
+          mode: profitSplitMode,
+          stakesFirst,
+          participantPersonIds: participants.map((participant) => participant.personId),
+          partners: collectives.map(({ members, ...collective }) => ({ ...collective, personIds: members.map((member) => member.participant.personId) })),
+        },
+      })),
       expenses: expenses.map(({ paidBy, ...expense }) => ({ ...expense, paidByName: paidBy?.fullName ?? null })),
       incomes,
       ticketTiers,

@@ -110,3 +110,53 @@ describe("accounting engine", () => {
     assert.deepEqual([...encodeLatin9("é€Œ☃")], [0xe9, 0xa4, 0xbc, 0x3f]);
   });
 });
+
+describe("co-organised events", () => {
+  const coEvent = {
+    ...event, id: "co", vatMode: "NON_ASSUJETTI" as const,
+    collectiveSplit: { mode: "EQUAL" as const, stakesFirst: false, participantPersonIds: ["h1", "p1", "p2"], partners: [{ id: "partner", name: "Asso amie", shareBasisPoints: 0, personIds: ["p1", "p2"] }] },
+  };
+  const amounts = (cents: number) => ({ amountCents: cents, amountHtCents: cents, amountTtcCents: cents });
+  const coData = (sold: number, stakesFirst = false): LedgerData => ({
+    events: [{ ...coEvent, collectiveSplit: { ...coEvent.collectiveSplit, stakesFirst } }],
+    expenses: [
+      expense({ id: "venue", eventId: "co", ...amounts(4000) }),
+      expense({ id: "host", eventId: "co", paidById: "h1", paidByName: "Hôte", reimbursement: "PENDING", ...amounts(1000) }),
+      expense({ id: "partner-gift", eventId: "co", paidById: "p1", paidByName: "Paul", reimbursement: "NOT_OWED", ...amounts(2000) }),
+      expense({ id: "partner-advance", eventId: "co", paidById: "p2", paidByName: "Pia", reimbursement: "PENDING", ...amounts(500) }),
+    ],
+    incomes: [],
+    ticketTiers: [{ id: "tco", eventId: "co", name: "Entrée", organizerRevenueCents: 1000, sold }],
+  });
+  const share = (operations: ReturnType<typeof buildOperations>) => operations.find((o) => o.sourceId === "collective:partner");
+
+  it("books the partner's share in 655 and leaves out what the partner bears", () => {
+    const ops = buildOperations(coData(10), "ASSOCIATION", ["ACTUAL"]);
+    assert.ok(!ops.some((o) => o.sourceId === "partner-gift"));
+    assert.equal(share(ops)?.account.number, "655");
+    assert.equal(share(ops)?.ttcCents, 1250);
+    assert.equal(incomeStatement(ops, "ASSOCIATION").resultCents, 1250 + 2000);
+  });
+
+  it("follows the stakes-first split on a loss and stays balanced", () => {
+    const ops = buildOperations(coData(5, true), "ASSOCIATION", ["ACTUAL"]);
+    assert.equal(share(ops)?.ttcCents, 214);
+    const statement = incomeStatement(ops, "ASSOCIATION");
+    assert.equal(statement.resultCents, -714);
+    const sheet = balanceSheet(ops, period, statement);
+    assert.ok(sheet.balanced, JSON.stringify(sheet));
+    assert.equal(sheet.liabilities.find((line) => line.key === "collectivesPayable")!.amountCents, 214);
+    const totals = new Map<string, number>();
+    for (const row of fecRows(ops, period, "2027-01-15").slice(1)) {
+      const columns = row.split("|");
+      const cents = (value: string) => Math.round(Number(value.replace(",", ".")) * 100);
+      totals.set(columns[2], (totals.get(columns[2]) ?? 0) + cents(columns[11]) - cents(columns[12]));
+    }
+    assert.ok([...totals.values()].every((total) => total === 0));
+  });
+
+  it("books a partner covering part of a loss in 755", () => {
+    const ops = buildOperations(coData(0), "ASSOCIATION", ["ACTUAL"]);
+    assert.equal(share(ops)?.account.number, "755");
+  });
+});

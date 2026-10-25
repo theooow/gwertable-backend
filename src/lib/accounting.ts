@@ -1,4 +1,5 @@
-import type { AccountingFramework, BudgetPhase, ReimbStatus, VatMode } from "@prisma/client";
+import type { AccountingFramework, BudgetPhase, ProfitSplitMode, ReimbStatus, VatMode } from "@prisma/client";
+import { collectivePayouts, type SplitCollective } from "./collective-split.js";
 
 /**
  * Accounting engine. Turns budget lines into operations classified in the
@@ -8,6 +9,11 @@ import type { AccountingFramework, BudgetPhase, ReimbStatus, VatMode } from "@pr
  * Revenue and charges are recognised on the event date (taxable event), cash
  * movements on the payment / receipt date. Dates are compared as Europe/Paris
  * calendar days.
+ *
+ * When partner collectives co-organise an event, the workspace keeps the gross
+ * amounts and books each partner's share of the result in 655 / 755 (quotes-parts
+ * sur opérations faites en commun). Expenses a partner member bears without
+ * reimbursement belong to the partner's own books and are left out.
  */
 
 export type LedgerEvent = {
@@ -16,6 +22,8 @@ export type LedgerEvent = {
   startsAt: Date;
   vatMode: VatMode;
   defaultVatRateBasisPoints: number;
+  /** Partner collectives only: the workspace gathers the participants outside them. */
+  collectiveSplit?: { mode: ProfitSplitMode; stakesFirst: boolean; participantPersonIds: string[]; partners: SplitCollective[] };
 };
 
 type BudgetAmounts = {
@@ -75,6 +83,9 @@ export const ACCOUNTS = {
   retainedEarnings: { number: "110", label: "Report à nouveau (solde créditeur)" },
   retainedLosses: { number: "119", label: "Report à nouveau (solde débiteur)" },
   donations: { number: "7541", label: "Dons manuels - abandons de frais" },
+  collectives: { number: "4671", label: "Co-organisateurs - quotes-parts à régler" },
+  jointCharge: { number: "655", label: "Quotes-parts de résultat sur opérations faites en commun" },
+  jointProduct: { number: "755", label: "Quotes-parts de résultat sur opérations faites en commun" },
 } as const satisfies Record<string, Account>;
 
 const EXPENSE_ACCOUNTS: Record<string, Account> = {
@@ -113,7 +124,7 @@ export function incomeAccount(category: string): Account {
   return INCOME_ACCOUNTS[category] ?? OTHER_INCOME;
 }
 
-type Counterpart = "SUPPLIER" | "MEMBER" | "PARTNER" | "CUSTOMER" | "DONATION";
+type Counterpart = "SUPPLIER" | "MEMBER" | "PARTNER" | "CUSTOMER" | "DONATION" | "COLLECTIVE";
 
 export type Operation = {
   kind: "expense" | "income";
@@ -237,7 +248,66 @@ export function buildOperations(data: LedgerData, framework: AccountingFramework
     }
   }
 
-  return operations.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+  const shared = phases.includes("ACTUAL") ? withCollectiveShares(operations, data) : operations;
+  return shared.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+}
+
+const signedHtCents = (operation: Operation) => (operation.kind === "income" ? operation.htCents : -operation.htCents);
+
+/**
+ * Replaces the expenses partner members bear without reimbursement by each partner's share of the result:
+ * what the split pays it, minus the reimbursements already owed to its members (467).
+ */
+function withCollectiveShares(operations: Operation[], data: LedgerData): Operation[] {
+  const expensesById = new Map(data.expenses.map((expense) => [expense.id, expense]));
+  let result = operations;
+  for (const event of data.events) {
+    const split = event.collectiveSplit;
+    if (!split || split.partners.length === 0) continue;
+    const own = result.filter((operation) => operation.eventId === event.id);
+    const partnerPersonIds = new Set(split.partners.flatMap((partner) => partner.personIds));
+    const host: SplitCollective = { id: "workspace", name: "", shareBasisPoints: Math.max(0, 10000 - split.partners.reduce((sum, partner) => sum + partner.shareBasisPoints, 0)), personIds: split.participantPersonIds.filter((personId) => !partnerPersonIds.has(personId)) };
+    const ownExpenses = own.flatMap((operation) => {
+      const expense = operation.kind === "expense" ? expensesById.get(operation.sourceId) : undefined;
+      return expense ? [{ operation, expense }] : [];
+    });
+    const payouts = collectivePayouts(
+      [host, ...split.partners],
+      ownExpenses.map(({ operation, expense }) => ({ paidById: expense.paidById, amountCents: operation.htCents, reimbursement: expense.reimbursement })),
+      own.reduce((sum, operation) => sum + signedHtCents(operation), 0),
+      split.mode,
+      split.stakesFirst,
+    );
+    const borneByPartners = new Set(ownExpenses
+      .filter(({ expense }) => expense.paidById && partnerPersonIds.has(expense.paidById) && expense.reimbursement === "NOT_OWED")
+      .map(({ operation }) => operation));
+    const date = toDay(event.startsAt);
+    const shares: Operation[] = payouts.slice(1).flatMap((payout) => {
+      const cents = payout.payoutCents - payout.pendingCents;
+      if (cents === 0) return [];
+      return [{
+        kind: cents > 0 ? "expense" : "income",
+        sourceId: `collective:${payout.id}`,
+        eventId: event.id,
+        eventName: event.name,
+        label: `Quote-part de résultat - ${payout.name}`,
+        date,
+        settledOn: null,
+        account: cents > 0 ? ACCOUNTS.jointCharge : ACCOUNTS.jointProduct,
+        htCents: Math.abs(cents),
+        vatCents: 0,
+        ttcCents: Math.abs(cents),
+        counterpart: "COLLECTIVE",
+        counterpartId: payout.id,
+        counterpartName: payout.name,
+        // Backed by the co-organisation agreement rather than an invoice.
+        hasReceipt: true,
+        isTicketing: false,
+      } satisfies Operation];
+    });
+    result = [...result.filter((operation) => !borneByPartners.has(operation)), ...shares];
+  }
+  return result;
 }
 
 // ── Income statement ─────────────────────────────────────────────────────────
@@ -256,8 +326,10 @@ const SECTIONS: { key: string; label: string; kind: "PRODUCT" | "CHARGE"; match:
   { key: "sales", label: "Ventes de marchandises", kind: "PRODUCT", match: (a) => a.startsWith("707") },
   { key: "services", label: "Production vendue (services)", kind: "PRODUCT", match: (a) => a.startsWith("706") },
   { key: "donations", label: "Dons et abandons de frais", kind: "PRODUCT", match: (a) => a.startsWith("754") },
+  { key: "jointProducts", label: "Quotes-parts reçues des co-organisateurs", kind: "PRODUCT", match: (a) => a.startsWith("755") },
   { key: "otherProducts", label: "Autres produits de gestion courante", kind: "PRODUCT", match: (a) => a.startsWith("75") },
   { key: "goods", label: "Achats de marchandises", kind: "CHARGE", match: (a) => a.startsWith("607") },
+  { key: "jointCharges", label: "Quotes-parts reversées aux co-organisateurs", kind: "CHARGE", match: (a) => a.startsWith("655") },
   { key: "external", label: "Autres achats et charges externes", kind: "CHARGE", match: (a) => a.startsWith("6") },
 ];
 
@@ -303,6 +375,8 @@ export type Positions = {
   suppliersCents: number;
   membersCents: number;
   partnersCents: number;
+  collectivesReceivableCents: number;
+  collectivesPayableCents: number;
   deferredIncomeCents: number;
 };
 
@@ -311,13 +385,16 @@ export type Positions = {
  * and lines settled before their event (advances).
  */
 export function positionsAt(operations: Operation[], day: string): Positions {
-  const positions: Positions = { receivablesCents: 0, prepaidChargesCents: 0, suppliersCents: 0, membersCents: 0, partnersCents: 0, deferredIncomeCents: 0 };
+  const positions: Positions = { receivablesCents: 0, prepaidChargesCents: 0, suppliersCents: 0, membersCents: 0, partnersCents: 0, collectivesReceivableCents: 0, collectivesPayableCents: 0, deferredIncomeCents: 0 };
   for (const operation of operations) {
     if (operation.counterpart === "DONATION") continue;
     const recognised = operation.date <= day;
     const settled = operation.settledOn !== null && operation.settledOn <= day;
     if (recognised === settled) continue;
-    if (operation.kind === "income") {
+    if (operation.counterpart === "COLLECTIVE") {
+      if (operation.kind === "income") positions.collectivesReceivableCents += operation.ttcCents;
+      else positions.collectivesPayableCents += operation.ttcCents;
+    } else if (operation.kind === "income") {
       if (recognised) positions.receivablesCents += operation.ttcCents;
       else positions.deferredIncomeCents += operation.ttcCents;
     } else if (!recognised) {
@@ -334,8 +411,8 @@ export function positionsAt(operations: Operation[], day: string): Positions {
 }
 
 function netPositionCents(positions: Positions, cashCents: number) {
-  return cashCents + positions.receivablesCents + positions.prepaidChargesCents
-    - positions.suppliersCents - positions.membersCents - positions.partnersCents - positions.deferredIncomeCents;
+  return cashCents + positions.receivablesCents + positions.prepaidChargesCents + positions.collectivesReceivableCents
+    - positions.suppliersCents - positions.membersCents - positions.partnersCents - positions.collectivesPayableCents - positions.deferredIncomeCents;
 }
 
 export function previousDay(day: string): string {
@@ -396,6 +473,7 @@ export function balanceSheet(allOperations: Operation[], period: Period, stateme
   const assets: BalanceLine[] = [
     { key: "receivables", label: association ? "Créances usagers et comptes rattachés" : "Créances clients et comptes rattachés", account: "411", amountCents: closing.receivablesCents },
     { key: "vatReceivable", label: "Autres créances - TVA à récupérer", account: "445", amountCents: Math.max(0, -vat.netCents) },
+    { key: "collectivesReceivable", label: "Autres créances - quotes-parts dues par les co-organisateurs", account: "4671", amountCents: closing.collectivesReceivableCents },
     { key: "prepaidCharges", label: "Charges constatées d'avance", account: "486", amountCents: closing.prepaidChargesCents },
     { key: "cash", label: "Disponibilités", account: "512", amountCents: Math.max(0, computedCashCents) },
   ];
@@ -407,6 +485,7 @@ export function balanceSheet(allOperations: Operation[], period: Period, stateme
     { key: "suppliers", label: "Dettes fournisseurs et comptes rattachés", account: "401", amountCents: closing.suppliersCents },
     { key: "members", label: association ? "Avances des membres à rembourser" : "Avances des salariés et dirigeants à rembourser", account: "467", amountCents: closing.membersCents },
     { key: "partners", label: "Comptes courants d'associés", account: "455", amountCents: closing.partnersCents },
+    { key: "collectivesPayable", label: "Autres dettes - quotes-parts dues aux co-organisateurs", account: "4671", amountCents: closing.collectivesPayableCents },
     { key: "vatPayable", label: "Dettes fiscales - TVA à décaisser", account: "445", amountCents: Math.max(0, vat.netCents) },
     { key: "deferredIncome", label: "Produits constatés d'avance", account: "487", amountCents: closing.deferredIncomeCents },
     { key: "overdraft", label: "Concours bancaires courants", account: "512", amountCents: Math.max(0, -computedCashCents) },
@@ -445,6 +524,9 @@ type FecLine = { account: Account; auxiliary?: { id: string; label: string }; de
 type FecEntry = { journal: Journal; date: string; pieceRef: string; label: string; lines: FecLine[] };
 
 function thirdParty(operation: Operation): { account: Account; auxiliary?: { id: string; label: string } } {
+  if (operation.counterpart === "COLLECTIVE" && operation.counterpartId) {
+    return { account: ACCOUNTS.collectives, auxiliary: { id: operation.counterpartId, label: operation.counterpartName ?? "Co-organisateur" } };
+  }
   if (operation.kind === "income") return { account: ACCOUNTS.customers };
   if (operation.counterpart === "MEMBER" && operation.counterpartId) {
     return { account: ACCOUNTS.members, auxiliary: { id: operation.counterpartId, label: operation.counterpartName ?? "Membre" } };
@@ -462,6 +544,13 @@ function line(account: Account, debitCents: number, creditCents: number, auxilia
 function operationEntry(operation: Operation): FecEntry {
   const pieceRef = operation.sourceId;
   const label = `${operation.eventName} - ${operation.label}`;
+  if (operation.counterpart === "COLLECTIVE") {
+    const party = thirdParty(operation);
+    const lines = operation.kind === "income"
+      ? [line(party.account, operation.ttcCents, 0, party.auxiliary), line(operation.account, 0, operation.htCents)]
+      : [line(operation.account, operation.htCents, 0), line(party.account, 0, operation.ttcCents, party.auxiliary)];
+    return { journal: "OD", date: operation.date, pieceRef, label, lines };
+  }
   if (operation.kind === "income") {
     return {
       journal: "VE", date: operation.date, pieceRef, label, lines: [
@@ -498,6 +587,7 @@ function openingEntry(allOperations: Operation[], period: Period): FecEntry | nu
     signed(ACCOUNTS.suppliers, positions.prepaidChargesCents - positions.suppliersCents),
     signed(ACCOUNTS.members, -positions.membersCents),
     signed(ACCOUNTS.partners, -positions.partnersCents),
+    signed(ACCOUNTS.collectives, positions.collectivesReceivableCents - positions.collectivesPayableCents),
     signed(equityCents >= 0 ? ACCOUNTS.retainedEarnings : ACCOUNTS.retainedLosses, -equityCents),
   ];
   return { journal: "AN", date: period.startsOn, pieceRef: "AN", label: "A-nouveaux", lines };

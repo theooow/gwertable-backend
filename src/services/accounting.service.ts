@@ -294,7 +294,8 @@ export class AccountingService {
     const fiscalYear = await this.repository.findFiscalYearCovering(workspaceId, event.startsAt);
     const framework = fiscalYear?.framework ?? "ASSOCIATION";
     const actualOperations = buildOperations(ledger, framework, ["ACTUAL"]);
-    const projectedOperations = [...actualOperations, ...buildOperations(ledger, framework, ["FORECAST"])];
+    // Built in one pass so the collectives' shares follow the projected result.
+    const projectedOperations = buildOperations(ledger, framework, ["ACTUAL", "FORECAST"]);
     const actual = incomeStatement(actualOperations, framework);
     const projected = incomeStatement(projectedOperations, framework);
 
