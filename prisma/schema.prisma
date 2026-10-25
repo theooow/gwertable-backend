@@ -1502,6 +1502,8 @@ model EventCollective {
   event            Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name             String
   shareBasisPoints Int     @default(0)
+  // Transfer of the collective's share of the result, which settles 4671 in the accounts.
+  shareSettledAt   DateTime?
   members          EventCollectiveMember[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

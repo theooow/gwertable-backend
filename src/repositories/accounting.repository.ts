@@ -71,7 +71,7 @@ export class AccountingRepository {
         select: {
           id: true, name: true, startsAt: true, vatMode: true, defaultVatRateBasisPoints: true, profitSplitMode: true, stakesFirst: true,
           participants: { select: { personId: true } },
-          collectives: { select: { id: true, name: true, shareBasisPoints: true, members: { select: { participant: { select: { personId: true } } } } } },
+          collectives: { select: { id: true, name: true, shareBasisPoints: true, shareSettledAt: true, members: { select: { participant: { select: { personId: true } } } } } },
         },
       }),
       this.prisma.expense.findMany({

@@ -1,6 +1,6 @@
 import type { UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
-import type { CollectiveInput, ProfitSplitInput } from "../schemas/collective.js";
+import type { CollectiveInput, ProfitSplitInput, ShareSettlementInput } from "../schemas/collective.js";
 import type { CollectiveRepository } from "../repositories/collective.repository.js";
 
 export class CollectiveService {
@@ -24,6 +24,11 @@ export class CollectiveService {
   async update(id: string, workspaceId: string, role: UserRole, userId: string, data: CollectiveInput) {
     requireCan(role, "budget.write");
     return this.collectiveRepository.update(id, workspaceId, userId, data);
+  }
+
+  async settleShare(id: string, workspaceId: string, role: UserRole, userId: string, data: ShareSettlementInput) {
+    requireCan(role, "budget.write");
+    return this.collectiveRepository.settleShare(id, workspaceId, userId, data);
   }
 
   async delete(id: string, workspaceId: string, role: UserRole, userId: string) {

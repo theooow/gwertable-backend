@@ -155,6 +155,16 @@ describe("co-organised events", () => {
     assert.ok([...totals.values()].every((total) => total === 0));
   });
 
+  it("settles the partner's share on its transfer date", () => {
+    const settled = coData(5, true);
+    settled.events[0]!.collectiveSplit!.partners[0]!.shareSettledAt = new Date("2026-06-10T12:00:00Z");
+    const ops = buildOperations(settled, "ASSOCIATION", ["ACTUAL"]);
+    assert.equal(share(ops)?.settledOn, "2026-06-10");
+    const sheet = balanceSheet(ops, period, incomeStatement(ops, "ASSOCIATION"));
+    assert.ok(sheet.balanced);
+    assert.equal(sheet.liabilities.find((line) => line.key === "collectivesPayable")!.amountCents, 0);
+  });
+
   it("books a partner covering part of a loss in 755", () => {
     const ops = buildOperations(coData(0), "ASSOCIATION", ["ACTUAL"]);
     assert.equal(share(ops)?.account.number, "755");

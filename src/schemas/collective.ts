@@ -12,5 +12,10 @@ export const profitSplitSchema = z.object({
   stakesFirst: z.boolean().optional(),
 });
 
+export const shareSettlementSchema = z.object({
+  settledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide").nullable(),
+});
+
 export type CollectiveInput = z.infer<typeof collectiveSchema>;
 export type ProfitSplitInput = z.infer<typeof profitSplitSchema>;
+export type ShareSettlementInput = z.infer<typeof shareSettlementSchema>;

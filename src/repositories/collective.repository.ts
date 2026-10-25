@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { NotFoundError, ValidationError } from "../lib/errors.js";
-import type { CollectiveInput, ProfitSplitInput } from "../schemas/collective.js";
+import type { CollectiveInput, ProfitSplitInput, ShareSettlementInput } from "../schemas/collective.js";
 import { ActivityRepository, type ActivityNotificationType } from "./activity.repository.js";
 
 const collectiveInclude = {
@@ -107,6 +107,19 @@ export class CollectiveRepository {
       return tx.eventCollective.findUniqueOrThrow({ where: { id }, include: collectiveInclude });
     });
     await this.record(workspaceId, existing.eventId, userId, "COLLECTIVE_UPDATED", `Collectif modifié : ${collective.name}`, id);
+    return collective;
+  }
+
+  /** Records when the collective's share of the result was transferred; `null` reopens it. */
+  async settleShare(id: string, workspaceId: string, userId: string, data: ShareSettlementInput) {
+    const existing = await this.findCollective(id, workspaceId);
+    const collective = await this.prisma.eventCollective.update({
+      where: { id },
+      data: { shareSettledAt: data.settledOn ? new Date(`${data.settledOn}T12:00:00Z`) : null },
+      include: collectiveInclude,
+    });
+    const title = data.settledOn ? `Quote-part réglée : ${existing.name}` : `Quote-part à régler : ${existing.name}`;
+    await this.record(workspaceId, existing.eventId, userId, "COLLECTIVE_UPDATED", title, id);
     return collective;
   }
 

@@ -282,8 +282,9 @@ function withCollectiveShares(operations: Operation[], data: LedgerData): Operat
       .filter(({ expense }) => expense.paidById && partnerPersonIds.has(expense.paidById) && expense.reimbursement === "NOT_OWED")
       .map(({ operation }) => operation));
     const date = toDay(event.startsAt);
-    const shares: Operation[] = payouts.slice(1).flatMap((payout) => {
+    const shares: Operation[] = payouts.slice(1).flatMap((payout, index) => {
       const cents = payout.payoutCents - payout.pendingCents;
+      const settledAt = split.partners[index]!.shareSettledAt;
       if (cents === 0) return [];
       return [{
         kind: cents > 0 ? "expense" : "income",
@@ -292,7 +293,7 @@ function withCollectiveShares(operations: Operation[], data: LedgerData): Operat
         eventName: event.name,
         label: `Quote-part de résultat - ${payout.name}`,
         date,
-        settledOn: null,
+        settledOn: settledAt ? toDay(settledAt) : null,
         account: cents > 0 ? ACCOUNTS.jointCharge : ACCOUNTS.jointProduct,
         htCents: Math.abs(cents),
         vatCents: 0,

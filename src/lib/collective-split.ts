@@ -5,7 +5,7 @@ import type { ProfitSplitMode, ReimbStatus } from "@prisma/client";
  * Mirrors `splitResultBetweenCollectives` in the frontend (lib/collectives.ts): keep both in sync.
  */
 
-export type SplitCollective = { id: string; name: string; shareBasisPoints: number; personIds: string[] };
+export type SplitCollective = { id: string; name: string; shareBasisPoints: number; personIds: string[]; shareSettledAt?: Date | null };
 export type SplitExpense = { paidById: string | null; amountCents: number; reimbursement: ReimbStatus };
 export type CollectivePayout = { id: string; name: string; pendingCents: number; payoutCents: number };
 

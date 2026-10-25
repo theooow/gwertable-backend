@@ -635,6 +635,13 @@ export const routeDocs: Record<string, RouteDoc> = {
     ],
     "summary": "Mettre à jour un collectif et ses membres"
   },
+  "PUT /api/collectives/:id/settlement": {
+    "tags": [
+      "Budget"
+    ],
+    "summary": "Enregistrer le virement de la quote-part d'un collectif",
+    "description": "`settledOn` (AAAA-MM-JJ) solde la quote-part due au collectif ou par lui (compte 4671) à cette date ; `null` la remet à régler."
+  },
   "DELETE /api/collectives/:id": {
     "tags": [
       "Budget"

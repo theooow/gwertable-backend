@@ -14,7 +14,7 @@ import { expenseSchema } from "../../schemas/expense.js";
 import { incomeSchema } from "../../schemas/income.js";
 import { ticketTierSchema } from "../../schemas/ticket-tier.js";
 import { consumableSchema } from "../../schemas/consumable.js";
-import { collectiveSchema, profitSplitSchema } from "../../schemas/collective.js";
+import { collectiveSchema, profitSplitSchema, shareSettlementSchema } from "../../schemas/collective.js";
 import { budgetGuideSchema } from "../../schemas/budget-guide.js";
 import { ExpenseDao } from "../../dao/expense.dao.js";
 import { BudgetRepository } from "../../repositories/budget.repository.js";
@@ -261,6 +261,12 @@ export async function budgetRoutes(fastify: FastifyInstance) {
     const { id } = idParamsSchema.parse(request.params);
     const data = collectiveSchema.parse(request.body);
     return collectiveService.update(id, request.workspaceId, request.userRole, request.user!.id, data);
+  });
+
+  fastify.put("/api/collectives/:id/settlement", { config: { documentation: { params: idParamsSchema, body: shareSettlementSchema } } }, async (request) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const data = shareSettlementSchema.parse(request.body);
+    return collectiveService.settleShare(id, request.workspaceId, request.userRole, request.user!.id, data);
   });
 
   fastify.delete("/api/collectives/:id", { config: { documentation: { params: idParamsSchema } } }, async (request) => {

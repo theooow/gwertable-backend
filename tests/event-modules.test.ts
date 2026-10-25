@@ -611,6 +611,13 @@ describe("event module routes", () => {
     });
     assert.equal(rejected.statusCode, 400);
 
+    const settled = await request("PUT", `/api/collectives/${collectiveA.id}/settlement`, authorization, { settledOn: "2026-10-20" });
+    assert.equal(settled.statusCode, 200);
+    assert.equal(json<{ shareSettledAt: string }>(settled).shareSettledAt.slice(0, 10), "2026-10-20");
+    const reopened = await request("PUT", `/api/collectives/${collectiveA.id}/settlement`, authorization, { settledOn: null });
+    assert.equal(json<{ shareSettledAt: string | null }>(reopened).shareSettledAt, null);
+    assert.equal((await request("PUT", `/api/collectives/${collectiveA.id}/settlement`, authorization, { settledOn: "20/10/2026" })).statusCode, 400);
+
     assert.equal((await request("DELETE", `/api/collectives/${collectiveB.id}`, authorization)).statusCode, 200);
     assert.equal(await prisma.eventCollectiveMember.count({ where: { participantId: second!.id } }), 0);
   });
