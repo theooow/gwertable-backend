@@ -8,7 +8,9 @@ import { BaseDao } from "./base.dao.js";
 const listInclude = {
   venue: { select: { fullName: true, address: true } },
   _count: { select: { participants: true, tasks: true, expenses: true, runOfShow: true } },
-  expenses: { select: { amountCents: true } },
+  expenses: { select: { amountCents: true, category: true, label: true } },
+  // Planned shopping counts in the forecast like on the budget page.
+  shopping: { where: { bought: false, expenseId: null, estimatedCents: { gt: 0 } }, select: { estimatedCents: true } },
   incomes: { select: { amountCents: true } },
   ticketTiers: {
     select: {

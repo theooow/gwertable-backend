@@ -6,13 +6,25 @@ import { ActivityRepository } from "./activity.repository.js";
 
 type EventListRow = Awaited<ReturnType<EventDao["findAll"]>>[number];
 
+/**
+ * Mirrors the budget page forecast for tickets sold so far, without the bar estimate
+ * from the average basket: planned shopping and the SACEM estimate are counted.
+ */
 function getBudgetSummary(event: EventListRow) {
-  const totalExpensesCents = event.expenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+  const sacemExpenses = event.expenses.filter((expense) => /sacem/i.test(`${expense.category} ${expense.label}`));
+  const sacemLinesCents = sacemExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+  const plannedShoppingCents = event.shopping.reduce((sum, item) => sum + (item.estimatedCents ?? 0), 0);
   const totalOtherIncomeCents = event.incomes.reduce((sum, income) => sum + income.amountCents, 0);
   const ticketRevenueCents = event.ticketTiers.reduce(
     (sum, tier) => sum + tier.sold * tier.organizerRevenueCents,
     0,
   );
+  const sacemBaseCents = event.sacemBase === "TOTAL_REVENUE" ? ticketRevenueCents + totalOtherIncomeCents : ticketRevenueCents;
+  const sacemEstimateCents = event.sacemEnabled ? Math.round((sacemBaseCents * event.sacemRateBasisPoints) / 10000) : 0;
+  const totalExpensesCents = event.expenses.reduce((sum, expense) => sum + expense.amountCents, 0)
+    + plannedShoppingCents
+    - sacemLinesCents
+    + Math.max(sacemLinesCents, sacemEstimateCents);
   const activeTiers = event.ticketTiers.filter((tier) => !tier.archivedAt);
   const ticketsSold = event.ticketTiers.reduce((sum, tier) => sum + tier.sold, 0);
   const ticketsCapacity = activeTiers.reduce((sum, tier) => sum + tier.quantity, 0);
@@ -43,7 +55,7 @@ function getBudgetSummary(event: EventListRow) {
 }
 
 function withBudgetSummary(event: EventListRow) {
-  const { expenses, incomes, ticketTiers, ...rest } = event;
+  const { expenses, incomes, ticketTiers, shopping, ...rest } = event;
   return {
     ...rest,
     budgetSummary: getBudgetSummary(event),
