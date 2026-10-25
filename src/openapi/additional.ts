@@ -43,6 +43,7 @@ const groups: Record<string, [string, string][]> = {
     ["POST /api/auth/password/login", "Se connecter avec un mot de passe"],
     ["POST /api/auth/password/setup", "Définir un mot de passe avec un jeton valide"],
     ["POST /api/auth/terms/accept", "Accepter la version courante des CGU et de la politique de confidentialité"],
+    ["POST /api/auth/budget-tour/seen", "Indiquer que la visite guidée du budget a été terminée ou ignorée"],
   ],
   Matériel: [
     ["PATCH /api/equipment/:id", "Modifier des cellules du catalogue matériel"],

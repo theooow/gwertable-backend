@@ -220,6 +220,19 @@ describe("auth and health routes", () => {
     assert.equal(json<{ user: { termsAccepted: boolean } }>(after).user.termsAccepted, true);
   });
 
+  it("remembers that the user went through the budget tour", async () => {
+    const { authorization } = await seedAdminSession();
+    const before = json<{ user: { budgetTourSeenAt: string | null } }>(await request("GET", "/api/auth/me", authorization));
+    assert.equal(before.user.budgetTourSeenAt, null);
+
+    const seen = await request("POST", "/api/auth/budget-tour/seen", authorization);
+    assert.equal(seen.statusCode, 200);
+    assert.ok(json<{ budgetTourSeenAt: string }>(seen).budgetTourSeenAt);
+
+    const after = json<{ user: { budgetTourSeenAt: string | null } }>(await request("GET", "/api/auth/me", authorization));
+    assert.ok(after.user.budgetTourSeenAt);
+  });
+
   it("rejects registration without terms acceptance", async () => {
     await request("POST", "/api/auth/login-link", undefined, { email: "no-terms@abregi.test" });
     const token = await prisma.verificationToken.findFirstOrThrow({ where: { identifier: "no-terms@abregi.test" } });

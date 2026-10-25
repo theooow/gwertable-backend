@@ -284,6 +284,7 @@ model User {
   emailVerified DateTime?
   termsAcceptedAt DateTime?
   termsVersion    String?
+  budgetTourSeenAt DateTime?
   // Drives the inactivity purge announced in the privacy policy.
   lastSeenAt         DateTime @default(now())
   inactivityWarnedAt DateTime?

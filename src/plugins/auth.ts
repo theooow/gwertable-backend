@@ -143,6 +143,7 @@ const authUserSelect = {
   themePreset: true,
   themePrimaryColor: true,
   termsVersion: true,
+  budgetTourSeenAt: true,
   usagePlan: true,
   subscriptionStatus: true,
   personId: true,

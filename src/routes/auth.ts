@@ -169,6 +169,9 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.post("/api/auth/terms/accept", { config: { documentation: {  } } }, async (request) =>
     service.acceptTerms(request.user!.id));
 
+  fastify.post("/api/auth/budget-tour/seen", { config: { documentation: {  } } }, async (request) =>
+    service.markBudgetTourSeen(request.user!.id));
+
   fastify.post("/api/auth/logout", { config: { documentation: {  } } }, async (request) => {
     const authorization = Array.isArray(request.headers.authorization)
       ? request.headers.authorization[0]

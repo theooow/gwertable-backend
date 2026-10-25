@@ -326,6 +326,15 @@ export class AuthService {
   }
 
   /**
+   * Retient que l'utilisateur a terminé ou ignoré la visite guidée du budget, pour ne plus la lancer d'elle-même.
+   *
+   * @param userId - Identifiant de l'utilisateur courant
+   */
+  async markBudgetTourSeen(userId: string): Promise<{ budgetTourSeenAt: Date | null }> {
+    return { budgetTourSeenAt: await this.authRepository.markBudgetTourSeen(userId, new Date()) };
+  }
+
+  /**
    * Supprime la session courante (déconnexion).
    *
    * @param sessionToken - Token de la session à invalider, ou `null`

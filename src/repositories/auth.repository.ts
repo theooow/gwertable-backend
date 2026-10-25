@@ -368,6 +368,15 @@ export class AuthRepository {
     });
   }
 
+  async markBudgetTourSeen(userId: string, seenAt: Date) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { budgetTourSeenAt: seenAt },
+      select: { budgetTourSeenAt: true },
+    });
+    return user.budgetTourSeenAt;
+  }
+
   async updatePasswordHash(userId: string, passwordHash: string) {
     return this.prisma.user.update({
       where: { id: userId },
