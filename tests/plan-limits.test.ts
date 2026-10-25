@@ -48,6 +48,22 @@ test("events of another workspace the user administers count towards the cap", a
   assert.equal((await createEvent(authorization)).statusCode, 403);
 });
 
+test("Lite and Plus keep a single workspace, Pro creates more", async () => {
+  const { authorization, user } = await seedAdminSession("LITE");
+  const createWorkspace = () => request("POST", "/api/workspaces", authorization, { name: "Second" });
+  const refused = await createWorkspace();
+  assert.equal(refused.statusCode, 403);
+  assert.match(refused.body, /plan Lite est limité à 1 espace de travail/);
+  assert.equal(json<{ requiredPlan: string }>(refused).requiredPlan, "PRO");
+
+  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PLUS" } });
+  assert.equal((await createWorkspace()).statusCode, 403);
+
+  await prisma.user.update({ where: { id: user.id }, data: { usagePlan: "PRO" } });
+  assert.equal((await createWorkspace()).statusCode, 201);
+  assert.equal((await createWorkspace()).statusCode, 201);
+});
+
 test("inviting collaborators starts with the Plus plan", async () => {
   const { authorization, user } = await seedAdminSession("LITE");
   const event = json<{ id: string }>(await createEvent(authorization));

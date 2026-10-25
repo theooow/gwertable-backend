@@ -46,6 +46,11 @@ export class WorkspaceDao extends BaseDao {
     return workspace;
   }
 
+  /** Workspaces the user administers, which is what the plan workspace limit counts. */
+  async countAdministeredBy(userId: string) {
+    return this.prisma.workspace.count({ where: { members: { some: { userId, role: "ADMIN" } } } });
+  }
+
   /**
    * Crée un espace de travail avec un premier membre admin.
    *

@@ -33,6 +33,7 @@ export function effectivePlan(sources: PlanSources, now = new Date()): UsagePlan
 }
 
 const activeEventLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, NONE: 0, LITE: 1, PLUS: 3, PRO: null };
+const workspaceLimits: Record<UsagePlan, number | null> = { BETA_TEST: null, NONE: 0, LITE: 1, PLUS: 1, PRO: null };
 export const activeEventStatuses: EventStatus[] = ["DRAFT", "PLANNING", "LIVE"];
 const upgradePath: UsagePlan[] = ["LITE", "PLUS", "PRO"];
 
@@ -68,6 +69,13 @@ export function requireActiveEventSlot(plan: UsagePlan, activeEvents: number) {
     }) ?? "PRO";
     if (limit === 0) throw new PlanRequiredError(`Choisis un abonnement pour avoir un événement en cours, à partir du plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
     throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} événement${limit > 1 ? "s" : ""} en cours. Archive un événement ou passe au plan ${usagePlanLabels[requiredPlan]}.`, requiredPlan);
+  }
+}
+
+export function requireWorkspaceSlot(plan: UsagePlan, administeredWorkspaces: number) {
+  const limit = workspaceLimits[plan];
+  if (limit !== null && administeredWorkspaces >= limit) {
+    throw new PlanRequiredError(`Le plan ${usagePlanLabels[plan]} est limité à ${limit} espace${limit > 1 ? "s" : ""} de travail. Passe au plan ${usagePlanLabels.PRO} pour en créer d’autres.`, "PRO");
   }
 }
 

@@ -145,6 +145,10 @@ export class WorkspaceRepository {
    * @param userId - Identifiant de l'utilisateur créateur (devient ADMIN)
    * @param name - Nom de l'espace
    */
+  async countAdministeredWorkspaces(userId: string) {
+    return this.workspaceDao.countAdministeredBy(userId);
+  }
+
   async createWorkspace(userId: string, name: string) {
     const workspace = await this.workspaceDao.createWithAdmin(name, userId);
     await this.prisma.user.update({

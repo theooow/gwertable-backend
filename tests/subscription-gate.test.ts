@@ -22,6 +22,8 @@ describe("subscription gate", () => {
     const ownWorkspace = await request("POST", "/api/workspaces", "Bearer colleague-session", { name: "Mon collectif" });
     assert.equal(ownWorkspace.statusCode, 403);
     assert.equal(json<{ requiredPlan: string }>(ownWorkspace).requiredPlan, "LITE");
+    assert.equal((await request("POST", "/api/workspaces", authorization, { name: "Second espace" })).statusCode, 403);
+    await prisma.user.updateMany({ where: { email: "admin@abregi.test" }, data: { usagePlan: "PRO" } });
     assert.equal((await request("POST", "/api/workspaces", authorization, { name: "Second espace" })).statusCode, 201);
 
     await prisma.user.updateMany({ where: { email: "admin@abregi.test" }, data: { subscriptionStatus: "past_due" } });

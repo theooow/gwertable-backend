@@ -1,5 +1,6 @@
-import type { UserRole } from "@prisma/client";
+import type { UsagePlan, UserRole } from "@prisma/client";
 import { requireCan } from "../lib/permissions.js";
+import { requireWorkspaceSlot } from "../lib/usage-plans.js";
 import { WorkspaceRepository, type AccountUpdateInput } from "../repositories/workspace.repository.js";
 
 /**
@@ -50,9 +51,11 @@ export class WorkspaceService {
    * Crée un nouvel espace de travail pour l'utilisateur courant.
    *
    * @param userId - Identifiant de l'utilisateur (devient ADMIN)
+   * @param plan - Plan effectif, qui limite le nombre d'espaces administrés
    * @param name - Nom de l'espace
    */
-  async createWorkspace(userId: string, name: string) {
+  async createWorkspace(userId: string, plan: UsagePlan, name: string) {
+    requireWorkspaceSlot(plan, await this.workspaceRepository.countAdministeredWorkspaces(userId));
     return this.workspaceRepository.createWorkspace(userId, name);
   }
 
