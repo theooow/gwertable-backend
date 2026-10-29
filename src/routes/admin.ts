@@ -6,6 +6,7 @@ import { ForbiddenError, NotFoundError } from "../lib/errors.js";
 import { effectivePlan } from "../lib/usage-plans.js";
 import { getAdminKpis } from "../repositories/admin-kpi.repository.js";
 import { FUNNEL_PERIODS, getBudgetFunnel } from "../repositories/admin-funnel.repository.js";
+import { getUnconvertedBudgetLeads } from "../repositories/admin-lead.repository.js";
 
 const userParamsSchema = z.object({ userId: z.string().min(1) });
 // A null plan removes the grant and gives the Stripe subscription back control of the plan.
@@ -91,6 +92,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   fastify.get("/api/admin/funnel", { config: { documentation: { querystring: funnelQuerySchema } } }, async (request) =>
     getBudgetFunnel(prisma, funnelQuerySchema.parse(request.query).period));
+
+  fastify.get("/api/admin/budget-leads", { config: { documentation: {} } }, async () => ({ leads: await getUnconvertedBudgetLeads(prisma) }));
 
   fastify.patch("/api/admin/users/:userId/plan", { config: { documentation: { params: userParamsSchema, body: updatePlanSchema } } }, async (request) => {
     assertAdmin(request);

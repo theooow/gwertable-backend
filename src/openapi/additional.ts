@@ -13,6 +13,7 @@ const groups: Record<string, [string, string][]> = {
     ["GET /api/admin/overview", "Consulter les statistiques de la plateforme"],
     ["GET /api/admin/kpis", "Consulter les indicateurs d'usage de l'application"],
     ["GET /api/admin/funnel", "Consulter le funnel AARRR du budget événementiel"],
+    ["GET /api/admin/budget-leads", "Lister les emails ayant essayé le budget sans créer de compte"],
     ["PATCH /api/admin/users/:userId/plan", "Modifier l'abonnement d'un utilisateur"],
   ],
   OAuth: [
